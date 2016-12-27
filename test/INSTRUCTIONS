@@ -1,7 +1,10 @@
-To run tests, run these commands from the main Unicycler repository directory.
+To run Unicycler tests, run these commands from the main Unicycler repository directory.
 
-Unicycler unit tests:
+To run unit tests:
 python3 -m unittest
+
+To run random sequence assembly tests:
+python3 test/unicycler_random_seqs_test.py
 
 To run overlap-removal performance tests:
 python3 test/remove_overlaps_random_seqs_performance_test.py
