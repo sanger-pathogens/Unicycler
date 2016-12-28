@@ -13,12 +13,13 @@ import unicycler.unicycler
 import unicycler.assembly_graph
 import unicycler.misc
 import random
+import datetime
 import fake_reads
 
 
 def main():
     random.seed(0)
-    print('\t'.join(['Test type', 'Seq length', 'Command']))
+    print('\t'.join(['Test type', 'Seq length', 'Time (ms)', 'Command']))
     while True:
         test_circular_no_repeat()
         test_circular_one_repeat()
@@ -29,7 +30,7 @@ def run_unicycler(out_dir, option_code, verbosity=None):
     """
     This function runs Unicycler. It uses different options, based on the iteration.
     """
-    unicycler_runner = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+    unicycler_runner = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                     'unicycler-runner.py')
     reads_1 = os.path.join(out_dir, 'reads_1.fastq')
     reads_2 = os.path.join(out_dir, 'reads_2.fastq')
@@ -46,11 +47,15 @@ def run_unicycler(out_dir, option_code, verbosity=None):
     if verbosity is not None:
         unicycler_cmd += ['--verbosity', str(verbosity)]
 
+    start_time = datetime.datetime.now()
     p = subprocess.Popen(unicycler_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
+    end_time = datetime.datetime.now()
+    milliseconds = (end_time - start_time).total_seconds() * 1000
+
     cmd_string = ' '.join(unicycler_cmd)
 
-    return stdout.decode(), stderr.decode(), cmd_string
+    return stdout.decode(), stderr.decode(), cmd_string, milliseconds
 
 
 def get_assembly_fasta_and_graph(out_dir):
@@ -80,11 +85,11 @@ def sequence_matches_any_rotation(seq_1, seq_2):
 
 
 def test_circular_no_repeat():
-    random_seq_length = random.randint(1000, 50000)
+    random_seq_length = random.randint(8, 20) ** 4
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)
     out_dir = fake_reads.make_fake_reads(random_seq)
     option_code = random.randint(0, 4)
-    stdout, stderr, cmd_string = run_unicycler(out_dir, option_code)
+    stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
     assert bool(stderr) is False
     fasta, graph = get_assembly_fasta_and_graph(out_dir)
     assert len(fasta) == 1
@@ -96,20 +101,21 @@ def test_circular_no_repeat():
     assert graph.segments[1].depth > 0.9
     assert graph.segments[1].depth < 1.1
 
-    print('\t'.join(['circular_no_repeat', str(random_seq_length), cmd_string]))
+    print('\t'.join(['circular_no_repeat', str(random_seq_length), str(ms), cmd_string]))
     shutil.rmtree(out_dir)
 
 
 def test_circular_one_repeat():
-    random_seq_length = random.randint(1000, 50000)
+    random_seq_length = random.randint(9, 20) ** 4
     repeat = unicycler.misc.get_random_sequence(500)
-    non_repeat_length = (random_seq_length - 500) // 2
-    seq_1 = unicycler.misc.get_random_sequence(non_repeat_length)
-    seq_2 = unicycler.misc.get_random_sequence(non_repeat_length)
+    non_repeat_length_1 = (random_seq_length - 1000) // 2
+    non_repeat_length_2 = random_seq_length - 1000 - non_repeat_length_1
+    seq_1 = unicycler.misc.get_random_sequence(non_repeat_length_1)
+    seq_2 = unicycler.misc.get_random_sequence(non_repeat_length_2)
     random_seq = seq_1 + repeat + seq_2 + repeat
     out_dir = fake_reads.make_fake_reads(random_seq)
     option_code = random.randint(0, 4)
-    stdout, stderr, cmd_string = run_unicycler(out_dir, option_code)
+    stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
     assert bool(stderr) is False
     fasta, graph = get_assembly_fasta_and_graph(out_dir)
     assert len(fasta) == 3
@@ -128,7 +134,7 @@ def test_circular_one_repeat():
     assert graph.segments[3].depth < 2.1
 
     assembled_len = len(seq_1) + len(seq_2) + 2 * len(seq_3)
-    assert assembled_len == 5000
+    assert assembled_len == random_seq_length
 
     repeat_forward_links = set(graph.forward_links[3])
     if 1 in repeat_forward_links:
@@ -141,25 +147,24 @@ def test_circular_one_repeat():
         s_2 = unicycler.misc.reverse_complement(seq_2)
     assembled_seq = s_1 + seq_3 + s_2 + seq_3
 
-    assert len(assembled_seq) == 5000
+    assert len(assembled_seq) == random_seq_length
     assert sequence_matches_any_rotation(random_seq, assembled_seq)
 
-    print('\t'.join(['circular_one_repeat', str(random_seq_length), cmd_string]))
+    print('\t'.join(['circular_one_repeat', str(random_seq_length), str(ms), cmd_string]))
     shutil.rmtree(out_dir)
 
 
 def test_stdout_size():
     stdout_sizes = []
     for verbosity in range(4):
-        random.seed(0)
         random_seq_length = random.randint(1000, 5000)
         random_seq = unicycler.misc.get_random_sequence(random_seq_length)
         out_dir = fake_reads.make_fake_reads(random_seq)
-        stdout, stderr, cmd_string = run_unicycler(out_dir, 0, verbosity)
+        stdout, stderr, cmd_string, ms = run_unicycler(out_dir, 0, verbosity)
         assert bool(stderr) is False
         stdout_sizes.append(len(stdout))
         shutil.rmtree(out_dir)
-        print('\t'.join(['stdout_size', str(random_seq_length), cmd_string]))
+        print('\t'.join(['stdout_size', str(random_seq_length), str(ms), cmd_string]))
     assert stdout_sizes[0] == 0
     assert stdout_sizes[1] > 0
     assert stdout_sizes[2] >= stdout_sizes[1]

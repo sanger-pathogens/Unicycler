@@ -17,7 +17,8 @@ def make_fake_reads(seq):
     """
     read_length = 100
     insert_length = 300
-    looped_seq = seq + seq[0:insert_length]
+    looped_seq_forward = seq + seq[0:insert_length]
+    looped_seq_reverse = unicycler.misc.reverse_complement(looped_seq_forward)
 
     out_dir = 'TEST_TEMP_' + str(os.getpid())
     os.makedirs(out_dir)
@@ -28,9 +29,11 @@ def make_fake_reads(seq):
     read_num = 1
     with open(reads_1, 'wt') as r_1, open(reads_2, 'wt') as r_2:
         for i in range(0, 2):
-            for j in range(0, len(looped_seq) - insert_length + 1):
-                if i == 1:
-                    looped_seq = unicycler.misc.reverse_complement(looped_seq)
+            for j in range(0, len(looped_seq_forward) - insert_length + 1):
+                if i == 0:
+                    looped_seq = looped_seq_forward
+                else:
+                    looped_seq = looped_seq_reverse
                 insert = looped_seq[j:j+insert_length]
                 read_1 = insert[:read_length]
                 read_2 = insert[-read_length:]

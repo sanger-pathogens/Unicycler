@@ -25,7 +25,7 @@ def main():
 
 
 def test_overlap_removal():
-    random_seq_length = random.randint(5000, 50000)
+    random_seq_length = random.randint(8, 20) ** 4
     repeat_count = random.randint(1, random_seq_length // 10)
     random_seq = make_repeaty_sequence(random_seq_length, repeat_count)
     out_dir = fake_reads.make_fake_reads(random_seq)
