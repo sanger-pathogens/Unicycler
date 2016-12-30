@@ -10,7 +10,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
     """
 
     def setUp(self):
-        test_fastg = os.path.join(os.path.dirname(__file__), 'test.fastg')
+        test_fastg = os.path.join(os.path.dirname(__file__), 'test_1.fastg')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25, paths_file=None,
                                                             insert_size_mean=401,
                                                             insert_size_deviation=60)
@@ -50,7 +50,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
 
     def test_load_spades_paths(self):
         self.assertEqual(len(self.graph.paths), 0)
-        paths_file = os.path.join(os.path.dirname(__file__), 'test.fastg.paths')
+        paths_file = os.path.join(os.path.dirname(__file__), 'test_1.fastg.paths')
         self.graph.load_spades_paths(paths_file)
         self.assertEqual(len(self.graph.paths), 53)
 
@@ -258,6 +258,22 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
         self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 0)
         self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 0)
 
+    def test_get_estimated_sequence_len(self):
+        estimated_sequence_len = self.graph.get_estimated_sequence_len()
+        self.assertTrue(estimated_sequence_len > 248000)
+        self.assertTrue(estimated_sequence_len < 255000)
+
+    def test_remove_all_overlaps(self):
+        self.assertEqual(self.graph.overlap, 25)
+        path_1_before_overlap_removal = self.graph.get_path_sequence([152, 297, 56, -222, -72])
+        seg_lengths = {s.number: s.get_length() for s in self.graph.segments.values()}
+        self.graph.remove_all_overlaps(0)
+        self.assertEqual(self.graph.overlap, 0)
+        path_1_after_overlap_removal = self.graph.get_path_sequence([152, 297, 56, -222, -72])
+        self.assertTrue(path_1_after_overlap_removal in path_1_before_overlap_removal)
+        for seg_num in seg_lengths:
+            self.assertTrue(self.graph.segments[seg_num].get_length() <= seg_lengths[seg_num])
+
 
 class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
     """
@@ -265,7 +281,7 @@ class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
     """
 
     def setUp(self):
-        test_gfa = os.path.join(os.path.dirname(__file__), 'test.gfa')
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_1.gfa')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
         self.verbosity = 0
 

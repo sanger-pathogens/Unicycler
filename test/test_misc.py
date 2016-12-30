@@ -263,7 +263,7 @@ class TestMiscFunctions(unittest.TestCase):
         os.chdir(starting_cwd)
 
     def test_convert_fastq_to_fasta(self):
-        test_fastq = os.path.join(os.path.dirname(__file__), 'test.fastq')
+        test_fastq = os.path.join(os.path.dirname(__file__), 'test_1.fastq')
         test_fasta = os.path.join(os.path.dirname(__file__), 'temp_test.fasta')
         unicycler.misc.convert_fastq_to_fasta(test_fastq, test_fasta)
         fasta = unicycler.misc.load_fasta(test_fasta)
