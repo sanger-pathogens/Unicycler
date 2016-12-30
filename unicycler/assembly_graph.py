@@ -211,6 +211,44 @@ class AssemblyGraph(object):
                 return segment.depth
         return 0.0
 
+    def get_single_copy_depth(self, verbosity=0):
+        """
+        Determines the single-copy read depth for the graph. In haploid and some diploid cases,
+        this will be the median depth. But in some diploid cases, the single-copy depth may be at
+        about half the median (because the median depth holds the sequences shared between sister
+        chromosomes). To catch these cases, we look to see whether the graph peaks more strongly
+        at half the median or double the median. In the former case, we move the single-copy
+        depth down to half the median.
+        """
+        median_depth = self.get_median_read_depth()
+        if verbosity > 1:
+            print('Median graph depth:', float_to_str(median_depth, 2))
+        bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
+                                                                    median_depth * 0.6)
+        bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
+                                                                      median_depth * 2.4)
+        total_graph_bases = self.get_total_length()
+        half_median_frac = bases_near_half_median / total_graph_bases
+        double_median_frac = bases_near_double_median / total_graph_bases
+        if half_median_frac > double_median_frac and \
+                half_median_frac >= settings.MIN_HALF_MEDIAN_FOR_DIPLOID:
+            single_copy_depth = median_depth / 2.0
+        else:
+            single_copy_depth = median_depth
+        if verbosity > 1:
+            print('Single-copy depth: ', float_to_str(median_depth, 2))
+        return single_copy_depth
+
+    def get_base_count_in_depth_range(self, min_depth, max_depth):
+        """
+        Returns the total number of bases in the graph in the given depth range.
+        """
+        total_bases = 0
+        for segment in self.segments.values():
+            if min_depth <= segment.depth <= max_depth:
+                total_bases += segment.get_length()
+        return total_bases
+
     def reassign_read_depths(self):
         """
         This function looks for segments which have an unoriginal read depth. If they are connected
@@ -1002,29 +1040,7 @@ class AssemblyGraph(object):
         # Reset any existing copy depths.
         self.copy_depths = {}
 
-        # Determine the single-copy read depth for the graph. In haploid and some diploid cases,
-        # this will be the median depth. But in some diploid cases, the single-copy depth may be at
-        # about half the median (because the median depth holds the sequences shared between sister
-        # chromosomes). To catch these cases, we look to see whether the graph peaks more strongly
-        # at half the median or double the median. In the former case, we move the single-copy
-        # depth down to half the median.
-        median_depth = self.get_median_read_depth()
-        if verbosity > 1:
-            print('Median graph depth:', float_to_str(median_depth, 2))
-        bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
-                                                                    median_depth * 0.6)
-        bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
-                                                                      median_depth * 2.4)
-        total_graph_bases = self.get_total_length()
-        half_median_frac = bases_near_half_median / total_graph_bases
-        double_median_frac = bases_near_double_median / total_graph_bases
-        if half_median_frac > double_median_frac and \
-                half_median_frac >= settings.MIN_HALF_MEDIAN_FOR_DIPLOID:
-            single_copy_depth = median_depth / 2.0
-        else:
-            single_copy_depth = median_depth
-        if verbosity > 1:
-            print('Single-copy depth: ', float_to_str(median_depth, 2))
+        single_copy_depth = self.get_single_copy_depth(verbosity)
 
         # Assign single-copy status to segments within the tolerance of the single-copy depth.
         max_depth = single_copy_depth + settings.INITIAL_SINGLE_COPY_TOLERANCE
@@ -1335,16 +1351,6 @@ class AssemblyGraph(object):
                     self.copy_depths[num] = new_copy_depths
                     success = True
         return success
-
-    def get_base_count_in_depth_range(self, min_depth, max_depth):
-        """
-        Returns the total number of bases in the graph in the given depth range.
-        """
-        total_bases = 0
-        for segment in self.segments.values():
-            if min_depth <= segment.depth <= max_depth:
-                total_bases += segment.get_length()
-        return total_bases
 
     def get_single_copy_segments(self):
         """
@@ -2156,6 +2162,7 @@ class AssemblyGraph(object):
         contributes it own length (minus overlaps), a segment of depth 2.5 contributes 2.5 times
         its own length, etc.
         """
+        single_copy_depth = self.get_single_copy_depth()
         total_seq_len = 0.0
         for seg_num, seg in self.segments.items():
             seg_len = seg.get_length()
@@ -2163,7 +2170,7 @@ class AssemblyGraph(object):
                 seg_len -= self.overlap / 2
             if seg_num in self.reverse_links:
                 seg_len -= self.overlap / 2
-            seg_len *= seg.depth
+            seg_len *= (seg.depth / single_copy_depth)
             total_seq_len += seg_len
         return total_seq_len
 
