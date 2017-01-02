@@ -9,6 +9,7 @@ import os
 import subprocess
 import gzip
 import shutil
+import statistics
 from .misc import print_section_header, round_to_nearest_odd, get_compression_type, int_to_str, \
     quit_with_error, strip_read_extensions, bold, dim, print_table, print_v, get_timestamp
 from .assembly_graph import AssemblyGraph
@@ -50,7 +51,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     graph_files, insert_size_mean, insert_size_deviation = \
         spades_assembly(reads, assem_dir, kmer_range, verbosity, threads, spades_path)
 
-    lowest_segment_count = min(count_segments_in_spades_fastg(x) for x in graph_files)
+    median_segment_count = statistics.median(count_segments_in_spades_fastg(x) for x in graph_files)
 
     for graph_file, kmer in zip(graph_files, kmer_range):
         table_line = [int_to_str(kmer)]
@@ -68,7 +69,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         # If this graph has way too many segments, then we will just skip it because very complex
         # graphs take forever to clean up.
         # TO DO: I can remove this awkward hack if I make the graph cleaning more efficient.
-        if len(assembly_graph.segments) > 4 * lowest_segment_count:
+        if len(assembly_graph.segments) > 4 * median_segment_count:
             table_line += [''] * (6 if verbosity > 1 else 2)
             table_line.append('too complex')
             spades_results_table.append(table_line)
