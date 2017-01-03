@@ -51,7 +51,9 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     graph_files, insert_size_mean, insert_size_deviation = \
         spades_assembly(reads, assem_dir, kmer_range, verbosity, threads, spades_path)
 
-    median_segment_count = statistics.median(count_segments_in_spades_fastg(x) for x in graph_files)
+    existing_graph_files = [x for x in graph_files if x is not None]
+    median_segment_count = statistics.median(count_segments_in_spades_fastg(x)
+                                             for x in existing_graph_files)
 
     for graph_file, kmer in zip(graph_files, kmer_range):
         table_line = [int_to_str(kmer)]
@@ -303,7 +305,7 @@ def get_kmer_range(reads_1_filename, reads_2_filename, spades_dir, verbosity, km
                 if verbosity > 0:
                     print('K-mer range already exists:')
                     print('  ' + kmer_range_filename)
-                    print('Will use this existing range:')
+                    print('\nWill use this existing range:')
                     print('  ' + ', '.join([str(x) for x in kmer_range]))
                 return kmer_range
             except ValueError:
