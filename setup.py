@@ -49,7 +49,7 @@ def missing_tool(tool_name):
         return []
 
 
-class UnicycleInstall(install):
+class UnicyclerInstall(install):
     """
     The install process copies the C++ shared library to the install location.
     """
@@ -130,7 +130,7 @@ class UnicycleInstall(install):
                 print()
 
 
-class UnicycleClean(Command):
+class UnicyclerClean(Command):
     """
     Custom clean command that really cleans up everything, except for:
       - the compiled *.so file needed when running the programs
@@ -186,6 +186,6 @@ setup(name='unicycler',
                                         'unicycler_check = unicycler.unicycler_check:main',
                                         'unicycler_polish = unicycler.unicycler_polish:main']},
       zip_safe=False,
-      cmdclass={'install': UnicycleInstall,
-                'clean': UnicycleClean}
+      cmdclass={'install': UnicyclerInstall,
+                'clean': UnicyclerClean}
       )
