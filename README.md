@@ -556,9 +556,10 @@ __Hybrid read set (Illumina and PacBio) polishing:__<br>
 `unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --pb_bax path/to/*bax.h5 -a assembly.fasta`
 
 
-# Citation
 
-Paper in progress... check back soon!
+# Paper
+
+A preprint version of the Unicycler manuscript is currently available on bioRxiv: [biorxiv.org/content/early/2016/12/22/096412](http://biorxiv.org/content/early/2016/12/22/096412)
 
 
 
