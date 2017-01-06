@@ -10,7 +10,7 @@ from collections import deque, defaultdict
 import textwrap
 from .misc import int_to_str, float_to_str, weighted_average_list, print_section_header, \
     reverse_complement, score_function, add_line_breaks_to_sequence, print_v, print_table, colour, \
-    get_timestamp
+    get_timestamp, get_right_arrow
 from .bridge import SpadesContigBridge, LoopUnrollingBridge, LongReadBridge
 from . import settings
 
@@ -1100,7 +1100,7 @@ class AssemblyGraph(object):
                 self.copy_depths[segment.number] = [segment.depth]
                 max_seg_num = max(self.segments.keys())
                 seg_name_depth_str = self.get_seg_name_depth_str(segment.number, max_seg_num)
-                copy_depth_table.append([seg_name_depth_str, '\u2192', seg_name_depth_str])
+                copy_depth_table.append([seg_name_depth_str, get_right_arrow(), seg_name_depth_str])
                 return 1
         return 0
 
@@ -1146,7 +1146,7 @@ class AssemblyGraph(object):
         if best_segment_num and lowest_error < error_margin:
             self.copy_depths[best_segment_num] = best_new_depths
             copy_depth_table.append([' + '.join(self.get_seg_name_depth_str(x, max_seg_num)
-                                     for x in best_source_nums), '\u2192',
+                                     for x in best_source_nums), get_right_arrow(),
                                      self.get_seg_name_depth_str(best_segment_num, max_seg_num)])
             return 1
         else:
@@ -1205,7 +1205,7 @@ class AssemblyGraph(object):
                 if self.assign_copy_depths_where_needed(connections, best_arrangement,
                                                         error_margin):
                     copy_depth_table.append([self.get_seg_name_depth_str(num, max_seg_num),
-                                             '\u2192',
+                                             get_right_arrow(),
                                              ' + '.join(self.get_seg_name_depth_str(x, max_seg_num)
                                                         for x in connections)])
                     return 1
@@ -1430,8 +1430,8 @@ class AssemblyGraph(object):
         # first.
         sorted_bridges = sorted(bridges, key=lambda x: (x.get_type_score(), x.quality),
                                 reverse=True)
-        bridge_application_table = [['Bridge type', 'Start \u2192 end', 'Path', 'Quality',
-                                     'Result']]
+        bridge_application_table = [['Bridge type', 'Start ' + get_right_arrow() + ' end', 'Path',
+                                     'Quality', 'Result']]
         table_row_colours = {}
         for bridge in sorted_bridges:
 
@@ -1472,7 +1472,7 @@ class AssemblyGraph(object):
                                         abs(bridge_using_this_segment.end_segment) in segs_in_path:
                             can_use_bridge = False
 
-            start_to_end = (str(bridge.start_segment) + ' \u2192').rjust(7) + ' ' + \
+            start_to_end = (str(bridge.start_segment) + ' ' + get_right_arrow()).rjust(7) + ' ' + \
                 str(bridge.end_segment)
             bridge_application_table_row = [bridge.get_type_name(), start_to_end,
                                             ', '.join([str(x) for x in bridge.graph_path]),

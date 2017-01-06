@@ -802,3 +802,27 @@ def get_ascii_art():
 
 def get_timestamp():
     return '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+
+
+def get_left_arrow():
+    """
+    This function returns either a Unicode left arrow or '<-', depending on the system encoding.
+    """
+    try:
+        '\u2190'.encode(sys.stdout.encoding)
+    except (AttributeError, UnicodeEncodeError):
+        return '<-'
+    else:
+        return '\u2190 '
+
+
+def get_right_arrow():
+    """
+    This function returns either a Unicode right arrow or '->', depending on the system encoding.
+    """
+    try:
+        '\u2192'.encode(sys.stdout.encoding)
+    except (AttributeError, UnicodeEncodeError):
+        return '->'
+    else:
+        return '\u2192'

@@ -11,7 +11,8 @@ import gzip
 import shutil
 import statistics
 from .misc import print_section_header, round_to_nearest_odd, get_compression_type, int_to_str, \
-    quit_with_error, strip_read_extensions, bold, dim, print_table, print_v, get_timestamp
+    quit_with_error, strip_read_extensions, bold, dim, print_table, print_v, get_timestamp, \
+    get_left_arrow
 from .assembly_graph import AssemblyGraph
 
 
@@ -152,7 +153,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         best_kmer_row = [x[0] for x in spades_results_table].index(int_to_str(best_kmer))
         print_table(spades_results_table, alignments='RRRRRRRR', indent=0,
                     row_colour={best_kmer_row: 'green'},
-                    row_extra_text={best_kmer_row: ' \u2190 best'})
+                    row_extra_text={best_kmer_row: ' ' + get_left_arrow() + 'best'})
 
     return assembly_graph
 

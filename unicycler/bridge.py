@@ -13,7 +13,7 @@ import math
 import statistics
 from collections import defaultdict
 from .misc import float_to_str, reverse_complement, weighted_average, get_num_agreement, \
-    flip_number_order, score_function, print_table
+    flip_number_order, score_function, print_table, get_right_arrow
 from .cpp_function_wrappers import multiple_sequence_alignment
 from . import settings
 from .path_finding import get_best_paths_for_seq
@@ -1049,7 +1049,7 @@ def get_long_read_bridge_table_parameters(graph, num_long_read_bridges, verbosit
 
 def print_long_read_bridge_table_header(alignments, col_widths, verbosity):
     header_line_1 = ['', '']
-    header_line_2 = ['', 'Start \u2192 end']
+    header_line_2 = ['', 'Start ' + get_right_arrow() + ' end']
 
     if verbosity > 1:
         header_line_1 += ['',      'Consensus']
@@ -1086,7 +1086,7 @@ def print_long_read_bridge_table_row(alignments, col_widths, output, completed_c
         search_type, search_time, best_path, best_path_len, best_path_raw_score, \
         best_path_scaled_score, best_path_length_discrepancy, quality = output
 
-    start_to_end = (start + ' \u2192').rjust(7) + ' ' + end
+    start_to_end = (start + ' ' + get_right_arrow()).rjust(7) + ' ' + end
     quality_str = float_to_str(quality, 3)
 
     table_row = [fraction, start_to_end]
