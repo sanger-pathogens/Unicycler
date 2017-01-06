@@ -5,7 +5,7 @@ This sample dataset is made of synthetic reads generated from three plasmids in 
 
 ### Short read-only assembly
 
-`unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --no_long -o output_dir`
+`unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -o output_dir`
 
 This command will assemble the short reads alone. If you look at the resulting contigs (or view the graph in [Bandage](https://github.com/rrwick/Bandage)) you'll see that only the smallest plasmid assembled completely. The larger two plasmids contain quite a lot of repetitive sequence and short reads aren't enough to complete them.
 
