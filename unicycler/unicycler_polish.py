@@ -985,9 +985,11 @@ def filter_arrow_small_variants(raw_variants, raw_variants_gff, filtered_variant
         # If we are assessing small variants with short reads, then both the AO percentage and
         # homopolymer length are used to filter variants.
         if passed and short_read_assessed:
-            passed = (variant.illumina_alt_percent and                    # must have an alt%
-                      variant.illumina_alt_percent >= args.illumina_alt)  # must have a big alt%
-
+            # If there are no reference occurrences at all (can occur when there are no alignments
+            # whatsoever), then we pass the PacBio variant. If there are reference occurrences,
+            # then we pass the variant if the alternative percentage is high enough.
+            passed = (variant.ro == 0 or (variant.illumina_alt_percent and
+                                          variant.illumina_alt_percent >= args.illumina_alt))
         if passed:
             filtered_variants.append(variant)
             variant_row.append('PASS')
