@@ -119,7 +119,7 @@ If the last command complains about permissions, you may need to run it with `su
 
 # Quick usage
 
-These commands use the reads you'll find in the `sample_data` directory. They are synthetic reads generated from plasmids in a [_Shigella sonnei reference_](https://www.ncbi.nlm.nih.gov/genome/417?genome_assembly_id=166795).
+These commands use the reads you'll find in the [`sample_data`](sample_data/) directory. They are synthetic reads generated from plasmids in a [_Shigella sonnei reference_](https://www.ncbi.nlm.nih.gov/genome/417?genome_assembly_id=166795).
 
 __Short read-only assembly:__<br>
 `unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -o output_dir`
