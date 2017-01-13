@@ -343,7 +343,7 @@ class AssemblyGraph(object):
             for segment in sorted_segments:
                 if len(segment.forward_sequence) >= min_length:
                     fasta.write(segment.get_fasta_name_and_description_line())
-                    fasta.write(add_line_breaks_to_sequence(segment.forward_sequence, 60))
+                    fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     @staticmethod
     def save_specific_segments_to_fasta(filename, segments, verbosity=0):
@@ -355,7 +355,7 @@ class AssemblyGraph(object):
             sorted_segments = sorted(segments, key=lambda x: x.number)
             for segment in sorted_segments:
                 fasta.write('>' + str(segment.number) + '\n')
-                fasta.write(add_line_breaks_to_sequence(segment.forward_sequence, 60))
+                fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     def save_to_gfa(self, filename, verbosity, save_copy_depth_info=False,
                     save_seg_type_info=False, leading_newline=True):
@@ -748,14 +748,12 @@ class AssemblyGraph(object):
         Returns the length for which segments that length and longer make up >= n% of the total
         bases.  E.g. if n = 50, this function returns the N50.  n must be from 0 to 100.
         """
-        total_length = self.get_total_length_no_overlaps()
+        total_length = self.get_total_length()
         target_length = total_length * (n_percent / 100.0)
-        sorted_segments = sorted(self.segments.values(),
-                                 key=lambda x: x.get_length_no_overlap(self.overlap),
-                                 reverse=True)
+        sorted_segments = sorted(self.segments.values(),key=lambda x: x.get_length(), reverse=True)
         length_so_far = 0
         for segment in sorted_segments:
-            seg_length = segment.get_length_no_overlap(self.overlap)
+            seg_length = segment.get_length()
             length_so_far += seg_length
             if length_so_far >= target_length:
                 return seg_length
@@ -773,20 +771,10 @@ class AssemblyGraph(object):
         l_line += str(self.overlap) + 'M\n'
         return l_line
 
-    def get_all_outputs(self, segment):
-        """
-        Returns a list of segments which lead out from the given segment.
-        """
-        if segment.number in self.reverse_links:
-            return [self.segments[x] for x in self.forward_links[segment.number]]
-        else:
-            return []
-
     def get_exclusive_inputs(self, segment_number):
         """
         This function finds all segments which lead into the given segment.  If those segments
-        do not lead into any other segments, then this function returns them in a list.  If they
-        do lead into other segments, then this function returns None.
+        do not lead into any other segments, then this function returns them in a list.
         Specifically, this function returns a list of unsigned numbers.
         """
         if segment_number not in self.reverse_links:
@@ -2585,7 +2573,7 @@ class Segment(object):
         """
         fasta = open(fasta_filename, 'w')
         fasta.write(self.get_fasta_name_and_description_line())
-        fasta.write(add_line_breaks_to_sequence(self.forward_sequence, 60))
+        fasta.write(add_line_breaks_to_sequence(self.forward_sequence))
         fasta.close()
 
     def get_seg_type_label(self):

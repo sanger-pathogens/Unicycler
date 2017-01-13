@@ -1100,7 +1100,7 @@ def apply_variants(in_fasta, variants, out_fasta):
         for name in out_seqs:
             header, seq = out_seqs[name]
             fasta.write('>' + header + '\n')
-            fasta.write(add_line_breaks_to_sequence(seq, 60))
+            fasta.write(add_line_breaks_to_sequence(seq))
 
 
 def print_command(command, verbosity):

@@ -274,6 +274,9 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
         for seg_num in seg_lengths:
             self.assertTrue(self.graph.segments[seg_num].get_length() <= seg_lengths[seg_num])
 
+    def test_get_n_segment_length(self):
+        self.assertEqual(self.graph.get_n_segment_length(50), 3217)
+
 
 class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
     """
@@ -507,3 +510,106 @@ class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
                                1.64285714285714)
         self.assertAlmostEqual(self.graph.get_mean_path_depth([19])[0], 10.0)
         self.assertAlmostEqual(self.graph.get_mean_path_depth([19, 19, 19])[0], 10.0)
+
+    def test_add_link_1(self):
+        self.assertEqual((len(self.graph.forward_links[18])
+                          if 18 in self.graph.forward_links else 0), 0)
+        self.assertEqual((len(self.graph.reverse_links[-18])
+                          if -18 in self.graph.reverse_links else 0), 0)
+        self.assertEqual((len(self.graph.forward_links[-17])
+                          if -17 in self.graph.forward_links else 0), 0)
+        self.assertEqual((len(self.graph.reverse_links[17])
+                          if 17 in self.graph.reverse_links else 0), 0)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 40)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 40)
+
+        self.graph.add_link(18, 17)
+
+        self.assertEqual((len(self.graph.forward_links[18])
+                          if 18 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[-18])
+                          if -18 in self.graph.reverse_links else 0), 1)
+        self.assertEqual((len(self.graph.forward_links[-17])
+                          if -17 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[17])
+                          if 17 in self.graph.reverse_links else 0), 1)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 42)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 42)
+
+    def test_add_link_2(self):
+        self.assertEqual((len(self.graph.forward_links[18])
+                          if 18 in self.graph.forward_links else 0), 0)
+        self.assertEqual((len(self.graph.reverse_links[-18])
+                          if -18 in self.graph.reverse_links else 0), 0)
+        self.assertEqual((len(self.graph.forward_links[-17])
+                          if -17 in self.graph.forward_links else 0), 0)
+        self.assertEqual((len(self.graph.reverse_links[17])
+                          if 17 in self.graph.reverse_links else 0), 0)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 40)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 40)
+
+        self.graph.add_link(-17, -18)
+
+        self.assertEqual((len(self.graph.forward_links[18])
+                          if 18 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[-18])
+                          if -18 in self.graph.reverse_links else 0), 1)
+        self.assertEqual((len(self.graph.forward_links[-17])
+                          if -17 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[17])
+                          if 17 in self.graph.reverse_links else 0), 1)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 42)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 42)
+
+        self.graph.add_link(18, 17)
+
+        self.assertEqual((len(self.graph.forward_links[18])
+                          if 18 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[-18])
+                          if -18 in self.graph.reverse_links else 0), 1)
+        self.assertEqual((len(self.graph.forward_links[-17])
+                          if -17 in self.graph.forward_links else 0), 1)
+        self.assertEqual((len(self.graph.reverse_links[17])
+                          if 17 in self.graph.reverse_links else 0), 1)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 42)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 42)
+
+    def test_get_connected_components_and_remove_link(self):
+        components = self.graph.get_connected_components()
+        self.assertEqual(len(components), 3)
+        self.assertEqual(sorted([len(x) for x in components]), [1, 1, 17])
+
+        self.graph.remove_link(17, 15)
+
+        components = self.graph.get_connected_components()
+        self.assertEqual(len(components), 4)
+        self.assertEqual(sorted([len(x) for x in components]), [1, 1, 1, 16])
+
+        self.graph.remove_link(-18, -15)
+
+        components = self.graph.get_connected_components()
+        self.assertEqual(len(components), 5)
+        self.assertEqual(sorted([len(x) for x in components]), [1, 1, 1, 1, 15])
+
+    def test_seq_from_signed_seg_num(self):
+        self.assertEqual(self.graph.seq_from_signed_seg_num(1), 'TTCTATTTTG')
+        self.assertEqual(self.graph.seq_from_signed_seg_num(-1), 'CAAAATAGAA')
+        self.assertEqual(self.graph.seq_from_signed_seg_num(15), 'GGAC')
+        self.assertEqual(self.graph.seq_from_signed_seg_num(-15), 'GTCC')
+
+    def test_get_connected_segments(self):
+        self.assertEqual(sorted(self.graph.get_connected_segments(1)), [2, 12])
+        self.assertEqual(sorted(self.graph.get_connected_segments(15)), [8, 10, 14, 17, 18])
+        self.assertEqual(sorted(self.graph.get_connected_segments(-19)), [19])
+        self.assertEqual(sorted(self.graph.get_connected_segments(16)), [])
+
+    def test_all_segments_below_depth(self):
+        self.assertTrue(self.graph.all_segments_below_depth([1, 2, 3], 1.5))
+        self.assertFalse(self.graph.all_segments_below_depth([1, 2, 3, 12], 1.5))
+        self.assertTrue(self.graph.all_segments_below_depth([1, 2, 3, 12], 2.5))
+
+    # def test_get_exclusive_inputs(self):
+    #     pass
+    #
+    # def test_get_exclusive_outputs(self):
+    #     pass

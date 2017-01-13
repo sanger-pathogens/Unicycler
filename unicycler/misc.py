@@ -16,6 +16,7 @@ import shutil
 import re
 import textwrap
 import datetime
+from . import settings
 
 
 def float_to_str(num, decimals, max_num=0):
@@ -503,12 +504,14 @@ def strip_read_extensions(read_file_name):
     return '.'.join(name_parts)
 
 
-def add_line_breaks_to_sequence(sequence, line_length):
+def add_line_breaks_to_sequence(sequence, line_length=0):
     """
     Wraps sequences to the defined length.  All resulting sequences end in a line break.
     """
     if not sequence:
         return '\n'
+    if line_length <= 0:
+        line_length = settings.BASES_PER_FASTA_LINE
     seq_with_breaks = ''
     pos = 0
     while pos < len(sequence):
