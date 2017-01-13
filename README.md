@@ -95,7 +95,17 @@ Unicycler needs the following tools for certain parts of its pipeline. They are 
 
 # Installation
 
-### Typical installation
+### installation via conda
+```bash
+conda install unicycler -c bioconda -c conda-forge
+```
+
+### installation via docker
+```bash
+docker run quay.io/biocontainers/unicycler:0.2.0--py35_0 unicycler -h
+```
+
+### installation from source
 ```
 git clone https://github.com/rrwick/Unicycler.git
 cd Unicycler
