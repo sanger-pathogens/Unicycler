@@ -16,6 +16,7 @@ import shutil
 import re
 import textwrap
 import datetime
+import multiprocessing
 from . import settings
 
 
@@ -520,7 +521,7 @@ def add_line_breaks_to_sequence(sequence, line_length=0):
     return seq_with_breaks
 
 
-class MyHelpFormatter(argparse.RawDescriptionHelpFormatter):
+class MyHelpFormatter(argparse.HelpFormatter):
     """
     This is a custom formatter class for argparse. It allows for some custom formatting,
     in particular for the help texts with multiple options (like bridging mode and verbosity level).
@@ -531,6 +532,13 @@ class MyHelpFormatter(argparse.RawDescriptionHelpFormatter):
         os.environ['COLUMNS'] = str(terminal_width)
         max_help_position = min(max(24, terminal_width // 3), 40)
         super().__init__(prog, max_help_position=max_help_position)
+
+    def _get_help_string(self, action):
+        help_text = action.help
+        if action.default != argparse.SUPPRESS and 'default' not in help_text.lower() and \
+                action.default is not None:
+            help_text += ' (default: ' + str(action.default) + ')'
+        return help_text
 
     def _split_lines(self, text, width):
         if text.startswith('B|') or text.startswith('R|'):
@@ -568,7 +576,7 @@ class MyHelpFormatter(argparse.RawDescriptionHelpFormatter):
 
     def _fill_text(self, text, width, indent):
         if text.startswith('R|'):
-            return argparse.RawDescriptionHelpFormatter._fill_text(self, text[2:], width, indent)
+            return ''.join(indent + line for line in text[2:].splitlines(keepends=True))
         else:
             return argparse.HelpFormatter._fill_text(self, text, width, indent)
 
@@ -829,3 +837,7 @@ def get_right_arrow():
         return '->'
     else:
         return '\u2192'
+
+
+def get_default_thread_count():
+    return min(multiprocessing.cpu_count(), settings.MAX_AUTO_THREAD_COUNT)

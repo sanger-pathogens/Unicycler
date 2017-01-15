@@ -35,11 +35,10 @@ import random
 import shutil
 import math
 from multiprocessing.dummy import Pool as ThreadPool
-import multiprocessing
 import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     print_progress_line, print_section_header, weighted_average_list, get_sequence_file_type, \
-    MyHelpFormatter, dim, colour, print_v
+    MyHelpFormatter, dim, colour, print_v, get_default_thread_count
 from .cpp_function_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
     delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
@@ -103,18 +102,18 @@ def get_arguments():
                                                  'read aligner',
                                      formatter_class=MyHelpFormatter)
 
-    parser.add_argument('--ref', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--ref', type=str, required=True,
                         help='FASTA file containing one or more reference sequences')
-    parser.add_argument('--reads', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--reads', type=str, required=True,
                         help='FASTQ or FASTA file of long reads')
-    parser.add_argument('--sam', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--sam', type=str, required=True,
                         help='SAM file of resulting alignments')
 
     add_aligning_arguments(parser, True)
 
     parser.add_argument('--sensitivity', type=int, default=0,
                         help='A number from 0 (least sensitive) to 3 (most sensitive)')
-    parser.add_argument('--threads', type=int, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--threads', type=int, required=False, default=get_default_thread_count(),
                         help='Number of threads used (default: number of CPUs, up to ' +
                              str(settings.MAX_AUTO_THREAD_COUNT) + ')')
     parser.add_argument('--verbosity', type=int, required=False, default=1,
@@ -138,15 +137,15 @@ def add_aligning_arguments(parser, show_help):
                         help='Temp directory for working files ("PID" will be replaced with the '
                              'process ID)'
                              if show_help else argparse.SUPPRESS)
-    parser.add_argument('--contamination', required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--contamination', required=False,
                         help='FASTA file of known contamination in long reads, e.g. lambda phage '
-                             'spike-in (default: none).'
+                             'spike-in (default: none)'
                              if show_help else argparse.SUPPRESS)
     parser.add_argument('--scores', type=str, required=False, default='3,-6,-5,-2',
                         help='Comma-delimited string of alignment scores: match, mismatch, '
                              'gap open, gap extend'
                              if show_help else argparse.SUPPRESS)
-    parser.add_argument('--low_score', type=float, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--low_score', type=float, required=False,
                         help='Score threshold - alignments below this are considered poor '
                              '(default: set threshold automatically)'
                              if show_help else argparse.SUPPRESS)
@@ -154,7 +153,7 @@ def add_aligning_arguments(parser, show_help):
                         help='Minimum alignment length (bp) - exclude alignments shorter than this '
                              'length'
                              if show_help else argparse.SUPPRESS)
-    parser.add_argument('--keep_bad', action='store_true', default=argparse.SUPPRESS,
+    parser.add_argument('--keep_bad', action='store_true',
                         help='Include alignments in the results even if they are below the low '
                              'score threshold (default: low-scoring alignments are discarded)'
                              if show_help else argparse.SUPPRESS)
@@ -167,30 +166,6 @@ def add_aligning_arguments(parser, show_help):
 
 
 def fix_up_arguments(args):
-    """
-    Repairs issues with the arguments, like not existing. We don't use None/False as a default
-    in add_argument because it makes the help text look weird.
-    """
-    try:
-        args.low_score
-    except AttributeError:
-        args.low_score = None
-    try:
-        args.keep_bad
-    except AttributeError:
-        args.keep_bad = False
-    try:
-        args.threads
-    except AttributeError:
-        args.threads = min(multiprocessing.cpu_count(), settings.MAX_AUTO_THREAD_COUNT)
-        if VERBOSITY > 2:
-            print('\nThread count set to', args.threads)
-
-    try:
-        args.contamination
-    except AttributeError:
-        args.contamination = None
-
     # If the user just said 'lambda' for the contamination, then we use the lambda phage FASTA
     # included with Unicycler.
     if args.contamination == 'lambda':

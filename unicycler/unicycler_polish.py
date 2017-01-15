@@ -20,7 +20,7 @@ from .misc import add_line_breaks_to_sequence, load_fasta, MyHelpFormatter, prin
     get_percentile_sorted, get_pilon_jar_path, colour, bold, bold_green, bold_yellow_underline, \
     dim, get_all_files_in_current_dir, check_file_exists, remove_formatting, \
     get_sequence_file_type, convert_fastq_to_fasta, load_fasta_with_full_header, get_timestamp, \
-    get_left_arrow, get_right_arrow
+    get_left_arrow, get_right_arrow, get_default_thread_count
 from . import settings
 
 
@@ -106,9 +106,9 @@ def get_arguments():
     settings_group = parser.add_argument_group('Polishing settings',
                                                'Various settings for polishing behaviour '
                                                '(defaults should work well in most cases)')
-    settings_group.add_argument('--min_insert', type=int, default=argparse.SUPPRESS,
+    settings_group.add_argument('--min_insert', type=int,
                                 help='minimum valid short read insert size (default: auto)')
-    settings_group.add_argument('--max_insert', type=int, default=argparse.SUPPRESS,
+    settings_group.add_argument('--max_insert', type=int,
                                 help='maximum valid short read insert size (default: auto)')
     settings_group.add_argument('--min_align_length', type=int, default=1000,
                                 help='Minimum long read alignment length (default: 1000)')
@@ -128,7 +128,7 @@ def get_arguments():
                                      'quality is less than this value')
 
     other_group = parser.add_argument_group('Other settings')
-    other_group.add_argument('--threads', type=int,
+    other_group.add_argument('--threads', type=int, default=get_default_thread_count(),
                              help='CPU threads to use in alignment and consensus (default: '
                                   'number of CPUs)')
     other_group.add_argument('--verbosity', type=int, required=False, default=2,
@@ -228,20 +228,6 @@ def get_arguments():
     #             parser.error(args.on_fast5 + ' is not a directory')
     #         if not any(f.lower().endswith('.fast5') for f in os.listdir(args.on_fast5)):
     #             parser.error('there are no *.fast5 files in ' + args.on_fast5)
-
-    if args.threads is None:
-        args.threads = min(multiprocessing.cpu_count(), settings.MAX_AUTO_THREAD_COUNT)
-        if args.verbosity > 2:
-            print('\nThread count set to', args.threads)
-
-    try:
-        args.min_insert
-    except AttributeError:
-        args.min_insert = None
-    try:
-        args.max_insert
-    except AttributeError:
-        args.max_insert = None
 
     return args, short_reads, pacbio_reads, long_reads
 

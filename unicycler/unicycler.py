@@ -17,7 +17,8 @@ from .assembly_graph import AssemblyGraph
 from .bridge import create_spades_contig_bridges, create_long_read_bridges, \
     create_loop_unrolling_bridges
 from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, print_v, bold, \
-    print_section_header, check_files_and_programs, MyHelpFormatter, print_table, get_ascii_art
+    print_section_header, check_files_and_programs, MyHelpFormatter, print_table, get_ascii_art, \
+    get_default_thread_count
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -415,45 +416,44 @@ def get_arguments():
 
     # Short read input options
     input_group = parser.add_argument_group('Input')
-    input_group.add_argument('-1', '--short1', required=True, default=argparse.SUPPRESS,
-                             help='FASTQ file of short reads (first reads in each pair)')
-    input_group.add_argument('-2', '--short2', required=True, default=argparse.SUPPRESS,
-                             help='FASTQ file of short reads (second reads in each pair)')
-    input_group.add_argument('-s', '--unpaired', required=False, default=argparse.SUPPRESS,
-                             help='FASTQ file of unpaired short reads')
+    input_group.add_argument('-1', '--short1', required=True,
+                             help='FASTQ file of first short reads in each pair (required)')
+    input_group.add_argument('-2', '--short2', required=True,
+                             help='FASTQ file of second short reads in each pair (required)')
+    input_group.add_argument('-s', '--unpaired', required=False,
+                             help='FASTQ file of unpaired short reads (optional)')
 
     # Long read input options
-    input_group.add_argument('-l', '--long', required=False, default=argparse.SUPPRESS,
-                             help='FASTQ or FASTA file of long reads, if all reads are available '
-                                  'at start.')
+    input_group.add_argument('-l', '--long', required=False,
+                             help='FASTQ or FASTA file of long reads (optional)')
 
     # Output options
     output_group = parser.add_argument_group('Output')
-    output_group.add_argument('-o', '--out', required=True, default=argparse.SUPPRESS,
-                              help='Output directory')
+    output_group.add_argument('-o', '--out', required=True,
+                              help='Output directory (required)')
     output_group.add_argument('--verbosity', type=int, required=False, default=1,
-                              help='R|Level of stdout information (0 to 3, default: 1)\n  '
+                              help='R|Level of stdout information (default: 1)\n  '
                                    '0 = no stdout, 1 = basic progress indicators, '
                                    '2 = extra info, 3 = debugging info')
     output_group.add_argument('--min_fasta_length', type=int, required=False, default=1,
                               help='Exclude contigs from the FASTA file which are shorter than '
                                    'this length (default: 1)')
     output_group.add_argument('--keep_temp', type=int, default=0,
-                              help='R|Level of file retention (0 to 2, default: 0)\n  '
+                              help='R|Level of file retention (default: 0)\n  '
                                    '0 = only keep files at main checkpoints, '
                                    '1 = keep some temp files including SAM, '
                                    '2 = keep all temp files')
 
     other_group = parser.add_argument_group('Other')
-    other_group.add_argument('-t', '--threads', type=int, required=False, default=argparse.SUPPRESS,
-                             help='Number of threads used (default: number of CPUs, up to ' +
-                                  str(settings.MAX_AUTO_THREAD_COUNT) + ')')
+    other_group.add_argument('-t', '--threads', type=int, required=False,
+                             default=get_default_thread_count(),
+                             help='Number of threads used')
     other_group.add_argument('--mode', choices=['conservative', 'normal', 'bold'], default='normal',
                              help='B|Bridging mode (default: normal)\n'
                                   '  conservative = smaller contigs, lowest misassembly rate\n'
                                   '  normal = moderate contig size and misassembly rate\n'
                                   '  bold = longest contigs, higher misassembly rate')
-    other_group.add_argument('--min_bridge_qual', type=float, default=argparse.SUPPRESS,
+    other_group.add_argument('--min_bridge_qual', type=float,
                              help='R|Do not apply bridges with a quality below this value\n'
                                   '  conservative mode default: ' +
                                   str(settings.CONSERVATIVE_MIN_BRIDGE_QUAL) + '\n'
@@ -475,7 +475,8 @@ def get_arguments():
                               help='Path to the SPAdes executable'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--no_correct', action='store_true',
-                              help='Skip SPAdes error correction step'
+                              help='Skip SPAdes error correction step (default: conduct SPAdes '
+                                   'error correction)'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--min_kmer_frac', type=float, default=0.2,
                               help='Lowest k-mer size for SPAdes assembly, expressed as a '
@@ -496,12 +497,14 @@ def get_arguments():
                                                'pipeline.'
                                                if show_all_args else argparse.SUPPRESS)
     rotation_group.add_argument('--no_rotate', action='store_true',
-                                help='Do not rotate completed replicons to start at a standard gene'
+                                help='Do not rotate completed replicons to start at a standard '
+                                     'gene (default: completed replicons are rotated)'
                                      if show_all_args else argparse.SUPPRESS)
     rotation_group.add_argument('--start_genes', type=str,
                                 default=os.path.join(this_script_dir, 'gene_data',
                                                      'start_genes.fasta'),
-                                help='FASTA file of genes for start point of rotated replicons'
+                                help='FASTA file of genes for start point of rotated replicons '
+                                     '(default: start_genes.fasta)'
                                      if show_all_args else argparse.SUPPRESS)
     rotation_group.add_argument('--start_gene_id', type=float, default=90.0,
                                 help='The minimum required BLAST percent identity for a start gene '
@@ -524,7 +527,8 @@ def get_arguments():
                                              'using Pilon at the end of the Unicycler pipeline.'
                                              if show_all_args else argparse.SUPPRESS)
     polish_group.add_argument('--no_pilon', action='store_true',
-                              help='Do not use Pilon to polish the final assembly'
+                              help='Do not use Pilon to polish the final assembly (default: Pilon '
+                                   'is used)'
                                    if show_all_args else argparse.SUPPRESS)
     polish_group.add_argument('--bowtie2_path', type=str, default='bowtie2',
                               help='Path to the bowtie2 executable'
@@ -542,8 +546,8 @@ def get_arguments():
                               help='Path to the java executable'
                                    if show_all_args else argparse.SUPPRESS)
     polish_group.add_argument('--min_polish_size', type=int, default=10000,
-                              help='Sequences shorter than this value will not be polished using '
-                                   'Pilon'
+                              help='Contigs shorter than this value (bp) will not be polished '
+                                   'using Pilon'
                                    if show_all_args else argparse.SUPPRESS)
 
     # Graph cleaning options
@@ -552,12 +556,12 @@ def get_arguments():
                                                'leftover sequences after bridging is complete.'
                                                if show_all_args else argparse.SUPPRESS)
     cleaning_group.add_argument('--min_component_size', type=int, default=1000,
-                                help='Unbridged graph components smaller than this size will be '
-                                     'removed from the final graph'
+                                help='Unbridged graph components smaller than this size (bp) will '
+                                     'be removed from the final graph'
                                      if show_all_args else argparse.SUPPRESS)
     cleaning_group.add_argument('--min_dead_end_size', type=int, default=1000,
-                                help='Graph dead ends smaller than this size will be removed from '
-                                     'the final graph'
+                                help='Graph dead ends smaller than this size (bp) will be removed '
+                                     'from the final graph'
                                      if show_all_args else argparse.SUPPRESS)
 
     # Add the arguments for the aligner, but suppress the help text.
@@ -573,41 +577,21 @@ def get_arguments():
     if args.keep_temp < 0 or args.keep_temp > 2:
         quit_with_error('--keep_temp must be between 0 and 2 (inclusive)')
 
-    try:
-        args.unpaired
-    except AttributeError:
-        args.unpaired = None
-    try:
-        args.long
-    except AttributeError:
-        args.long = None
-    try:
-        args.threads
-    except AttributeError:
-        args.threads = min(multiprocessing.cpu_count(), settings.MAX_AUTO_THREAD_COUNT)
-        if args.verbosity > 2:
-            print('\nThread count set to', args.threads)
-    try:
-        args.keep_temp
-    except AttributeError:
-        args.keep_temp = False
-
     # Set up bridging mode related stuff.
-    user_set_bridge_qual = hasattr(args, 'min_bridge_qual')
-    bridging_mode_val = 1
+    user_set_bridge_qual = args.min_bridge_qual is not None
+    args.mode = 1
     if args.mode == 'conservative':
-        bridging_mode_val = 0
+        args.mode = 0
         if not user_set_bridge_qual:
             args.min_bridge_qual = settings.CONSERVATIVE_MIN_BRIDGE_QUAL
     elif args.mode == 'normal':
-        bridging_mode_val = 1
+        args.mode = 1
         if not user_set_bridge_qual:
             args.min_bridge_qual = settings.NORMAL_MIN_BRIDGE_QUAL
     elif args.mode == 'bold':
-        bridging_mode_val = 2
+        args.mode = 2
         if not user_set_bridge_qual:
             args.min_bridge_qual = settings.BOLD_MIN_BRIDGE_QUAL
-    args.mode = bridging_mode_val
 
     # Change some arguments to full paths.
     args.out = os.path.abspath(args.out)

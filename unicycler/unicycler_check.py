@@ -95,13 +95,13 @@ def get_arguments():
     parser = argparse.ArgumentParser(description='Long read assembly checker',
                                      formatter_class=MyHelpFormatter)
 
-    parser.add_argument('--sam', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--sam', type=str, required=True,
                         help="Input SAM file of alignments (if this file doesn't exist, the "
                              "alignment will be performed with results saved to this file - you "
                              "can use the aligner arguments with this script)")
-    parser.add_argument('--ref', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--ref', type=str, required=True,
                         help='FASTA file containing one or more reference sequences')
-    parser.add_argument('--reads', type=str, required=True, default=argparse.SUPPRESS,
+    parser.add_argument('--reads', type=str, required=True,
                         help='FASTQ file of long reads')
     parser.add_argument('--error_window_size', type=int, required=False, default=100,
                         help='Window size for error summaries')
@@ -112,15 +112,15 @@ def get_arguments():
                              'the mean error rate and the random alignment error rate')
     parser.add_argument('--depth_p_val', type=float, required=False, default=0.01,
                         help='P-value for low/high depth thresholds')
-    parser.add_argument('--window_tables', type=str, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--window_tables', type=str, required=False,
                         help='Path and/or prefix for table files summarising reference errors for '
                              'reference windows (default: do not save window tables)')
-    parser.add_argument('--base_tables', type=str, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--base_tables', type=str, required=False,
                         help='Path and/or prefix for table files summarising reference errors at '
                              'each base (default: do not save base tables)')
-    parser.add_argument('--html', type=str, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--html', type=str, required=False,
                         help='Path for HTML report (default: do not save HTML report)')
-    parser.add_argument('--threads', type=int, required=False, default=argparse.SUPPRESS,
+    parser.add_argument('--threads', type=int, required=False,
                         help='Number of CPU threads used to align (default: the number of '
                              'available CPUs)')
     parser.add_argument('--verbosity', type=int, required=False, default=1,
@@ -134,21 +134,6 @@ def get_arguments():
 
     global VERBOSITY
     VERBOSITY = args.verbosity
-
-    # If some arguments weren't set, set them to None/False. We don't use None/False as a default
-    # in add_argument because it makes the help text look weird.
-    try:
-        args.window_tables
-    except AttributeError:
-        args.window_tables = None
-    try:
-        args.base_tables
-    except AttributeError:
-        args.base_tables = None
-    try:
-        args.html
-    except AttributeError:
-        args.html = None
 
     if args.depth_p_val > 0.1 or args.depth_p_val <= 0.0:
         quit_with_error('--depth_p_val must be greater than 0.0 and less than or equal to 0.1')
