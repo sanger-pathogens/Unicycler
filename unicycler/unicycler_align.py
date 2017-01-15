@@ -138,8 +138,7 @@ def add_aligning_arguments(parser, show_help):
                              'process ID)'
                              if show_help else argparse.SUPPRESS)
     parser.add_argument('--contamination', required=False,
-                        help='FASTA file of known contamination in long reads, e.g. lambda phage '
-                             'spike-in (default: none)'
+                        help='FASTA file of known contamination in long reads'
                              if show_help else argparse.SUPPRESS)
     parser.add_argument('--scores', type=str, required=False, default='3,-6,-5,-2',
                         help='Comma-delimited string of alignment scores: match, mismatch, '
@@ -159,9 +158,6 @@ def add_aligning_arguments(parser, show_help):
                              if show_help else argparse.SUPPRESS)
     parser.add_argument('--allowed_overlap', type=int, required=False, default=100,
                         help='Allow this much overlap between alignments in a single read'
-                             if show_help else argparse.SUPPRESS)
-    parser.add_argument('--kmer', type=int, required=False, default=8,
-                        help='K-mer size used for seeding alignments'
                              if show_help else argparse.SUPPRESS)
 
 

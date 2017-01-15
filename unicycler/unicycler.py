@@ -12,7 +12,6 @@ import sys
 import shutil
 import copy
 import random
-import multiprocessing
 from .assembly_graph import AssemblyGraph
 from .bridge import create_spades_contig_bridges, create_long_read_bridges, \
     create_loop_unrolling_bridges
@@ -579,19 +578,18 @@ def get_arguments():
 
     # Set up bridging mode related stuff.
     user_set_bridge_qual = args.min_bridge_qual is not None
-    args.mode = 1
     if args.mode == 'conservative':
         args.mode = 0
         if not user_set_bridge_qual:
             args.min_bridge_qual = settings.CONSERVATIVE_MIN_BRIDGE_QUAL
-    elif args.mode == 'normal':
-        args.mode = 1
-        if not user_set_bridge_qual:
-            args.min_bridge_qual = settings.NORMAL_MIN_BRIDGE_QUAL
     elif args.mode == 'bold':
         args.mode = 2
         if not user_set_bridge_qual:
             args.min_bridge_qual = settings.BOLD_MIN_BRIDGE_QUAL
+    else:  # normal
+        args.mode = 1
+        if not user_set_bridge_qual:
+            args.min_bridge_qual = settings.NORMAL_MIN_BRIDGE_QUAL
 
     # Change some arguments to full paths.
     args.out = os.path.abspath(args.out)

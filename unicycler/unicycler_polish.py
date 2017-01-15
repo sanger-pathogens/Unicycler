@@ -21,7 +21,6 @@ from .misc import add_line_breaks_to_sequence, load_fasta, MyHelpFormatter, prin
     dim, get_all_files_in_current_dir, check_file_exists, remove_formatting, \
     get_sequence_file_type, convert_fastq_to_fasta, load_fasta_with_full_header, get_timestamp, \
     get_left_arrow, get_right_arrow, get_default_thread_count
-from . import settings
 
 
 def main():
