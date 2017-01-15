@@ -111,6 +111,9 @@ def get_arguments():
 
     add_aligning_arguments(parser, True)
 
+    parser.add_argument('--keep_bad', action='store_true',
+                        help='Include alignments in the results even if they are below the low '
+                             'score threshold (default: low-scoring alignments are discarded)')
     parser.add_argument('--sensitivity', type=int, default=0,
                         help='A number from 0 (least sensitive) to 3 (most sensitive)')
     parser.add_argument('--threads', type=int, required=False, default=get_default_thread_count(),
@@ -121,9 +124,6 @@ def get_arguments():
     parser.add_argument('--min_len', type=int, required=False, default=100,
                         help='Minimum alignment length (bp) - exclude alignments shorter than this '
                              'length')
-    parser.add_argument('--keep_bad', action='store_true',
-                        help='Include alignments in the results even if they are below the low '
-                             'score threshold (default: low-scoring alignments are discarded)')
     parser.add_argument('--allowed_overlap', type=int, required=False, default=100,
                         help='Allow this much overlap between alignments in a single read')
 
