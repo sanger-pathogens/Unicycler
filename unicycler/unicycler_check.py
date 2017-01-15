@@ -16,7 +16,7 @@ import random
 import shutil
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     get_nice_header, reverse_complement, print_progress_line, print_section_header, \
-    MyHelpFormatter
+    MyHelpFormatter, get_default_thread_count
 from .read_ref import load_references, load_long_reads
 from .alignment import AlignmentScoringScheme
 from .cpp_function_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
@@ -123,7 +123,7 @@ def get_arguments():
                              'each base (default: do not save base tables)')
     parser.add_argument('--html', type=str, required=False,
                         help='Path for HTML report (default: do not save HTML report)')
-    parser.add_argument('--threads', type=int, required=False,
+    parser.add_argument('--threads', type=int, required=False, default=get_default_thread_count(),
                         help='Number of CPU threads used to align (default: the number of '
                              'available CPUs)')
     parser.add_argument('--verbosity', type=int, required=False, default=1,
