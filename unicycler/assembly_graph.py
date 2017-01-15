@@ -338,11 +338,12 @@ class AssemblyGraph(object):
         Saves whole graph (only forward sequences) to a FASTA file.
         """
         print_v(('\n' if leading_newline else '') + 'Saving ' + filename, verbosity, 1)
+        circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for segment in sorted_segments:
                 if len(segment.forward_sequence) >= min_length:
-                    fasta.write(segment.get_fasta_name_and_description_line())
+                    fasta.write(segment.get_fasta_name_and_description_line(circular_seg_nums))
                     fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     @staticmethod
@@ -750,7 +751,7 @@ class AssemblyGraph(object):
         """
         total_length = self.get_total_length()
         target_length = total_length * (n_percent / 100.0)
-        sorted_segments = sorted(self.segments.values(),key=lambda x: x.get_length(), reverse=True)
+        sorted_segments = sorted(self.segments.values(), key=lambda x: x.get_length(), reverse=True)
         length_so_far = 0
         for segment in sorted_segments:
             seg_length = segment.get_length()
@@ -2560,12 +2561,15 @@ class Segment(object):
         s_line += 'dp:f:' + str(self.depth) + '\n'
         return s_line
 
-    def get_fasta_name_and_description_line(self):
+    def get_fasta_name_and_description_line(self, circular_seg_nums=None):
         """
         Returns the segment's fasta line, including the '>' and the newline.
         """
-        return ''.join(['>', str(self.number), ' length=', str(self.get_length()),
-                        ' depth=', '%.2f' % self.depth, 'x\n'])
+        name_and_description = ''.join(['>', str(self.number), ' length=', str(self.get_length()),
+                                        ' depth=', '%.2f' % self.depth, 'x'])
+        if circular_seg_nums and self.number in circular_seg_nums:
+            name_and_description += ' circular=true'
+        return name_and_description + '\n'
 
     def save_to_fasta(self, fasta_filename):
         """
