@@ -118,6 +118,14 @@ def get_arguments():
                              str(settings.MAX_AUTO_THREAD_COUNT) + ')')
     parser.add_argument('--verbosity', type=int, required=False, default=1,
                         help='Level of stdout information (0 to 4)')
+    parser.add_argument('--min_len', type=int, required=False, default=100,
+                        help='Minimum alignment length (bp) - exclude alignments shorter than this '
+                             'length')
+    parser.add_argument('--keep_bad', action='store_true',
+                        help='Include alignments in the results even if they are below the low '
+                             'score threshold (default: low-scoring alignments are discarded)')
+    parser.add_argument('--allowed_overlap', type=int, required=False, default=100,
+                        help='Allow this much overlap between alignments in a single read')
 
     args = parser.parse_args()
 
@@ -131,12 +139,9 @@ def get_arguments():
 
 def add_aligning_arguments(parser, show_help):
     """
-    Adds the aligning-specific arguments to the parser.
+    Adds some aligning-specific arguments to the parser. These are in a separate function because
+    other tools (e.g. unicycler.py, unicycler_check.py) can use this function too.
     """
-    parser.add_argument('--temp_dir', type=str, required=False, default='align_temp_PID',
-                        help='Temp directory for working files ("PID" will be replaced with the '
-                             'process ID)'
-                             if show_help else argparse.SUPPRESS)
     parser.add_argument('--contamination', required=False,
                         help='FASTA file of known contamination in long reads'
                              if show_help else argparse.SUPPRESS)
@@ -147,17 +152,6 @@ def add_aligning_arguments(parser, show_help):
     parser.add_argument('--low_score', type=float, required=False,
                         help='Score threshold - alignments below this are considered poor '
                              '(default: set threshold automatically)'
-                             if show_help else argparse.SUPPRESS)
-    parser.add_argument('--min_len', type=float, required=False, default=100,
-                        help='Minimum alignment length (bp) - exclude alignments shorter than this '
-                             'length'
-                             if show_help else argparse.SUPPRESS)
-    parser.add_argument('--keep_bad', action='store_true',
-                        help='Include alignments in the results even if they are below the low '
-                             'score threshold (default: low-scoring alignments are discarded)'
-                             if show_help else argparse.SUPPRESS)
-    parser.add_argument('--allowed_overlap', type=int, required=False, default=100,
-                        help='Allow this much overlap between alignments in a single read'
                              if show_help else argparse.SUPPRESS)
 
 
@@ -178,10 +172,6 @@ def fix_up_arguments(args):
         contamination_type = get_sequence_file_type(args.contamination)
         if contamination_type != 'FASTA':
             quit_with_error('Long read contamination file must be FASTA format')
-
-    # Add the process ID to the default temp directory so multiple instances can run at once in the
-    # same directory.
-    args.temp_dir = args.temp_dir.replace('PID', str(os.getpid()))
 
 
 def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, reads_fastq,

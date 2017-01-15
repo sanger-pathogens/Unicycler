@@ -256,8 +256,8 @@ In the above example, the conservative assembly is incomplete because some bridg
 Run `unicycler --help` to view the program's most commonly used options:
 
 ```
-usage: unicycler [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-l LONG] -o OUT [--verbosity VERBOSITY] [--keep_temp KEEP_TEMP] [-t THREADS]
-                 [--mode {conservative,normal,bold}] [--expected_linear_seqs EXPECTED_LINEAR_SEQS]
+usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s UNPAIRED] [-l LONG] -o OUT [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep_temp KEEP_TEMP] [-t THREADS]
+                           [--mode {conservative,normal,bold}] [--expected_linear_seqs EXPECTED_LINEAR_SEQS]
 
        __
        \ \___
@@ -280,27 +280,27 @@ Help:
   --version                             Show Unicycler's version number
 
 Input:
-  -1 SHORT1, --short1 SHORT1            FASTQ file of short reads (first reads in each pair)
-  -2 SHORT2, --short2 SHORT2            FASTQ file of short reads (second reads in each pair)
-  -s UNPAIRED, --unpaired UNPAIRED      FASTQ file of unpaired short reads
-  -l LONG, --long LONG                  FASTQ or FASTA file of long reads, if all reads are available at start.
+  -1 SHORT1, --short1 SHORT1            FASTQ file of first short reads in each pair (required)
+  -2 SHORT2, --short2 SHORT2            FASTQ file of second short reads in each pair (required)
+  -s UNPAIRED, --unpaired UNPAIRED      FASTQ file of unpaired short reads (optional)
+  -l LONG, --long LONG                  FASTQ or FASTA file of long reads (optional)
 
 Output:
-  -o OUT, --out OUT                     Output directory
-  --verbosity VERBOSITY                 Level of stdout information (0 to 3, default: 1)
+  -o OUT, --out OUT                     Output directory (required)
+  --verbosity VERBOSITY                 Level of stdout information (default: 1)
                                           0 = no stdout, 1 = basic progress indicators, 2 = extra info, 3 = debugging info
   --min_fasta_length MIN_FASTA_LENGTH   Exclude contigs from the FASTA file which are shorter than this length (default: 1)
-  --keep_temp KEEP_TEMP                 Level of file retention (0 to 2, default: 0)
+  --keep_temp KEEP_TEMP                 Level of file retention (default: 0)
                                           0 = only keep files at main checkpoints, 1 = keep some temp files including SAM, 2 = keep all temp files
 
 Other:
-  -t THREADS, --threads THREADS         Number of threads used (default: number of CPUs, up to 8)
+  -t THREADS, --threads THREADS         Number of threads used (default: 8)
   --mode {conservative,normal,bold}     Bridging mode (default: normal)
                                           conservative = smaller contigs, lowest misassembly rate
                                           normal = moderate contig size and misassembly rate
                                           bold = longest contigs, higher misassembly rate
   --expected_linear_seqs EXPECTED_LINEAR_SEQS
-                                        The expected number of linear (i.e. non-circular) sequences in the underlying sequence
+                                        The expected number of linear (i.e. non-circular) sequences in the underlying sequence (default: 0)
 ```
 
 ### Advanced options
@@ -310,53 +310,48 @@ Run `unicycler --help_all` to see a complete list of the program's options. Thes
 SPAdes assembly:
   These options control the short read SPAdes assembly at the beginning of the Unicycler pipeline.
 
-  --spades_path SPADES_PATH             Path to the SPAdes executable
-  --no_correct                          Skip SPAdes error correction step
-  --min_kmer_frac MIN_KMER_FRAC         Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read length
-  --max_kmer_frac MAX_KMER_FRAC         Highest k-mer size for SPAdes assembly, expressed as a fraction of the read length
-  --kmer_count KMER_COUNT               Number of k-mer steps to use in SPAdes assembly
+  --spades_path SPADES_PATH             Path to the SPAdes executable (default: spades.py)
+  --no_correct                          Skip SPAdes error correction step (default: conduct SPAdes error correction)
+  --min_kmer_frac MIN_KMER_FRAC         Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read length (default: 0.2)
+  --max_kmer_frac MAX_KMER_FRAC         Highest k-mer size for SPAdes assembly, expressed as a fraction of the read length (default: 0.95)
+  --kmer_count KMER_COUNT               Number of k-mer steps to use in SPAdes assembly (default: 10)
 
 Assembly rotation:
   These options control the rotation of completed circular sequence near the end of the Unicycler pipeline.
 
-  --no_rotate                           Do not rotate completed replicons to start at a standard gene
-  --start_genes START_GENES             FASTA file of genes for start point of rotated replicons
-  --start_gene_id START_GENE_ID         The minimum required BLAST percent identity for a start gene search
-  --start_gene_cov START_GENE_COV       The minimum required BLAST percent coverage for a start gene search
-  --makeblastdb_path MAKEBLASTDB_PATH   Path to the makeblastdb executable
-  --tblastn_path TBLASTN_PATH           Path to the tblastn executable
+  --no_rotate                           Do not rotate completed replicons to start at a standard gene (default: completed replicons are rotated)
+  --start_genes START_GENES             FASTA file of genes for start point of rotated replicons (default: start_genes.fasta)
+  --start_gene_id START_GENE_ID         The minimum required BLAST percent identity for a start gene search (default: 90.0)
+  --start_gene_cov START_GENE_COV       The minimum required BLAST percent coverage for a start gene search (default: 95.0)
+  --makeblastdb_path MAKEBLASTDB_PATH   Path to the makeblastdb executable (default: makeblastdb)
+  --tblastn_path TBLASTN_PATH           Path to the tblastn executable (default: tblastn)
 
 Pilon polishing:
   These options control the final assembly polish using Pilon at the end of the Unicycler pipeline.
 
-  --no_pilon                            Do not use Pilon to polish the final assembly
-  --bowtie2_path BOWTIE2_PATH           Path to the bowtie2 executable
+  --no_pilon                            Do not use Pilon to polish the final assembly (default: Pilon is used)
+  --bowtie2_path BOWTIE2_PATH           Path to the bowtie2 executable (default: bowtie2)
   --bowtie2_build_path BOWTIE2_BUILD_PATH
-                                        Path to the bowtie2_build executable
-  --samtools_path SAMTOOLS_PATH         Path to the samtools executable
-  --pilon_path PILON_PATH               Path to a Pilon executable or the Pilon Java archive file
-  --java_path JAVA_PATH                 Path to the java executable
-  --min_polish_size MIN_POLISH_SIZE     Sequences shorter than this value will not be polished using Pilon
+                                        Path to the bowtie2_build executable (default: bowtie2-build)
+  --samtools_path SAMTOOLS_PATH         Path to the samtools executable (default: samtools)
+  --pilon_path PILON_PATH               Path to a Pilon executable or the Pilon Java archive file (default: pilon)
+  --java_path JAVA_PATH                 Path to the java executable (default: java)
+  --min_polish_size MIN_POLISH_SIZE     Contigs shorter than this value (bp) will not be polished using Pilon (default: 10000)
 
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.
 
   --min_component_size MIN_COMPONENT_SIZE
-                                        Unbridged graph components smaller than this size will be removed from the final graph
+                                        Unbridged graph components smaller than this size (bp) will be removed from the final graph (default: 1000)
   --min_dead_end_size MIN_DEAD_END_SIZE
-                                        Graph dead ends smaller than this size will be removed from the final graph
+                                        Graph dead ends smaller than this size (bp) will be removed from the final graph (default: 1000)
 
 Long read alignment:
   These options control the alignment of long reads to the assembly graph.
 
-  --temp_dir TEMP_DIR                   Temp directory for working files ("PID" will be replaced with the process ID)
-  --contamination CONTAMINATION         FASTA file of known contamination in long reads, e.g. lambda phage spike-in (default: none).
-  --scores SCORES                       Comma-delimited string of alignment scores: match, mismatch, gap open, gap extend
+  --contamination CONTAMINATION         FASTA file of known contamination in long reads
+  --scores SCORES                       Comma-delimited string of alignment scores: match, mismatch, gap open, gap extend (default: 3,-6,-5,-2)
   --low_score LOW_SCORE                 Score threshold - alignments below this are considered poor (default: set threshold automatically)
-  --min_len MIN_LEN                     Minimum alignment length (bp) - exclude alignments shorter than this length
-  --keep_bad                            Include alignments in the results even if they are below the low score threshold (default: low-scoring alignments are discarded)
-  --allowed_overlap ALLOWED_OVERLAP     Allow this much overlap between alignments in a single read
-  --kmer KMER                           K-mer size used for seeding alignments
 ```
 
 

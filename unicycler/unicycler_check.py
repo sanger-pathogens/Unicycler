@@ -52,7 +52,7 @@ def main():
     if must_perform_alignment:
         semi_global_align_long_reads(references, args.ref, read_dict, read_names, read_filename,
                                      args.threads, scoring_scheme, [args.low_score],
-                                     args.keep_bad, args.min_len, args.sam,
+                                     False, args.min_len, args.sam,
                                      full_command, 0, 3, args.contamination, VERBOSITY)
 
     alignments = load_sam_alignments(args.sam, read_dict, reference_dict, scoring_scheme, VERBOSITY)
@@ -103,6 +103,9 @@ def get_arguments():
                         help='FASTA file containing one or more reference sequences')
     parser.add_argument('--reads', type=str, required=True,
                         help='FASTQ file of long reads')
+    parser.add_argument('--min_len', type=int, required=False, default=100,
+                        help='Minimum alignment length (bp) - exclude alignments shorter than this '
+                             'length')
     parser.add_argument('--error_window_size', type=int, required=False, default=100,
                         help='Window size for error summaries')
     parser.add_argument('--depth_window_size', type=int, required=False, default=100,
@@ -142,10 +145,6 @@ def get_arguments():
 
     if args.html and not importlib.util.find_spec('plotly'):
         quit_with_error('plotly not found - please install plotly package to produce html plots')
-
-    # Add the process ID to the default temp directory so multiple instances can run at once in the
-    # same directory.
-    args.temp_dir = args.temp_dir.replace('PID', str(os.getpid()))
 
     return args
 

@@ -105,8 +105,6 @@ class TestUnicyclerOptions(unittest.TestCase):
         min_component_size_default = int(get_default_from_help('--min_component_size', help_text))
         min_dead_end_size_default = int(get_default_from_help('--min_dead_end_size', help_text))
         scores_default = get_default_from_help('--scores', help_text)
-        min_len_default = int(get_default_from_help('--min_len', help_text))
-        allowed_overlap_default = int(get_default_from_help('--allowed_overlap', help_text))
 
         sys.argv = [sys.argv[0], '-1', 'reads_1.fastq.gz', '-2', 'reads_2.fastq.gz',
                     '-o', 'out_dir']
@@ -134,8 +132,6 @@ class TestUnicyclerOptions(unittest.TestCase):
         self.assertEqual(args.min_component_size, min_component_size_default)
         self.assertEqual(args.min_dead_end_size, min_dead_end_size_default)
         self.assertEqual(args.scores, scores_default)
-        self.assertEqual(args.min_len, min_len_default)
-        self.assertEqual(args.allowed_overlap, allowed_overlap_default)
 
     def test_modes(self):
         sys.argv = [sys.argv[0], '-1', 'reads_1.fastq.gz', '-2', 'reads_2.fastq.gz',

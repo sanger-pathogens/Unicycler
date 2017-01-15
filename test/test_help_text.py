@@ -69,14 +69,9 @@ class TestBasicHelpText(unittest.TestCase):
         self.assertFalse('--min_polish_size' in self.stdout)
         self.assertFalse('--min_component_size' in self.stdout)
         self.assertFalse('--min_dead_end_size' in self.stdout)
-        self.assertFalse('--temp_dir' in self.stdout)
         self.assertFalse('--contamination' in self.stdout)
         self.assertFalse('--scores' in self.stdout)
         self.assertFalse('--low_score' in self.stdout)
-        self.assertFalse('--min_len' in self.stdout)
-        self.assertFalse('--keep_bad' in self.stdout)
-        self.assertFalse('--allowed_overlap' in self.stdout)
-        self.assertFalse('--kmer' in self.stdout)
 
 
 class TestExtendedHelpText(unittest.TestCase):
@@ -131,14 +126,9 @@ class TestExtendedHelpText(unittest.TestCase):
         self.assertTrue('--min_polish_size' in self.stdout)
         self.assertTrue('--min_component_size' in self.stdout)
         self.assertTrue('--min_dead_end_size' in self.stdout)
-        self.assertTrue('--temp_dir' in self.stdout)
         self.assertTrue('--contamination' in self.stdout)
         self.assertTrue('--scores' in self.stdout)
         self.assertTrue('--low_score' in self.stdout)
-        self.assertTrue('--min_len' in self.stdout)
-        self.assertTrue('--keep_bad' in self.stdout)
-        self.assertTrue('--allowed_overlap' in self.stdout)
-        self.assertTrue('--kmer' in self.stdout)
 
 
 class TestEmptyCommand(unittest.TestCase):
