@@ -9,8 +9,10 @@ Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Ill
 * [Introduction](#introduction)
 * [Requirements](#requirements)
 * [Installation](#installation)
-    * [Typical installation](#typical-installation)
-    * [Other installation commands](#other-installation-commands)
+    * [Install from source](#install-from-source)
+    * [Build and run without installation](#build-and-run-without-installation)
+    * [Install via conda](#install-via-conda)
+    * [Install via Docker](#install-via-docker)
 * [Quick usage](#quick-usage)
 * [How it works](#how-it-works)
     * [Assembly graphs](#assembly-graphs)
@@ -95,35 +97,46 @@ Unicycler needs the following tools for certain parts of its pipeline. They are 
 
 # Installation
 
-### installation via conda
+### Install from source
+These instructions install the most up-to-date version of Unicycler:
 ```bash
-conda install unicycler -c bioconda -c conda-forge
-```
-
-### installation via docker
-```bash
-docker run quay.io/biocontainers/unicycler:0.2.0--py35_0 unicycler -h
-```
-
-### installation from source
-```
 git clone https://github.com/rrwick/Unicycler.git
 cd Unicycler
 python3 setup.py install
 ```
-If the last command complains about permissions, you may need to run it with `sudo`.
 
-### Other installation commands
-
+Notes:
+* If the last command complains about permissions, you may need to run it with `sudo`.
+* If you want a particular version of Unicycler, download the source from the [releases page](https://github.com/rrwick/Unicycler/releases) instead of cloning from GitHub.
 * Install just for your user: `python3 setup.py install --user`
     * If you get a strange 'can't combine user with prefix' error, read [this](http://stackoverflow.com/questions/4495120).
 * Install to a specific location: `python3 setup.py install --prefix=$HOME/.local`
 * Install with pip (local copy): `pip3 install path/to/Unicycler`
 * Install with pip (from GitHub): `pip3 install git+https://github.com/rrwick/Unicycler.git`
 * Install with specific Makefile options: `python3 setup.py install --makeargs "CXX=icpc"`
-* Build and run without installing:
-    * Run `make` in the Unicycler directory.
-    * Then you can execute `path/to/unicycler-runner.py` instead of `unicycler`
+
+
+### Build and run without installation
+
+This approach compiles Unicycler code, but doesn't copy executables anywhere:
+```bash
+git clone https://github.com/rrwick/Unicycler.git
+cd Unicycler
+make
+```
+Now instead of running `unicycler`, you instead use `path/to/unicycler-runner.py`.
+
+
+### Install via conda
+```bash
+conda install unicycler -c bioconda -c conda-forge
+```
+
+
+### Install via Docker
+```bash
+docker run quay.io/biocontainers/unicycler:0.2.0--py35_0 unicycler -h
+```
 
 
 
@@ -413,7 +426,7 @@ So how long must your reads be for Unicycler to complete an assembly? _Longer th
 ### Poretools
 
 [Poretools](http://poretools.readthedocs.io/en/latest/) can turn your Nanopore FAST5 reads into a FASTQ file appropriate for Unicycler. Here's an example command:
-```
+```bash
 poretools fastq --type best --min-length 1000 path/to/fast5/dir/ > nanopore_reads.fastq
 ```
 If you have 2D reads, `--type best` makes Poretools give only one FASTQ read per FAST5 file (if you have 1D reads, you can exclude that option). Adjust the `--min-length 1000` parameter to suit your dataset – a larger value would be appropriate if you have lots of long reads.
