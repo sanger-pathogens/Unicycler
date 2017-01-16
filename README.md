@@ -434,7 +434,7 @@ If you have 2D reads, `--type best` makes Poretools give only one FASTQ read per
 
 ### Nanopore: 1D vs 2D
 
-Since Unicycler can tolerate low accuracy reads, [Oxford Nanopore 1D sequencing](https://nanoporetech.com/applications/dna-nanopore-sequencing) is probably preferable to 2D, as it can provide twice as many reads. However, at the time of writing, the 2D library prep supports barcoding. So if you want to sequence multiple samples on a single flow cell, 2D is currently the only option.
+Since Unicycler can tolerate low accuracy reads, [Oxford Nanopore 1D sequencing](https://nanoporetech.com/applications/dna-nanopore-sequencing) is preferable to 2D, as it can provide twice as many reads. Unicycler will of course work with 2D reads, but you can get more out of your flow cell with 1D.
 
 
 ### Bad Illumina reads
