@@ -476,7 +476,8 @@ If your long reads have known contamination, you can use the `--contamination` o
 
 For example, if you've sequenced two isolates in succession on the same Nanopore flow cell, there may be residual reads from the first sample in the second run. In this case, you can supply a reference/assembly of the first sample to Unicycler when assembling the second sample.
 
-Some Oxford Nanopore kits include a lambda phage spike-in as a control. Since this is a common contaminant, you can simply use `--contamination lambda` to filter these out (no need to supply a FASTA file).
+Some Oxford Nanopore protocols include a lambda phage spike-in as a control. Since this is a common contaminant, you can simply use `--contamination lambda` to filter these out (no need to supply a FASTA file).
+
 
 
 # Unicycler align
