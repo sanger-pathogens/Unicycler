@@ -113,7 +113,7 @@ def get_arguments():
     parser.add_argument('--error_rate_threshold', type=float, required=False, default=0.3,
                         help='Threshold for high error rates, expressed as the fraction between '
                              'the mean error rate and the random alignment error rate')
-    parser.add_argument('--depth_p_val', type=float, required=False, default=0.01,
+    parser.add_argument('--depth_p_val', type=float, required=False, default=0.001,
                         help='P-value for low/high depth thresholds')
     parser.add_argument('--window_tables', type=str, required=False,
                         help='Path and/or prefix for table files summarising reference errors for '
