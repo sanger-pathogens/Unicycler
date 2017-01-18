@@ -39,29 +39,13 @@ def main():
     args = get_arguments()
     verbosity = args.verbosity
 
-    files = [args.short1, args.short2]
-    if args.unpaired:
-        files.append(args.unpaired)
-    if args.long:
-        files.append(args.long)
-    check_files_and_programs(files, args,
-                             spades_path=args.spades_path,
-                             makeblastdb_path=(None if args.no_rotate else args.makeblastdb_path),
-                             tblastn_path=(None if args.no_rotate else args.tblastn_path),
-                             gene_db_path=(None if args.no_rotate else args.start_genes),
-                             pilon_path=(None if args.no_pilon else args.pilon_path),
-                             java_path=(None if args.no_pilon else args.java_path),
-                             samtools_path=(None if args.no_pilon else args.samtools_path),
-                             bowtie2_path=(None if args.no_pilon else args.bowtie2_path),
-                             bowtie2_build_path=(None if args.no_pilon
-                                                 else args.bowtie2_build_path))
-
+    check_files_and_programs(args)
     print_intro_message(args, verbosity, full_command)
     make_output_directory(args.out, verbosity)
 
     file_num = 1
-    unbridged_graph_filename = os.path.join(args.out, str(file_num).zfill(3) +
-                                            '_unbridged_graph.gfa')
+    unbridged_graph_filename = os.path.join(args.out,
+                                            str(file_num).zfill(3) + '_unbridged_graph.gfa')
 
     # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
     if os.path.isfile(unbridged_graph_filename):

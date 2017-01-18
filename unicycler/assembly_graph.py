@@ -2481,6 +2481,7 @@ class AssemblyGraph(object):
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
 
 
+# noinspection PyAugmentAssignment
 class Segment(object):
     """
     This hold a graph segment with a number, depth, direction and sequence.

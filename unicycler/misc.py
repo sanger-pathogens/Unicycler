@@ -55,24 +55,25 @@ def int_to_str(num, max_num=0):
     return num_str.rjust(len(max_str))
 
 
-def check_files_and_programs(files, args, spades_path=None,
-                             makeblastdb_path=None, tblastn_path=None, gene_db_path=None,
-                             pilon_path=None, java_path=None, samtools_path=None,
-                             bowtie2_path=None, bowtie2_build_path=None):
+def check_files_and_programs(args):
     """
     Checks to make sure all files in the list are present and either program, as needed.
     """
-    for file in files:
-        check_file_exists(file)
-    if spades_path:
-        check_spades(spades_path)
-    if makeblastdb_path and tblastn_path:
-        check_blast(makeblastdb_path, tblastn_path, gene_db_path)
-    if pilon_path:
-        check_pilon(pilon_path, java_path, samtools_path, bowtie2_path, bowtie2_build_path, args)
+    check_file_exists(args.short1)
+    check_file_exists(args.short2)
+    if args.unpaired:
+        check_file_exists(args.unpaired)
+    if args.long:
+        check_file_exists(args.long)
+    check_spades(args.spades_path)
+    if not args.no_rotate:
+        check_blast(args.makeblastdb_path, args.tblastn_path, args.start_genes)
+    if not args.no_pilon:
+        check_pilon(args.pilon_path, args.java_path, args.samtools_path, args.bowtie2_path,
+                    args.bowtie2_build_path, args)
 
 
-def check_file_exists(filename):  # type: (str) -> bool
+def check_file_exists(filename):
     """
     Checks to make sure the single given file exists.
     """
@@ -80,12 +81,12 @@ def check_file_exists(filename):  # type: (str) -> bool
         quit_with_error('could not find ' + filename)
 
 
-def check_directory_exists(dirname):  # type: (str) -> bool
+def check_directory_exists(dir_name):
     """
     Checks to make sure the single given directory exists.
     """
-    if not os.path.isdir(dirname):
-        quit_with_error('could not find ' + dirname)
+    if not os.path.isdir(dir_name):
+        quit_with_error('could not find ' + dir_name)
 
 
 def quit_with_error(message):  # type: (str) -> None
@@ -362,9 +363,9 @@ def get_compression_type(filename):
     file_start = unknown_file.read(max_len)
     unknown_file.close()
     compression_type = 'plain'
-    for filetype, magic_bytes in magic_dict.items():
+    for file_type, magic_bytes in magic_dict.items():
         if file_start.startswith(magic_bytes):
-            compression_type = filetype
+            compression_type = file_type
     if compression_type == 'bz2':
         quit_with_error('cannot use bzip2 format - use gzip instead')
     if compression_type == 'zip':
