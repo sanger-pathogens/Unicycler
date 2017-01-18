@@ -232,7 +232,7 @@ def get_arguments():
 
 
 def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_alignments=True,
-             indices=True, large_variants=True, ale_scores=True):
+             indices=True, variants=True, ale_scores=True):
     all_files = get_all_files_in_current_dir()
     files_to_delete = []
 
@@ -244,8 +244,8 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
         files_to_delete += [f for f in all_files if f.endswith('.bt2') or f.endswith('.fai') or
                             f.endswith('.amb') or f.endswith('.ann') or f.endswith('.bwt') or
                             f.endswith('.pac') or f.endswith('.sa') or f.endswith('.bai')]
-    if large_variants:
-        files_to_delete += [f for f in all_files if f.startswith('large_variant_')]
+    if variants:
+        files_to_delete += [f for f in all_files if f.startswith('variant_')]
     if ale_scores:
         files_to_delete += [f for f in all_files if f.startswith('ale.out')]
     if long_read_alignments:
@@ -709,7 +709,7 @@ def ale_assessed_changes(fasta, round_num, args, short, pacbio, long_reads, all_
         current = fasta
     clean_up(args)
 
-    print_large_variant_table(variants, best_ale_score, initial_ale_score)
+    print_variant_table(variants, best_ale_score, initial_ale_score)
     print_result(applied_variant, polished_fasta, args.verbosity)
 
     return current, round_num, applied_variant
@@ -758,7 +758,7 @@ def run_ale(fasta, args, all_ale_outputs):
                 if 'ALE_score:' in line and ale_score == float('-inf'):
                     ale_score = float(line.split('ALE_score:')[1].strip().split()[0])
 
-    clean_up(args, large_variants=False)
+    clean_up(args, variants=False)
     return ale_score
 
 
@@ -1457,16 +1457,7 @@ def print_small_variant_table(rows, freebayes_qual, short_read_assessed, verbosi
     print_table([header] + rows, alignments=alignments, sub_colour=sub_colour)
 
 
-def print_simple_large_variant_table(variants):
-    table = [['Contig', 'Position', 'Ref', 'Alt']]
-    for v in variants:
-        ref_seq = v.ref_seq if v.ref_seq else '.'
-        variant_seq = v.variant_seq if v.variant_seq else '.'
-        table.append([v.ref_name, str(v.start_pos), ref_seq, variant_seq])
-    print_table(table, alignments='LRLL')
-
-
-def print_large_variant_table(variants, best_ale_score, initial_ale_score):
+def print_variant_table(variants, best_ale_score, initial_ale_score):
     print()
     table = [['Source', 'Contig', 'Position', 'Ref', 'Alt', 'ALE score']]
     text_colour = 'green' if initial_ale_score == best_ale_score else 'red'
