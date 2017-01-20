@@ -14,7 +14,6 @@ import subprocess
 import collections
 import statistics
 import math
-import multiprocessing
 import re
 from .misc import add_line_breaks_to_sequence, load_fasta, MyHelpFormatter, print_table, \
     get_percentile_sorted, get_pilon_jar_path, colour, bold, bold_green, bold_yellow_underline, \
@@ -41,21 +40,18 @@ def main():
     if short and (args.min_insert is None or args.max_insert is None):
         get_insert_size_range(args, current)
 
-    if long_reads and short and args.use_racon:
-        current, round_num = racon_polish(current, round_num, args, all_ale_scores)
-
     if short:
         current, round_num = full_pilon_loop(current, round_num, args, all_ale_scores)
 
     if long_reads and short:
-        current, round_num = long_read_polish_small_changes_loop(current, round_num, args,
+        current, round_num = long_read_polish_small_changes_loop(current, round_num, args, short,
                                                                  all_ale_scores)
     if pacbio:
         current, round_num = arrow_small_changes_loop(current, round_num, args, short,
                                                       all_ale_scores)
-    if short:
+    if short and pacbio:
         current, round_num = ale_assessed_changes_loop(current, round_num, args, short, pacbio,
-                                                       long_reads, all_ale_scores)
+                                                       all_ale_scores)
     finish(current, all_ale_scores, round_num, args, short)
 
 
@@ -85,22 +81,11 @@ def get_arguments():
     pacbio_group.add_argument('--pb_fasta', type=str,
                               help='FASTA file of PacBio reads')
 
-    # nanopore_group = parser.add_argument_group('Nanopore reads',
-    #                                            'To polish with Nanopore reads (using '
-    #                                            'Nanopolish), provide one of the following')
-    # nanopore_group.add_argument('--on_fast5', type=str,
-    #                             help='Directory containing Oxford Nanopore fast5 files')
-    # nanopore_group.add_argument('--on_fasta', type=str,
-    #                             help='FASTA file of Oxford Nanopore reads (must have been '
-    #                                  'extracted from fast5 files using nanopolish extract)')
-
     nanopore_group = parser.add_argument_group('Generic long reads',
                                                'To polish with generic long reads, provide the '
                                                'following')
     nanopore_group.add_argument('--long_reads', type=str,
                                 help='FASTQ/FASTA file of long reads')
-    nanopore_group.add_argument('--use_racon', action='store_true',
-                                help='Use Racon before polishing')
 
     settings_group = parser.add_argument_group('Polishing settings',
                                                'Various settings for polishing behaviour '
@@ -163,10 +148,6 @@ def get_arguments():
                              help='path to ALE executable')
     tools_group.add_argument('--bwa', type=str, default='bwa',
                              help='path to bwa executable')
-    tools_group.add_argument('--nanopolish', type=str, default='nanopolish',
-                             help='path to nanopolish executable')
-    tools_group.add_argument('--nanopolish_model_dir', type=str,
-                             help='path to nanopolish models directory')
     tools_group.add_argument('--racon', type=str, default='racon',
                              help='path to racon executable')
     tools_group.add_argument('--minimap', type=str, default='minimap',
@@ -191,11 +172,6 @@ def get_arguments():
         parser.error('only one of the following PacBio inputs can be used: --pb_bax, --pb_bam, '
                      '--pb_fasta')
 
-    # nanopore_input_count = sum(0 if x is None else 1 for x in [args.on_fast5, args.on_fasta])
-    # if nanopore_input_count > 1:
-    #     parser.error('only one of the following Nanopore inputs can be used: --on_fast5, '
-    #                  '--on_fasta')
-
     if not short_read_input_count and not pacbio_input_count and not args.long_reads:
         parser.error('at least one type of input reads is required')
 
@@ -205,28 +181,7 @@ def get_arguments():
 
     short_reads = short_read_input_count == 2
     pacbio_reads = pacbio_input_count == 1
-    # nanopore_reads = nanopore_input_count == 1
     long_reads = bool(args.long_reads)
-
-    # if nanopore_reads:
-    #     if not args.nanopolish_model_dir:
-    #         parser.error('--nanopolish_model_dir is required when polishing with Nanopore reads')
-    #     if not os.path.isdir(args.nanopolish_model_dir):
-    #         parser.error(args.nanopolish_model_dir + ' is not a directory')
-    #     nanopolish_model_fofn = os.path.join(args.nanopolish_model_dir, 'nanopolish_models.fofn')
-    #     if not os.path.isfile(nanopolish_model_fofn):
-    #         parser.error(nanopolish_model_fofn + ' is missing from ' + args.nanopolish_model_dir)
-    #     args.nanopolish_model_files = [os.path.join(args.nanopolish_model_dir, f)
-    #                                    for f in os.listdir(args.nanopolish_model_dir)
-    #                                    if f.endswith('.model')]
-    #     if not args.nanopolish_model_files:
-    #         parser.error('Nanopolish model files are missing from ' + args.nanopolish_model_dir)
-    #     args.nanopolish_model_files.append(nanopolish_model_fofn)
-    #     if args.on_fast5:
-    #         if not os.path.isdir(args.on_fast5):
-    #             parser.error(args.on_fast5 + ' is not a directory')
-    #         if not any(f.lower().endswith('.fast5') for f in os.listdir(args.on_fast5)):
-    #             parser.error('there are no *.fast5 files in ' + args.on_fast5)
 
     return args, short_reads, pacbio_reads, long_reads
 
@@ -250,10 +205,6 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
         files_to_delete += [f for f in all_files if f.startswith('ale.out')]
     if long_read_alignments:
         files_to_delete += [f for f in all_files if f.startswith('long_read_align')]
-    # if nanopore_alignments:
-    #     files_to_delete += [f for f in all_files if f.startswith('nanopore_align')]
-    #     files_to_delete += [f for f in all_files if f.endswith('_models.fofn')]
-    #     files_to_delete += [f for f in all_files if f.endswith('.model')]
 
     files_to_delete = sorted(list(set(files_to_delete)))
     if files_to_delete:
@@ -319,15 +270,6 @@ def get_tool_paths(args, short, pacbio, long_reads):
         if not args.freebayes:
             sys.exit('Error: could not find freebayes')
 
-    # if nanopore:
-    #     args.bwa = shutil.which(args.bwa)
-    #     if not args.bwa:
-    #         sys.exit('Error: could not find bwa')
-    #
-    #     args.nanopolish = shutil.which(args.nanopolish)
-    #     if not args.nanopolish:
-    #         sys.exit('Error: could not find nanopolish')
-
     if (pacbio or long_reads) and short:
         args.freebayes = shutil.which(args.freebayes)
         if not args.freebayes:
@@ -357,15 +299,6 @@ def make_pacbio_reads_bam(args):
         sys.exit('Error: bax2bam failed to make ' + args.pb_bam)
     if (args.pb_bam + '.pbi') not in files:
         sys.exit('Error: bax2bam failed to make ' + args.pb_bam + '.pbi')
-
-
-# def make_on_fasta(args):
-#     print_round_header('Converting FAST5 reads to FASTA format', args.verbosity)
-#     args.on_fasta = 'nanopore_reads.fasta'
-#     command = [args.nanopolish, 'extract', args.on_fast5, '-o', args.on_fasta]
-#     run_command(command, args)
-#     if args.on_fasta not in get_all_files_in_current_dir():
-#         sys.exit('Error: nanopolish extract failed to make ' + args.on_fasta)
 
 
 def full_pilon_loop(current, round_num, args, all_ale_scores):
@@ -426,7 +359,7 @@ def pilon_small_changes(fasta, round_num, args, all_ale_scores):
 
 def pilon_large_changes(fasta, round_num, args, all_ale_scores):
     current, round_num, applied_variant = ale_assessed_changes(fasta, round_num, args, True, False,
-                                                               False, all_ale_scores, 'local')
+                                                               all_ale_scores, 'local')
     return current, round_num, applied_variant
 
 
@@ -505,7 +438,7 @@ def arrow_small_changes(fasta, round_num, args, short, all_ale_scores):
     return current, round_num, filtered_variants
 
 
-def long_read_polish_small_changes_loop(current, round_num, args, all_ale_scores):
+def long_read_polish_small_changes_loop(current, round_num, args, short, all_ale_scores):
     """
     Repeatedly apply small variants using Pilon with long read alignments.
     """
@@ -513,8 +446,7 @@ def long_read_polish_small_changes_loop(current, round_num, args, all_ale_scores
     best_ale_score = get_ale_score(current, all_ale_scores, args)
     while True:
         current, round_num, variants = long_read_polish_small_changes(current, round_num, args,
-                                                                      all_ale_scores,
-                                                                      previously_applied_variants)
+                                                                      all_ale_scores, short)
         # If no more changes are suggested, then we're done!
         if not variants:
             break
@@ -535,12 +467,16 @@ def long_read_polish_small_changes_loop(current, round_num, args, all_ale_scores
     return current, round_num
 
 
-def racon_polish(fasta, round_num, args, all_ale_scores):
+def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores, short):
     round_num += 1
-    print_round_header('Round ' + str(round_num) + ': Racon polish', args.verbosity)
+    print_round_header('Round ' + str(round_num) + ': Long read polish, small variants',
+                       args.verbosity)
 
-    racon_fasta = '%03d' % round_num + '_racon_polish.fasta'
+    racon_fasta = '%03d' % round_num + '_1_racon_polish.fasta'
+    raw_variants_file = '%03d' % round_num + '_2_raw_snps'
+    polished_fasta = '%03d' % round_num + '_3_polish.fasta'
 
+    # Run Racon.
     minimap_command = [args.minimap,
                        '-t', str(args.threads),
                        fasta, args.long_reads]
@@ -558,40 +494,28 @@ def racon_polish(fasta, round_num, args, all_ale_scores):
         out = racon.stderr.read() + out + err
         print(dim(out.decode()))
 
-    all_ale_scores[racon_fasta] = None
-    return racon_fasta, round_num
+    # Use MUMmer to align pre-Racon assembly to post-Racon assembly and get the SNPs.
+    nucmer_command = ['nucmer', '-p', 'nucmer', fasta, racon_fasta]
+    run_command(nucmer_command, args)
+    show_snps_command = ['show-snps', '-C', '-T', '-r', '-H', '-I', 'nucmer.delta']
+    print_command(show_snps_command, args.verbosity)
+    try:
+        show_snps_out = subprocess.check_output(show_snps_command, stderr=subprocess.STDOUT, shell=False).decode()
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.output.decode())
 
+    with open(raw_variants_file, 'wt') as raw_variants:
+        raw_variants.write(show_snps_out)
 
-def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores,
-                                   previously_applied_variants):
-    round_num += 1
-    print_round_header('Round ' + str(round_num) + ': Long read polish, small variants',
-                       args.verbosity)
-
-    raw_variants_file = '%03d' % round_num + '_1_raw_pilon.changes'
-    filtered_variants_file = '%03d' % round_num + '_1_filtered_pilon.changes'
-    polished_fasta = '%03d' % round_num + '_3_polish.fasta'
-
-    bam = 'long_read_alignments.bam'
-    align_long_reads(fasta, args, bam)
-
-    raw_variants = get_pilon_variants(fasta, args, 'bases', raw_variants_file, bam, clean=False)
-
-    # Only accept substitution changes as there will be tons of bogus indels.
-    raw_variants = [x for x in raw_variants if x.type == 'substitution']
-
-    p = multiprocessing.Pool(args.threads)
-    raw_variants = p.map(assign_freebayes_qual_pool, [(v, fasta, bam, args) for v in raw_variants])
+    variants = load_variants_from_show_snps(raw_variants_file, fasta, args)
+    variants = merge_variants(variants, fasta, args)
 
     align_illumina_reads(fasta, args, local=False)
-    p = multiprocessing.Pool(args.threads)
-    raw_variants = p.map(assess_against_illumina_alignments_pool, [(v, fasta, args)
-                                                                   for v in raw_variants])
+    for variant in variants:
+        variant.assess_against_illumina_alignments(fasta, args)
     clean_up(args)
 
-    filtered_variants = filter_long_read_pilon_variants(raw_variants, raw_variants_file,
-                                                        filtered_variants_file, args,
-                                                        previously_applied_variants)
+    filtered_variants = filter_racon_variants(variants, args, short)
     if filtered_variants:
         apply_variants(fasta, filtered_variants, polished_fasta)
         all_ale_scores[polished_fasta] = None
@@ -600,6 +524,24 @@ def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores,
         current = fasta
     print_result(filtered_variants, polished_fasta, args.verbosity)
     return current, round_num, filtered_variants
+
+
+def merge_variants(variants, fasta, args):
+    merged_variants = []
+    reference = dict(load_fasta(fasta, ))
+    variants_to_merge = []
+    for v in variants:
+        if not variants_to_merge:
+            variants_to_merge.append(v)
+        else:
+            if v.start_pos == variants_to_merge[-1].start_pos + 1:
+                variants_to_merge.append(v)
+            else:
+                merged_variants.append(Variant(reference, args.large, variants_to_merge=variants_to_merge))
+                variants_to_merge = [v]
+    if variants_to_merge:
+        merged_variants.append(Variant(reference, args.large, variants_to_merge=variants_to_merge))
+    return merged_variants
 
 
 def assign_freebayes_qual_pool(info):
@@ -634,25 +576,22 @@ def all_changes_overlap_previous(variants, previous_variants):
     return True
 
 
-def ale_assessed_changes_loop(current, round_num, args, short, pacbio, long_reads, all_ale_scores):
+def ale_assessed_changes_loop(current, round_num, args, short, pacbio, all_ale_scores):
     """
-    All changes are gathered from all available sources (Pilon, Arrow and Nanopolish) and each
-    is evaluated using ALE. If the best one beats the ALE score of the input assembly then we
-    apply it and repeat.
+    All changes are gathered from all available sources and each is evaluated using ALE. If the
+    best one beats the ALE score of the input assembly then we apply it and repeat.
     """
     while True:
         current, round_num, variants = ale_assessed_changes(current, round_num, args, short, pacbio,
-                                                            long_reads, all_ale_scores,
-                                                            'bases,local')
+                                                            all_ale_scores, 'bases,local')
         if not variants:
             break
     return current, round_num
 
 
-def ale_assessed_changes(fasta, round_num, args, short, pacbio, long_reads, all_ale_scores,
-                         pilon_fix_type):
+def ale_assessed_changes(fasta, round_num, args, short, pacbio, all_ale_scores, pilon_fix_type):
     round_num += 1
-    if short and not pacbio and not long_reads:
+    if short and not pacbio:
         round_title = 'Pilon polish, large variants, ALE assessed'
     else:
         round_title = 'all variant types, ALE assessed'
@@ -669,11 +608,6 @@ def ale_assessed_changes(fasta, round_num, args, short, pacbio, long_reads, all_
         file_num += 1
         arrow_variants_file = '%03d' % round_num + '_' + str(file_num) + '_arrow.gff'
         variants += get_arrow_variants(fasta, args, arrow_variants_file)
-
-    # if nanopore:
-    #     file_num += 1
-    #     nano_variants_file = '%03d' % round_num + '_' + str(file_num) + '_nanopolish_variants'
-    #     variants += get_nanopolish_variants(fasta, args, nano_variants_file)
 
     if not variants:
         clean_up(args)
@@ -701,6 +635,19 @@ def ale_assessed_changes(fasta, round_num, args, short, pacbio, long_reads, all_
             applied_variant = [variant]
             save_variants(applied_variant, filtered_variants_file)
 
+    # If there are multiple variants, we also try applying them all.
+    if len(variants) > 1:
+        modified_assembly = 'variant_all.fasta'
+        apply_variants(fasta, variants, modified_assembly)
+        all_variants_ale_score = run_ale(modified_assembly, args, ale_outputs)
+        if all_variants_ale_score > best_ale_score:
+            best_ale_score = all_variants_ale_score
+            best_modification = modified_assembly
+            applied_variant = variants
+            save_variants(applied_variant, filtered_variants_file)
+    else:
+        all_variants_ale_score = None
+
     if best_modification:
         rename_file(best_modification, polished_fasta, args.verbosity)
         all_ale_scores[polished_fasta] = best_ale_score
@@ -709,7 +656,7 @@ def ale_assessed_changes(fasta, round_num, args, short, pacbio, long_reads, all_
         current = fasta
     clean_up(args)
 
-    print_variant_table(variants, best_ale_score, initial_ale_score)
+    print_variant_table(variants, best_ale_score, initial_ale_score, all_variants_ale_score)
     print_result(applied_variant, polished_fasta, args.verbosity)
 
     return current, round_num, applied_variant
@@ -889,15 +836,6 @@ def get_pilon_variants(fasta, args, fix_type, raw_pilon_changes, alignments, cle
     return load_variants_from_pilon_changes(raw_pilon_changes, fasta, args.large)
 
 
-# def get_nanopolish_variants(fasta, args, raw_nanopolish_variants):
-#     """
-#     Returns Nanopolish's suggested variants (but doesn't apply them to anything).
-#     """
-#     align_nanopore_reads(fasta, args)
-#     run_nanopolish(fasta, args, raw_nanopolish_variants)
-#     return load_variants_from_nanopolish(raw_nanopolish_variants, fasta, args)
-
-
 def get_arrow_variants(fasta, args, raw_arrow_variants):
     """
     Returns Arrow's suggested variants (but doesn't apply them to anything).
@@ -914,47 +852,6 @@ def run_arrow(fasta, args, raw_variants_filename):
     run_command(command, args)
     if raw_variants_filename not in get_all_files_in_current_dir():
         sys.exit('Error: Arrow failed to make ' + raw_variants_filename)
-
-
-# def run_nanopolish(fasta, args, raw_variants_filename):
-#     copy_files(args.nanopolish_model_files, '.', args.verbosity)
-#     bam_1 = 'nanopore_alignments.bam'
-#     bam_2 = 'nanopolish_eventalign.bam'
-#
-#     nanopolish_command = [args.nanopolish, 'eventalign', '-t', str(args.threads), '--sam',
-#                           '-r', args.on_fasta, '-b', bam_1, '-g', fasta,
-#                           '--models', args.nanopolish_model_files[-1]]
-#     samtools_view_command = [args.samtools, 'view', '-hu', '-']
-#     samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam_2, '-']
-#
-#     print_command(nanopolish_command + ['|'] + samtools_view_command + ['|'] +
-#                   samtools_sort_command, args.verbosity)
-#
-#     nanopolish = subprocess.Popen(nanopolish_command, stdout=subprocess.PIPE,
-#                                   stderr=subprocess.PIPE)
-#     samtools_view = subprocess.Popen(samtools_view_command, stdin=nanopolish.stdout,
-#                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#     nanopolish.stdout.close()
-#     samtools_sort = subprocess.Popen(samtools_sort_command, stdin=samtools_view.stdout,
-#                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#     samtools_view.stdout.close()
-#     out, err = samtools_sort.communicate()
-#     if args.verbosity > 2:
-#         out = nanopolish.stderr.read() + samtools_view.stderr.read() + out + err
-#         print(dim(out.decode()))
-#
-#     run_command([args.samtools, 'index', bam_2], args)
-#
-#     nanopolish_command = [args.nanopolish, 'variants', '-r', args.on_fasta, '-b', bam_1,
-#                           '-g', fasta, '-e', bam_2, '-t', str(args.threads),
-#                           '--min-candidate-frequency', '0.1', '-o', raw_variants_filename,
-#                           '--models', 'nanopolish_models.fofn']
-#
-#     run_command(nanopolish_command, args)
-#     if raw_variants_filename not in get_all_files_in_current_dir():
-#         sys.exit('Error: Nanopolish failed to make ' + raw_variants_filename)
-#
-#     clean_up(args)
 
 
 def filter_arrow_small_variants(raw_variants, raw_variants_gff, filtered_variants_gff, args,
@@ -994,6 +891,40 @@ def filter_arrow_small_variants(raw_variants, raw_variants_gff, filtered_variant
                 new_gff.write(variant.original_gff_line + '\n')
             elif variant.original_changes_line:
                 new_gff.write(variant.original_changes_line + '\n')
+    return filtered_variants
+
+
+def filter_racon_variants(raw_variants, args, short_read_assessed):
+    filtered_variants = []
+    variant_rows = []
+    for variant in raw_variants:
+        variant_row = variant.get_output_row(False, short_read_assessed)
+
+        # Whether or not we have short reads, we reject changes in homopolymers.
+        passed = variant.homo_size_before < args.homopolymer
+
+        # If we are assessing small variants with short reads, then both the AO percentage and
+        # homopolymer length are used to filter variants.
+        if passed and short_read_assessed:
+            # If there are no reference occurrences at all (can occur when there are no alignments
+            # whatsoever), then we pass the PacBio variant. If there are reference occurrences,
+            # then we pass the variant if the alternative percentage is high enough.
+            passed = (variant.ro == 0 or (variant.illumina_alt_percent and
+                                          variant.illumina_alt_percent >= args.illumina_alt))
+        if passed:
+            filtered_variants.append(variant)
+            variant_row.append('PASS')
+            variant_rows.append(variant_row)
+        else:
+            variant_row.append('FAIL')
+
+            # Only show the failures in the table if they are sort of close. Otherwise the table
+            # gets way too big.
+            if (variant.illumina_alt_percent and
+                    variant.illumina_alt_percent >= (args.illumina_alt / 2)):
+                variant_rows.append(variant_row)
+
+    print_small_variant_table(variant_rows, False, short_read_assessed, args.verbosity)
     return filtered_variants
 
 
@@ -1193,18 +1124,15 @@ def load_variants_from_arrow(gff_file, fasta, args):
     return variants
 
 
-# def load_variants_from_nanopolish(nanopolish_file, fasta, args):
-#     reference = dict(load_fasta(fasta))
-#     variants = []
-#     with open(nanopolish_file, 'rt') as nanopolish:
-#         for line in nanopolish:
-#             line = line.strip()
-#             # TO DO
-#             # TO DO
-#             # TO DO
-#             # TO DO
-#             # TO DO
-#     return variants
+def load_variants_from_show_snps(raw_variants_file, fasta, args):
+    reference = dict(load_fasta(fasta))
+    variants = []
+    with open(raw_variants_file, 'rt') as snps:
+        for line in snps:
+            line = line.strip()
+            if line:
+                variants.append(Variant(reference, args.large, show_snps_line=line))
+    return variants
 
 
 def load_variants_from_pilon_changes(pilon_changes_file, fasta, large_var_size):
@@ -1244,15 +1172,17 @@ def homopolymer_size(seq, pos):
 
 
 class Variant(object):
-    def __init__(self, reference, large_var_size, gff_line=None, changes_line=None):
+    def __init__(self, reference, large_var_size, gff_line=None, changes_line=None, show_snps_line=None,
+                 variants_to_merge=None):
         self.original_gff_line = gff_line
         self.original_changes_line = changes_line
+        self.original_show_snps_line = show_snps_line
 
         if gff_line:
             # https://github.com/PacificBiosciences/GenomicConsensus/blob/master/doc/VariantsGffSpecification.rst
+            self.source = 'Arrow'
             line_parts = gff_line.split('\t')
             attributes = {x.split('=')[0]: x.split('=')[1] for x in line_parts[8].split(';')}
-            self.source = 'Arrow'
             self.ref_name = line_parts[0]
             self.type = line_parts[2]
             self.ref_seq = attributes['reference'].replace('.', '')
@@ -1262,8 +1192,8 @@ class Variant(object):
 
         elif changes_line:
             # https://github.com/broadinstitute/pilon/wiki/Output-File-Descriptions
-            line_parts = changes_line.split(' ')
             self.source = 'Pilon'
+            line_parts = changes_line.split(' ')
             self.ref_name = line_parts[0].split(':')[0]
             self.ref_seq = line_parts[2].replace('.', '')
             self.variant_seq = line_parts[3].replace('.', '')
@@ -1275,6 +1205,30 @@ class Variant(object):
                 self.type = 'insertion'
             else:
                 self.type = 'substitution'
+
+        elif show_snps_line:
+            self.source = 'Racon'
+            line_parts = show_snps_line.split('\t')
+            self.ref_name = line_parts[9].replace('Consensus_', '')
+            self.ref_seq = line_parts[1].replace('.', '')
+            self.variant_seq = line_parts[2].replace('.', '')
+            self.start_pos = int(line_parts[0]) - 1
+            self.end_pos = self.start_pos + len(self.ref_seq)
+            if len(self.ref_seq) > len(self.variant_seq):
+                self.type = 'deletion'
+            elif len(self.ref_seq) < len(self.variant_seq):
+                self.type = 'insertion'
+            else:
+                self.type = 'substitution'
+
+        elif variants_to_merge:
+            self.source = 'Racon'
+            self.ref_name = variants_to_merge[0].ref_name
+            self.ref_seq = ''.join(x.ref_seq for x in variants_to_merge)
+            self.variant_seq = ''.join(x.variant_seq for x in variants_to_merge)
+            self.start_pos = variants_to_merge[0].start_pos
+            self.end_pos = self.start_pos + len(self.ref_seq)
+            self.type = 'substitution'
 
         full_ref_sequence = reference[self.ref_name]
 
@@ -1312,6 +1266,11 @@ class Variant(object):
         self.illumina_alt_percent = None
         self.ale_score = float('-inf')
         self.freebayes_qual = float('-inf')
+
+    def __str__(self):
+        r = self.ref_seq if self.ref_seq else '.'
+        a = self.variant_seq if self.variant_seq else '.'
+        return self.ref_name + ': Pos=' + str(self.start_pos) + ', Ref=' + r + ', Alt=' + a
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -1370,7 +1329,7 @@ class Variant(object):
                              'illumina_alignments.bam']
         freebayes_out = subprocess.check_output(freebayes_command, stderr=subprocess.STDOUT)
         freebayes_lines = [x for x in freebayes_out.decode().split('\n')
-                           if x and not x.startswith('#')]
+                           if x and not x.startswith('#') and not x.startswith('index file')]
         for line in freebayes_lines:
             line_parts = line.split('\t')
 
@@ -1457,7 +1416,7 @@ def print_small_variant_table(rows, freebayes_qual, short_read_assessed, verbosi
     print_table([header] + rows, alignments=alignments, sub_colour=sub_colour)
 
 
-def print_variant_table(variants, best_ale_score, initial_ale_score):
+def print_variant_table(variants, best_ale_score, initial_ale_score, all_variants_ale_score):
     print()
     table = [['Source', 'Contig', 'Position', 'Ref', 'Alt', 'ALE score']]
     text_colour = 'green' if initial_ale_score == best_ale_score else 'red'
@@ -1468,6 +1427,9 @@ def print_variant_table(variants, best_ale_score, initial_ale_score):
         text_colour = 'green' if v.ale_score == best_ale_score else 'red'
         ale_score_str = colour('%.6f' % v.ale_score, text_colour)
         table.append([v.source, v.ref_name, str(v.start_pos), ref_seq, variant_seq, ale_score_str])
+    if all_variants_ale_score is not None:
+        text_colour = 'green' if all_variants_ale_score == best_ale_score else 'red'
+        table.append(['All variants', '', '', '', '', colour('%.6f' % all_variants_ale_score, text_colour)])
     print_table(table, alignments='LLRLLR')
 
 
