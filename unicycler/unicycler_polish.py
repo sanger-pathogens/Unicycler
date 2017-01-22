@@ -204,7 +204,7 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
     if ale_scores:
         files_to_delete += [f for f in all_files if f.startswith('ale.out')]
     if long_read_alignments:
-        files_to_delete += [f for f in all_files if f.startswith('long_read_align')]
+        files_to_delete += [f for f in all_files if f.startswith('nucmer')]
 
     files_to_delete = sorted(list(set(files_to_delete)))
     if files_to_delete:
@@ -766,52 +766,6 @@ def align_pacbio_reads(fasta, args):
         sys.exit('Error: pbalign failed to make pbalign_alignments.bam.pbi')
     if 'pbalign_alignments.bam.bai' not in files:
         sys.exit('Error: pbalign failed to make pbalign_alignments.bam.bai')
-
-
-def align_long_reads(fasta, args, bam):
-
-    run_command(['unicycler_align', '--ref', fasta, '--reads', args.long_reads,
-                 '--threads', str(args.threads), '--sam', 'long_read_alignments.sam'], args)
-
-    samtools_view_command = [args.samtools, 'view', '-hu', 'long_read_alignments.sam']
-    samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
-    print_command(samtools_view_command + ['|'] + samtools_sort_command, args.verbosity)
-
-    samtools_view = subprocess.Popen(samtools_view_command, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
-    samtools_sort = subprocess.Popen(samtools_sort_command, stdin=samtools_view.stdout,
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    samtools_view.stdout.close()
-    out, err = samtools_sort.communicate()
-    if args.verbosity > 2:
-        out = samtools_view.stderr.read() + out + err
-        print(dim(out.decode()))
-
-    run_command([args.samtools, 'index', bam], args)
-
-    # run_command([args.bwa, 'index', '-p', 'bwa_index', fasta], args)
-    #
-    # bwa_command = [args.bwa, 'mem', '-x', 'ont2d', '-t', str(args.threads),
-    #                '-L', '100',  # big clipping penalty to encourage semi-global alignment
-    #                'bwa_index', args.long_reads]
-    # samtools_view_command = [args.samtools, 'view', '-hu', '-']
-    # samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
-    # print_command(bwa_command + ['|'] + samtools_view_command + ['|'] + samtools_sort_command,
-    #               args.verbosity)
-    #
-    # bwa = subprocess.Popen(bwa_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # samtools_view = subprocess.Popen(samtools_view_command, stdin=bwa.stdout,
-    #                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # bwa.stdout.close()
-    # samtools_sort = subprocess.Popen(samtools_sort_command, stdin=samtools_view.stdout,
-    #                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # samtools_view.stdout.close()
-    # out, err = samtools_sort.communicate()
-    # if args.verbosity > 2:
-    #     out = bwa.stderr.read() + samtools_view.stderr.read() + out + err
-    #     print(dim(out.decode()))
-    #
-    # run_command([args.samtools, 'index', bam], args)
 
 
 def run_pilon(fasta, args, raw_pilon_changes_filename, fix_type, alignments):
