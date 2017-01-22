@@ -1,7 +1,6 @@
 """
-This module describes bridges - links between two single-copy segments in an assembly graph.
-Bridges can come from multiple sources, so there are a few different classes which all share
-the important members/methods (for duck-typing purposes).
+Long read bridges are the big important type of bridge for a hybrid Unicycler assembly. They are
+made using long reads which align to multiple segments in the graph.
 
 Author: Ryan Wick
 email: rrwick@gmail.com
@@ -12,121 +11,18 @@ import time
 import math
 import statistics
 from collections import defaultdict
-from .misc import float_to_str, reverse_complement, weighted_average, get_num_agreement, \
-    flip_number_order, score_function, print_table, get_right_arrow
+from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
+from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
+    print_table, get_right_arrow
 from .cpp_function_wrappers import multiple_sequence_alignment
 from . import settings
 from .path_finding import get_best_paths_for_seq
-
-
-class SpadesContigBridge(object):
-    """
-    This class describes a bridge created from the contigs.paths file made by SPAdes.
-
-    Quality is affected by:
-      * How well the start and end segments' depths agree.
-      * The depth consistency within the path (only applies to bridges where the path segments
-        exclusively lead to the start/end segments).
-    """
-
-    def __init__(self, graph, spades_contig_path):
-
-        # The numbers of the two single-copy segments which are being bridged.
-        self.start_segment = None
-        self.end_segment = None
-
-        # The path through the unbridged graph.
-        self.graph_path = []
-
-        # The bridge sequence, gotten from the graph path.
-        self.bridge_sequence = ''
-
-        # The bridge depth, a weighted mean of the start and end depths.
-        self.depth = 0.0
-
-        # A score used to determine the order of bridge application. SPAdes contig bridges don't
-        # start at 1.0 and so cannot get as high as long read bridges potentially can.
-        self.quality = 0.4
-
-        # When a bridge is applied, the segments in the bridge may have their depth reduced
-        # accordingly. This member stores which segments have had their depth reduced and by how
-        # much due to this bridge's application. It is stored so if this bridge is later deleted,
-        # we can restore the depth to the segments.
-        self.segments_reduced_depth = []
-
-        # The first and last values in spades_contig_path are the start and end segments. The
-        # values in between are the path.
-        self.graph_path = spades_contig_path
-        self.start_segment = self.graph_path.pop(0)
-        self.end_segment = self.graph_path.pop()
-
-        # If there are segments in between the start and end (there usually will be), then they
-        # provide the bridge sequence. If not (i.e. if the start and end directly connect),
-        # then the bridge sequence is just the overlapping sequence between them.
-        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
-
-        # The start segment and end segment should agree in depth. If they don't, that's very bad,
-        # so depth_disagreement is applied to quality twice (squared effect).
-        start_seg = graph.segments[abs(self.start_segment)]
-        end_seg = graph.segments[abs(self.end_segment)]
-        self.quality *= get_depth_agreement_factor(start_seg.depth, end_seg.depth)
-        self.depth = get_mean_depth(start_seg, end_seg, graph)
-
-        # If the segments in the path exclusively lead to the start and end segments (i.e they
-        # cannot lead to any another segment), then we can also scale the quality based on the
-        # depth consistency of the path. E.g. if a bridge path contains a segment 3 times and that
-        # segment's depth also suggests about 3 times, that's good. If they don't agree, that's
-        # bad.
-        if path_is_self_contained(self.graph_path, self.start_segment, self.end_segment, graph):
-            graph_path_pos_nums = list(set([abs(x) for x in self.graph_path]))
-            for path_segment in graph_path_pos_nums:
-                actual_depth = graph.segments[path_segment].depth
-                expected_depth = graph_path_pos_nums.count(path_segment) * self.depth
-                agreement = get_num_agreement(actual_depth, expected_depth)
-                self.quality *= agreement
-
-        # The quality of a SPAdes contig bridge should decline sharply if the bridging sequence
-        # is too large compared to the short read insert size. E.g. if the insert size is 500 bp
-        # and the SPAdes contig bridge is 2 kb long, we should not believe it!
-        if self.graph_path:
-            bridge_length = len(self.bridge_sequence)
-            if bridge_length <= graph.insert_size_mean:
-                bridge_length_factor = 1.0
-            else:
-                bridge_length_factor = graph.insert_size_deviation / (bridge_length -
-                                                                      graph.insert_size_mean +
-                                                                      graph.insert_size_deviation)
-            self.quality *= bridge_length_factor
-
-        # We finalise the quality to a range of 0 to 100. We also use the sqrt function to pull
-        # the scores up a bit (otherwise they tend to hang near the bottom of the range).
-        self.quality = 100.0 * math.sqrt(self.quality)
-
-    def __repr__(self):
-        return 'SPAdes bridge: ' + get_bridge_str(self) + \
-               ' (quality = ' + float_to_str(self.quality, 2) + ')'
-
-    @staticmethod
-    def get_type_score():
-        """
-        Returns a score indicating the relative importance of the bridge types:
-        LongReadBridge = 2, SpadesContigBridge = 1, LoopUnrollingBridge = 0
-        """
-        return 1
-
-    @staticmethod
-    def get_type_name():
-        """
-        Returns the of the bridge types.
-        """
-        return 'SPAdes'
 
 
 class LongReadBridge(object):
     """
     This class describes a bridge created from long read alignments.
     """
-
     def __init__(self, graph, start, end):
 
         # The numbers of the two single-copy segments which are being bridged.
@@ -594,220 +490,6 @@ class LongReadBridge(object):
         return 'long read'
 
 
-class LoopUnrollingBridge(object):
-    """
-    This class describes a bridge created from unrolling an assembly graph loop.
-
-    Quality is affected by:
-      * How well the start and end segments' depths agree.
-      * How close the determined loop count is to a whole number.
-      * The final loop count (higher counts get lower quality).
-    """
-
-    def __init__(self, graph, start, end, middle, repeat):
-        """
-        This constructor assumes the the start, end, middle and repeat segments form a simple loop
-        in the graph supported by either a SPAdes contig or a long read alignment. It will use
-        segment depths to determine the loop count and score the bridge's quality.
-        """
-        # The numbers of the two single-copy segments which are being bridged.
-        self.start_segment = start
-        self.end_segment = end
-
-        # The path through the unbridged graph.
-        self.graph_path = []
-
-        # The bridge sequence, gotten from the graph path.
-        self.bridge_sequence = ''
-
-        # The bridge depth, a weighted mean of the start and end depths.
-        self.depth = 0.0
-
-        # A score used to determine the order of bridge application. This value starts at the
-        # maximum for a loop unrolling bridge and can only decrease as the constructor continues.
-        self.quality = 0.4
-
-        # When a bridge is applied, the segments in the bridge may have their depth reduced
-        # accordingly. This member stores which segments have had their depth reduced and by how
-        # much due to this bridge's application. It is stored so if this bridge is later deleted,
-        # we can restore the depth to the segments.
-        self.segments_reduced_depth = []
-
-        # Get the actual segments from the numbers. Since we are assuming they do form a simple
-        # loop, we don't care about directionality.
-        start_seg = graph.segments[abs(start)]
-        end_seg = graph.segments[abs(end)]
-        middle_seg = graph.segments[abs(middle)]
-        repeat_seg = graph.segments[abs(repeat)]
-
-        # The start segment and end segment should agree in depth. If they don't, that's very bad,
-        # so depth_disagreement is applied to quality twice (squared effect).
-        self.quality *= get_depth_agreement_factor(start_seg.depth, end_seg.depth)
-
-        # We'll use a mean loop count that's weighted by the middle and repeat segment lengths.
-        self.depth = get_mean_depth(start_seg, end_seg, graph)
-        loop_count_by_middle = middle_seg.depth / self.depth
-        loop_count_by_repeat = max((repeat_seg.depth - self.depth) / self.depth, 0.0)
-        mean_loop_count = weighted_average(loop_count_by_middle, loop_count_by_repeat,
-                                           middle_seg.get_length_no_overlap(graph.overlap),
-                                           repeat_seg.get_length_no_overlap(graph.overlap))
-
-        # If the average loop count is near a whole number, that's better. If it's near 0.5, that's
-        # very bad because we don't know whether to round up or down.
-        if mean_loop_count < 1.0:
-            loop_count = 1
-            closeness_to_whole_num = mean_loop_count
-        else:
-            loop_count = int(round(mean_loop_count))
-            fractional_part = mean_loop_count % 1
-            distance_from_whole_num = min(fractional_part, 1.0 - fractional_part)
-            closeness_to_whole_num = 1.0 - (2.0 * distance_from_whole_num)
-        self.quality *= closeness_to_whole_num
-
-        # Finally, we reduce the quality for higher loop counts, as those are harder to call.
-        loop_count_penalty = 1 / (2 ** (loop_count - 1))
-        self.quality *= loop_count_penalty
-
-        self.graph_path = [repeat]
-        for _ in range(loop_count):
-            self.graph_path += [middle, repeat]
-        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
-
-        # We finalise the quality to a range of 0 to 100. We also use the sqrt function to pull
-        # the scores up a bit (otherwise they tend to hang near the bottom of the range).
-        self.quality = 100.0 * math.sqrt(self.quality)
-
-    def __repr__(self):
-        return 'loop bridge: ' + get_bridge_str(self) + \
-               ' (quality = ' + float_to_str(self.quality, 2) + ')'
-
-    @staticmethod
-    def get_type_score():
-        """
-        Returns a score indicating the relative importance of the bridge types:
-        LongReadBridge = 2, SpadesContigBridge = 1, LoopUnrollingBridge = 0
-        """
-        return 0
-
-    @staticmethod
-    def get_type_name():
-        """
-        Returns the of the bridge types.
-        """
-        return 'loop'
-
-
-def create_spades_contig_bridges(graph, single_copy_segments):
-    """
-    Builds graph bridges using the SPAdes contig paths.
-    """
-    bridge_path_set = set()
-    single_copy_numbers = [x.number for x in single_copy_segments]
-    for segment in single_copy_segments:
-        for path in graph.paths.values():
-            flipped_path = [-x for x in reversed(path)]
-            contig_bridges = find_contig_bridges(segment.number, path, single_copy_numbers)
-            contig_bridges += find_contig_bridges(segment.number, flipped_path, single_copy_numbers)
-            for contig_bridge in contig_bridges:
-                flipped_contig_bridge = [-x for x in reversed(contig_bridge)]
-                contig_bridge_str = ','.join([str(x) for x in contig_bridge])
-                flipped_contig_bridge_str = ','.join([str(x) for x in flipped_contig_bridge])
-                if contig_bridge_str not in bridge_path_set and \
-                        flipped_contig_bridge_str not in bridge_path_set:
-                    if contig_bridge[0] < 0 and contig_bridge[-1] < 0:
-                        bridge_path_set.add(flipped_contig_bridge_str)
-                    else:
-                        bridge_path_set.add(contig_bridge_str)
-
-    bridge_path_list = sorted(list([[int(y) for y in x.split(',')] for x in bridge_path_set]))
-
-    # If multiple bridge paths start with or end with the same segment, that implies a conflict
-    # between SPADes' paths and our single-copy determination. Throw these bridges out.
-    bridge_paths_by_start = {}
-    bridge_paths_by_end = {}
-    for path in bridge_path_list:
-        start = path[0]
-        end = path[-1]
-        if start not in bridge_paths_by_start:
-            bridge_paths_by_start[start] = []
-        if end not in bridge_paths_by_end:
-            bridge_paths_by_end[end] = []
-        if -end not in bridge_paths_by_start:
-            bridge_paths_by_start[-end] = []
-        if -start not in bridge_paths_by_end:
-            bridge_paths_by_end[-start] = []
-        bridge_paths_by_start[start].append(path)
-        bridge_paths_by_end[end].append(path)
-        bridge_paths_by_start[-end].append(path)
-        bridge_paths_by_end[-start].append(path)
-    conflicting_paths = []
-    for grouped_paths in bridge_paths_by_start.values():
-        if len(grouped_paths) > 1:
-            conflicting_paths += grouped_paths
-    for grouped_paths in bridge_paths_by_end.values():
-        if len(grouped_paths) > 1:
-            conflicting_paths += grouped_paths
-    conflicting_paths_no_dupes = []
-    for path in conflicting_paths:
-        if path not in conflicting_paths_no_dupes:
-            conflicting_paths_no_dupes.append(path)
-    conflicting_paths = conflicting_paths_no_dupes
-    final_bridge_paths = [x for x in bridge_path_list if x not in conflicting_paths]
-
-    return [SpadesContigBridge(spades_contig_path=x, graph=graph) for x in final_bridge_paths]
-
-
-def find_contig_bridges(segment_num, path, single_copy_numbers):
-    """
-    This function returns a list of lists: every part of the path which starts on the segment_num
-    and ends on any of the single_copy_numbers.
-    """
-    bridge_paths = []
-    indices = [i for i, x in enumerate(path) if abs(x) == segment_num]
-    for index in indices:
-        bridge_path = [path[index]]
-        for i in range(index + 1, len(path)):
-            bridge_path.append(path[i])
-            if path[i] in single_copy_numbers or -path[i] in single_copy_numbers:
-                break
-        else:
-            bridge_path = []
-        if bridge_path:
-            bridge_paths.append(bridge_path)
-    return bridge_paths
-
-
-def create_loop_unrolling_bridges(graph):
-    """
-    This function creates loop unrolling bridges using the information in SPAdes paths.
-    """
-    bridges = []
-    simple_loops = graph.find_all_simple_loops()
-
-    # A simple loop can either be caused by a repeat in one sequence (probably more typical) or by
-    # a separate circular sequence which has some common sequence (less typical, but still very
-    # possible: plasmids). We only want to unroll the former group, so we look for cases where the
-    # loop's start or end is in a SPAdes contig path along with the middle. That implies that they
-    # are on the same piece of DNA and can be unrolled.
-    for start, end, middle, repeat in simple_loops:
-        joined = False
-        for path in graph.paths.values():
-            flipped_path = [-x for x in reversed(path)]
-            if (start in path and middle in path) or \
-                    (end in path and middle in path) or \
-                    (start in flipped_path and middle in flipped_path) or \
-                    (end in flipped_path and middle in flipped_path):
-                joined = True
-                break
-
-        # If we've found evidence the simply loop is a single piece of DNA, then we'll make a loop
-        # unrolling bridge!
-        if joined:
-            bridges.append(LoopUnrollingBridge(graph, start, end, middle, repeat))
-
-    return bridges
-
-
 def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments, verbosity,
                              existing_bridges, min_scaled_score, threads, scoring_scheme,
                              min_alignment_length, expected_linear_seqs, min_bridge_qual):
@@ -1116,33 +798,6 @@ def print_long_read_bridge_table_row(alignments, col_widths, output, completed_c
                 sub_colour=sub_colour)
 
 
-def get_mean_depth(seg_1, seg_2, graph):
-    """
-    Returns the mean depth of the two segments, weighted by their length.
-    """
-    return weighted_average(seg_1.depth, seg_2.depth,
-                            seg_1.get_length_no_overlap(graph.overlap),
-                            seg_2.get_length_no_overlap(graph.overlap))
-
-
-def path_is_self_contained(path, start, end, graph):
-    """
-    Returns True if the path segments are only connected to each other and the start/end segments.
-    If they are connected to anything else, it returns False.
-    """
-    all_numbers_in_path = set()
-    all_numbers_in_path.add(abs(start))
-    all_numbers_in_path.add(abs(end))
-    for segment in path:
-        all_numbers_in_path.add(abs(segment))
-    for segment in path:
-        connected_segments = graph.get_connected_segments(segment)
-        for connected_segment in connected_segments:
-            if connected_segment not in all_numbers_in_path:
-                return False
-    return True
-
-
 def get_single_copy_alignments(read, single_copy_num_set, min_scaled_score):
     """
     Returns a list of single-copy segment alignments for the read.
@@ -1165,17 +820,6 @@ def finalise_bridge(all_args):
                            estimated_genome_size, expected_linear_seqs)
 
 
-def get_bridge_str(bridge):
-    """
-    Returns a bridge sequence in human-readable form.
-    """
-    bridge_str = str(bridge.start_segment) + ' -> '
-    if bridge.graph_path:
-        bridge_str += ', '.join([str(x) for x in bridge.graph_path]) + ' -> '
-    bridge_str += str(bridge.end_segment)
-    return bridge_str
-
-
 def reduce_expected_count(expected_count, a, b):
     """
     This function reduces the expected read count. It reduces by a factor which is a function of
@@ -1186,27 +830,3 @@ def reduce_expected_count(expected_count, a, b):
     y=x\cdot \left(\left(\frac{a}{a+x}\right)\cdot \left(1-b\right)+b\right)
     """
     return expected_count * ((a / (a + expected_count)) * (1.0 - b) + b)
-
-
-def get_depth_agreement_factor(start_seg_depth, end_seg_depth):
-    """
-    This function is set up such that:
-      * equal depths return 1.0
-      * similar depths return a value near 1.0
-      * more divergent depths return a much lower value:
-          a ratio of 1.35 return a value of about 0.5
-          a ratio of 2.06 return a value of about 0.1
-      * very different depths return a value near 0.0
-    https://www.desmos.com/calculator
-        y=\frac{1}{1+10^{2\left(\log \left(x-1\right)+0.45\right)}}
-        y=\frac{1}{1+10^{2\left(\log \left(\frac{1}{x}-1\right)+0.45\right)}}
-    """
-    larger_depth = max(start_seg_depth, end_seg_depth)
-    smaller_depth = min(start_seg_depth, end_seg_depth)
-    if larger_depth == 0.0 or smaller_depth == 0.0:
-        return 0.0
-    elif larger_depth == smaller_depth:
-        return 1.0
-    else:
-        ratio = larger_depth / smaller_depth
-        return 1.0 / (1.0 + 10.0 ** (2 * (math.log10(ratio - 1.0) + 0.45)))

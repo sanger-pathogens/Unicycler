@@ -20,7 +20,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
                           spades_path, threads, keep_temp, kmer_count, min_kmer_frac, max_kmer_frac,
                           no_spades_correct, expected_linear_seqs):
     """
-    This function tries a SPAdes assembly at different kmers and returns the best.
+    This function tries a SPAdes assembly at different k-mers and returns the best.
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
     graphs have the same dead-end count (e.g. zero!) then the highest kmer is used.
     """
