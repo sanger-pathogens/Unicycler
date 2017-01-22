@@ -23,11 +23,13 @@ from .misc import add_line_breaks_to_sequence, load_fasta, MyHelpFormatter, prin
 
 
 def main():
+    full_command = ' '.join(sys.argv)
     args, short, pacbio, long_reads = get_arguments()
     get_tool_paths(args, short, pacbio, long_reads)
     if args.verbosity > 1:
         print()
     clean_up(args)
+    print_intro_message(args.verbosity, full_command)
 
     round_num = get_starting_round_number()
     starting_sequence_filename = '%03d' % round_num + '_starting_sequence.fasta'
@@ -184,6 +186,17 @@ def get_arguments():
     long_reads = bool(args.long_reads)
 
     return args, short_reads, pacbio_reads, long_reads
+
+
+def print_intro_message(verbosity, full_command):
+    """
+    Prints a message at the start of the program's execution.
+    """
+    if verbosity == 0:
+        return
+
+    print_round_header('Unicycler polish', verbosity)
+    print('Command: ' + bold(full_command))
 
 
 def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_alignments=True,
