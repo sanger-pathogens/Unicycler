@@ -15,6 +15,7 @@ import collections
 import statistics
 import math
 import re
+import multiprocessing
 from .misc import add_line_breaks_to_sequence, load_fasta, MyHelpFormatter, print_table, \
     get_percentile_sorted, get_pilon_jar_path, colour, bold, bold_green, bold_yellow_underline, \
     dim, get_all_files_in_current_dir, check_file_exists, remove_formatting, \
@@ -209,7 +210,8 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
     if illumina_alignments:
         files_to_delete += [f for f in all_files if f.startswith('illumina_align')]
     if indices:
-        files_to_delete += [f for f in all_files if f.endswith('.bt2') or f.endswith('.fai') or
+        files_to_delete += [f for f in all_files if
+                            f.endswith('.bt2') or f.endswith('.fai') or
                             f.endswith('.amb') or f.endswith('.ann') or f.endswith('.bwt') or
                             f.endswith('.pac') or f.endswith('.sa') or f.endswith('.bai')]
     if variants:
@@ -217,7 +219,8 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
     if ale_scores:
         files_to_delete += [f for f in all_files if f.startswith('ale.out')]
     if long_read_alignments:
-        files_to_delete += [f for f in all_files if f.startswith('nucmer')]
+        files_to_delete += [f for f in all_files if
+                            f.startswith('nucmer') or f.startswith('long_read_align')]
 
     files_to_delete = sorted(list(set(files_to_delete)))
     if files_to_delete:
@@ -488,24 +491,46 @@ def arrow_large_changes(fasta, round_num, args, all_ale_scores, large_changes):
 
 def long_read_polish_small_changes_loop(current, round_num, args, short, all_ale_scores):
     """
-    Repeatedly apply small variants using Pilon with long read alignments.
+    Repeatedly apply small variants using first Racon and then Pilon with long read alignments.
     """
-    previously_applied_variants = []
     best_ale_score = get_ale_score(current, all_ale_scores, args)
+
+    # First polish approach uses Racon.
+    previously_applied_variants = []
     while True:
-        current, round_num, variants = long_read_polish_small_changes(current, round_num, args,
-                                                                      all_ale_scores, short)
-        # If no more changes are suggested, then we're done!
+        current, round_num, variants = \
+            long_read_polish_small_changes_racon(current, round_num, args, all_ale_scores, short,
+                                                 previously_applied_variants)
         if not variants:
             break
-
         previously_applied_variants += variants
 
         # If changes were made, then another we do another short read Pilon round.
         current, round_num = full_pilon_loop(current, round_num, args, all_ale_scores)
 
-        # If this full round (both long and short read Pilon polishing together) made an ALE
-        # improvement, then we repeat. Otherwise, we're done.
+        # If this full round (both long and short read polishing together) made an ALE improvement,
+        # then we repeat. Otherwise, we're done.
+        ale_score_after_pilon = get_ale_score(current, all_ale_scores, args)
+        if ale_score_after_pilon > best_ale_score:
+            best_ale_score = ale_score_after_pilon
+        else:
+            break
+
+    # Second polish approach uses Pilon.
+    previously_applied_variants = []
+    while True:
+        current, round_num, variants = \
+            long_read_polish_small_changes_pilon(current, round_num, args, all_ale_scores,
+                                                 previously_applied_variants)
+        if not variants:
+            break
+        previously_applied_variants += variants
+
+        # If changes were made, then another we do another short read Pilon round.
+        current, round_num = full_pilon_loop(current, round_num, args, all_ale_scores)
+
+        # If this full round (both long and short read polishing together) made an ALE improvement,
+        # then we repeat. Otherwise, we're done.
         ale_score_after_pilon = get_ale_score(current, all_ale_scores, args)
         if ale_score_after_pilon > best_ale_score:
             best_ale_score = ale_score_after_pilon
@@ -515,7 +540,8 @@ def long_read_polish_small_changes_loop(current, round_num, args, short, all_ale
     return current, round_num
 
 
-def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores, short):
+def long_read_polish_small_changes_racon(fasta, round_num, args, all_ale_scores, short,
+                                         previously_applied_variants):
     round_num += 1
     print_round_header('Round ' + str(round_num) + ': Long read polish, small variants',
                        args.verbosity)
@@ -560,11 +586,11 @@ def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores, short
     variants = merge_variants(variants, fasta, args)
 
     align_illumina_reads(fasta, args, local=False)
-    for variant in variants:
-        variant.assess_against_illumina_alignments(fasta, args)
+    p = multiprocessing.Pool(args.threads)
+    variants = p.map(assess_against_illumina_alignments_pool, [(v, fasta, args) for v in variants])
     clean_up(args)
 
-    filtered_variants = filter_racon_variants(variants, args, short)
+    filtered_variants = filter_racon_variants(variants, args, short, previously_applied_variants)
     if filtered_variants:
         apply_variants(fasta, filtered_variants, polished_fasta)
         all_ale_scores[polished_fasta] = None
@@ -591,6 +617,72 @@ def merge_variants(variants, fasta, args):
     if variants_to_merge:
         merged_variants.append(Variant(reference, args.large, variants_to_merge=variants_to_merge))
     return merged_variants
+
+
+
+def long_read_polish_small_changes_pilon(fasta, round_num, args, all_ale_scores,
+                                         previously_applied_variants):
+    round_num += 1
+    print_round_header('Round ' + str(round_num) + ': Long read polish, small variants',
+                       args.verbosity)
+
+    raw_variants_file = '%03d' % round_num + '_1_raw_pilon.changes'
+    filtered_variants_file = '%03d' % round_num + '_1_filtered_pilon.changes'
+    polished_fasta = '%03d' % round_num + '_3_polish.fasta'
+
+    bam = 'long_read_alignments.bam'
+    align_long_reads(fasta, args, bam)
+
+    raw_variants = get_pilon_variants(fasta, args, 'bases', raw_variants_file, bam, clean=False)
+
+    # Only accept substitution changes as there will be tons of bogus indels.
+    raw_variants = [x for x in raw_variants if x.type == 'substitution']
+
+    p = multiprocessing.Pool(args.threads)
+    raw_variants = p.map(assign_freebayes_qual_pool, [(v, fasta, bam, args) for v in raw_variants])
+
+    align_illumina_reads(fasta, args, local=False)
+    p = multiprocessing.Pool(args.threads)
+    raw_variants = p.map(assess_against_illumina_alignments_pool, [(v, fasta, args)
+                                                                   for v in raw_variants])
+    clean_up(args)
+
+    filtered_variants = filter_long_read_pilon_variants(raw_variants, raw_variants_file,
+                                                        filtered_variants_file, args,
+                                                        previously_applied_variants)
+    if filtered_variants:
+        apply_variants(fasta, filtered_variants, polished_fasta)
+        all_ale_scores[polished_fasta] = None
+        current = polished_fasta
+    else:
+        current = fasta
+    print_result(filtered_variants, polished_fasta, args.verbosity)
+    return current, round_num, filtered_variants
+
+
+
+def align_long_reads(fasta, args, bam):
+
+    run_command(['unicycler_align', '--ref', fasta, '--reads', args.long_reads,
+                 '--threads', str(args.threads), '--sam', 'long_read_alignments.sam',
+                 '--sensitivity', '3'], args)
+
+    samtools_view_command = [args.samtools, 'view', '-hu', 'long_read_alignments.sam']
+    samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
+    print_command(samtools_view_command + ['|'] + samtools_sort_command, args.verbosity)
+
+    samtools_view = subprocess.Popen(samtools_view_command, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
+    samtools_sort = subprocess.Popen(samtools_sort_command, stdin=samtools_view.stdout,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    samtools_view.stdout.close()
+    out, err = samtools_sort.communicate()
+    if args.verbosity > 2:
+        out = samtools_view.stderr.read() + out + err
+        print(dim(out.decode()))
+
+    run_command([args.samtools, 'index', bam], args)
+
 
 
 def assign_freebayes_qual_pool(info):
@@ -898,14 +990,18 @@ def filter_arrow_small_variants(raw_variants, raw_variants_gff, filtered_variant
     return filtered_variants
 
 
-def filter_racon_variants(raw_variants, args, short_read_assessed):
+def filter_racon_variants(raw_variants, args, short_read_assessed, previously_applied_variants):
     filtered_variants = []
     variant_rows = []
     for variant in raw_variants:
         variant_row = variant.get_output_row(False, short_read_assessed)
 
+        # Variants fail if they have previously been applied (which suggests that the
+        # Illumina-Pilon round undid the change).
+        previously_applied = any(variant == x for x in previously_applied_variants)
+
         # Whether or not we have short reads, we reject changes in homopolymers.
-        passed = variant.homo_size_before < args.homopolymer
+        passed = (variant.homo_size_before < args.homopolymer) and not previously_applied
 
         # If we are assessing small variants with short reads, then both the AO percentage and
         # homopolymer length are used to filter variants.
