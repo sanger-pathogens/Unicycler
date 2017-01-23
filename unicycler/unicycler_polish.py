@@ -49,8 +49,8 @@ def main():
         current, round_num = long_read_polish_small_changes_loop(current, round_num, args, short,
                                                                  all_ale_scores)
     if pacbio:
-        current, round_num = arrow_small_changes_loop(current, round_num, args, short,
-                                                      all_ale_scores)
+        current, round_num = full_arrow_loop(current, round_num, args, short, all_ale_scores)
+
     if short and pacbio:
         current, round_num = ale_assessed_changes_loop(current, round_num, args, short, pacbio,
                                                        all_ale_scores)
@@ -372,8 +372,29 @@ def pilon_small_changes(fasta, round_num, args, all_ale_scores):
 
 def pilon_large_changes(fasta, round_num, args, all_ale_scores):
     current, round_num, applied_variant = ale_assessed_changes(fasta, round_num, args, True, False,
-                                                               all_ale_scores, 'local')
+                                                               all_ale_scores, 'local',
+                                                               'Pilon polish, large variants, '
+                                                               'ALE assessed')
     return current, round_num, applied_variant
+
+
+def full_arrow_loop(current, round_num, args, short, all_ale_scores):
+    """
+    Repeatedly apply both small and large variants using Arrow.
+    """
+    while True:
+        # The arrow_small_changes_loop function doesn't apply large variants, but it does collect
+        # them. If it finds some, they are passed to the arrow_large_changes function (so we don't
+        # have to run arrow again).
+        current, round_num, large_changes = arrow_small_changes_loop(current, round_num, args,
+                                                                     short, all_ale_scores)
+        if not large_changes:
+            break
+        current, round_num, variants = arrow_large_changes(current, round_num, args,
+                                                           all_ale_scores, large_changes)
+        if not variants:
+            break
+    return current, round_num
 
 
 def arrow_small_changes_loop(current, round_num, args, short, all_ale_scores):
@@ -399,8 +420,9 @@ def arrow_small_changes_loop(current, round_num, args, short, all_ale_scores):
     previously_applied_variants = []
     overlap_counter = 0
     while True:
-        current, round_num, variants = arrow_small_changes(current, round_num, args, short,
-                                                           all_ale_scores)
+        current, round_num, variants, large_variants = arrow_small_changes(current, round_num,
+                                                                           args, short,
+                                                                           all_ale_scores)
         # If no more changes are suggested, then we're done!
         if not variants:
             break
@@ -416,7 +438,7 @@ def arrow_small_changes_loop(current, round_num, args, short, all_ale_scores):
     if previously_applied_variants and short:
         current, round_num = full_pilon_loop(current, round_num, args, all_ale_scores)
 
-    return current, round_num
+    return current, round_num, large_variants
 
 
 def arrow_small_changes(fasta, round_num, args, short, all_ale_scores):
@@ -431,7 +453,9 @@ def arrow_small_changes(fasta, round_num, args, short, all_ale_scores):
     align_pacbio_reads(fasta, args)
     run_arrow(fasta, args, raw_variants_file)
     raw_variants = load_variants_from_arrow(raw_variants_file, fasta, args)
+
     small_variants = [x for x in raw_variants if not x.large]
+    large_variants = [x for x in raw_variants if x.large]
 
     if short:
         align_illumina_reads(fasta, args, local=False)
@@ -448,7 +472,18 @@ def arrow_small_changes(fasta, round_num, args, short, all_ale_scores):
     else:
         current = fasta
     print_result(filtered_variants, polished_fasta, args.verbosity)
-    return current, round_num, filtered_variants
+    return current, round_num, filtered_variants, large_variants
+
+
+def arrow_large_changes(fasta, round_num, args, all_ale_scores, large_changes):
+
+    current, round_num, applied_variant = ale_assessed_changes(fasta, round_num, args, False, True,
+                                                               all_ale_scores, '',
+                                                               'Arrow polish, large variants, '
+                                                               'ALE assessed',
+                                                               variants=large_changes)
+    return current, round_num, applied_variant
+
 
 
 def long_read_polish_small_changes_loop(current, round_num, args, short, all_ale_scores):
@@ -513,7 +548,8 @@ def long_read_polish_small_changes(fasta, round_num, args, all_ale_scores, short
     show_snps_command = ['show-snps', '-C', '-T', '-r', '-H', '-I', 'nucmer.delta']
     print_command(show_snps_command, args.verbosity)
     try:
-        show_snps_out = subprocess.check_output(show_snps_command, stderr=subprocess.STDOUT, shell=False).decode()
+        show_snps_out = subprocess.check_output(show_snps_command, stderr=subprocess.STDOUT,
+                                                shell=False).decode()
     except subprocess.CalledProcessError as e:
         sys.exit(e.output.decode())
 
@@ -596,36 +632,37 @@ def ale_assessed_changes_loop(current, round_num, args, short, pacbio, all_ale_s
     """
     while True:
         current, round_num, variants = ale_assessed_changes(current, round_num, args, short, pacbio,
-                                                            all_ale_scores, 'bases,local')
+                                                            all_ale_scores, 'bases,local',
+                                                            'all variant types, ALE assessed')
         if not variants:
             break
     return current, round_num
 
 
-def ale_assessed_changes(fasta, round_num, args, short, pacbio, all_ale_scores, pilon_fix_type):
+def ale_assessed_changes(fasta, round_num, args, short, pacbio, all_ale_scores, pilon_fix_type,
+                         round_title, variants=None):
     round_num += 1
-    if short and not pacbio:
-        round_title = 'Pilon polish, large variants, ALE assessed'
-    else:
-        round_title = 'all variant types, ALE assessed'
     print_round_header('Round ' + str(round_num) + ': ' + round_title, args.verbosity)
 
-    variants = []
+    # If this function was passed some variants, then we use those. If not, we run Pilon and/or
+    # Arrow to get the variants.
     file_num = 0
-    if short:
-        file_num += 1
-        pilon_variants_file = '%03d' % round_num + '_' + str(file_num) + '_pilon.changes'
-        variants += get_pilon_variants(fasta, args, pilon_fix_type, pilon_variants_file,
-                                       'illumina_alignments.bam')
-    if pacbio:
-        file_num += 1
-        arrow_variants_file = '%03d' % round_num + '_' + str(file_num) + '_arrow.gff'
-        variants += get_arrow_variants(fasta, args, arrow_variants_file)
+    if variants is None:
+        variants = []
+        if short:
+            file_num += 1
+            pilon_variants_file = '%03d' % round_num + '_' + str(file_num) + '_pilon.changes'
+            variants += get_pilon_variants(fasta, args, pilon_fix_type, pilon_variants_file,
+                                           'illumina_alignments.bam')
+        if pacbio:
+            file_num += 1
+            arrow_variants_file = '%03d' % round_num + '_' + str(file_num) + '_arrow.gff'
+            variants += get_arrow_variants(fasta, args, arrow_variants_file)
 
-    if not variants:
-        clean_up(args)
-        print_empty_result(args.verbosity)
-        return fasta, round_num, []
+        if not variants:
+            clean_up(args)
+            print_empty_result(args.verbosity)
+            return fasta, round_num, []
 
     ale_outputs = '%03d' % round_num + '_' + str(file_num+1) + '_ALE_output'
     filtered_variants_file = '%03d' % round_num + '_' + str(file_num+2) + '_filtered_variants'
