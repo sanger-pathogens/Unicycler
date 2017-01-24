@@ -1276,7 +1276,6 @@ class Variant(object):
                  variants_to_merge=None):
         self.original_gff_line = gff_line
         self.original_changes_line = changes_line
-        self.original_show_snps_line = show_snps_line
 
         if gff_line:
             # https://github.com/PacificBiosciences/GenomicConsensus/blob/master/doc/VariantsGffSpecification.rst
@@ -1595,12 +1594,6 @@ def get_insert_size_range(args, fasta):
 def copy_file(source, destination, verbosity):
     print_command(['cp', source, destination], verbosity)
     shutil.copy(source, destination)
-
-
-def copy_files(source_files, destination_dir, verbosity):
-    print_command(['cp'] + source_files + [destination_dir], verbosity)
-    for source in source_files:
-        shutil.copy(source, destination_dir)
 
 
 def rename_file(old_name, new_name, verbosity):

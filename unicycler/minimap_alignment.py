@@ -23,8 +23,6 @@ class MinimapAlignment(object):
         self.ref_start = int(line_parts[5])
         self.ref_end = int(line_parts[6])
 
-        self.minimiser_count = int(line_parts[7])
-
         self.read = read_dict[self.read_name]
         self.ref = ref_dict[self.ref_name]
 

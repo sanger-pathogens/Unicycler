@@ -70,10 +70,8 @@ class Alignment(object):
         self.ref = None
         self.ref_start_pos = None
         self.ref_end_pos = None
-        self.ref_end_gap = None
 
         # Alignment details
-        self.alignment_type = None
         self.rev_comp = None
         self.cigar_parts = None
         self.match_count = None
@@ -101,7 +99,6 @@ class Alignment(object):
         This function sets up the Alignment using the Seqan results. This kind of alignment has
         complete details about the alignment.
         """
-        self.alignment_type = 'Seqan'
         seqan_parts = seqan_output.split(',', 9)
         assert len(seqan_parts) >= 10
 
@@ -117,13 +114,11 @@ class Alignment(object):
         self.ref = reference_dict[get_nice_header(seqan_parts[0])]
         self.ref_start_pos = int(seqan_parts[4])
         self.ref_end_pos = int(seqan_parts[5])
-        self.ref_end_gap = len(self.ref.sequence) - self.ref_end_pos
 
     def setup_using_sam(self, sam_line, read_dict, reference_dict):
         """
         This function sets up the Alignment using a SAM line.
         """
-        self.alignment_type = 'SAM'
         sam_parts = sam_line.split('\t', 6)
         self.rev_comp = bool(int(sam_parts[1]) & 0x10)
         self.cigar_parts = re.findall(r'\d+\w', sam_parts[5])
@@ -143,8 +138,6 @@ class Alignment(object):
         # reference range. But we check just to be safe.
         if self.ref_end_pos > len(self.ref.sequence):
             self.ref_end_pos = len(self.ref.sequence)
-
-        self.ref_end_gap = len(self.ref.sequence) - self.ref_end_pos
 
     def tally_up_score_and_errors(self, scoring_scheme):
         """
@@ -338,44 +331,6 @@ class Alignment(object):
         sam_parts.append('NM:i:' + str(edit_distance))  # Edit distance to the reference, including
         # ambiguous bases but excluding clipping
         return '\t'.join(sam_parts) + '\n'
-
-    def is_whole_read(self):
-        """
-        Returns True if the alignment covers the entirety of the read.
-        """
-        return self.read_start_pos == 0 and self.read_end_gap == 0
-
-    def get_longest_indel_run(self):
-        """
-        Returns the longest indel in the alignment.
-        """
-        longest_indel_run = 0
-        for cigar_part in self.cigar_parts:
-            cigar_type = cigar_part[-1]
-            if cigar_type == 'I' or cigar_type == 'D':
-                longest_indel_run = max(longest_indel_run, int(cigar_part[:-1]))
-        return longest_indel_run
-
-    def get_missing_bases_at_start(self):
-        """
-        Returns the number of bases at the start of the alignment which are missing in both the
-        read and the reference (preventing the alignment from being semi-global).
-        """
-        return min(self.read_start_pos, self.ref_start_pos)
-
-    def get_missing_bases_at_end(self):
-        """
-        Returns the number of bases at the end of the alignment which are missing in both the read
-        and the reference (preventing the alignment from being semi-global).
-        """
-        return min(self.read_end_gap, self.ref_end_gap)
-
-    def get_total_missing_bases(self):
-        """
-        Returns the number of bases at the start and end of the alignment which are missing in both
-        the read and the reference (preventing the alignment from being semi-global).
-        """
-        return self.get_missing_bases_at_start() + self.get_missing_bases_at_end()
 
     def is_very_similar(self, other):
         """

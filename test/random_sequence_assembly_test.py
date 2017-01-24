@@ -65,13 +65,6 @@ def get_assembly_fasta_and_graph(out_dir):
     return fasta, graph
 
 
-def sequence_matches_either_strand(seq_1, seq_2):
-    if seq_1 == seq_2:
-        return True
-    else:
-        return unicycler.misc.reverse_complement(seq_1) == seq_2
-
-
 def sequence_matches_any_rotation(seq_1, seq_2):
     seq_1_rev_comp = unicycler.misc.reverse_complement(seq_1)
     for i in range(len(seq_1)):

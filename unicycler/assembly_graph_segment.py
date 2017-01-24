@@ -55,16 +55,6 @@ class Segment(object):
     def divide_depth(self, divisor):
         self.depth /= divisor
 
-    def get_fastg_header(self, positive):
-        """
-        Returns a SPAdes-style FASTG header, without the leading '>' or ending ';'.
-        """
-        header = 'EDGE_' + str(self.number) + '_length_' + str(
-            len(self.forward_sequence)) + '_cov_' + str(self.depth)
-        if not positive:
-            header += "'"
-        return header
-
     def get_length(self):
         return len(self.forward_sequence)
 

@@ -354,28 +354,6 @@ class Read(object):
                '+\n' + \
                self.qualities + '\n'
 
-    def get_fasta(self):
-        """
-        Returns a string for the read in FASTA format. It contains two lines and ends in a line
-        break.
-        """
-        return '>' + self.name + '\n' + \
-               self.sequence + '\n'
-
-    def get_descriptive_string(self):
-        """
-        Returns a multi-line string that describes the read and its alignments.
-        """
-        header = self.name + ' (' + str(len(self.sequence)) + ' bp)'
-        line = '-' * len(header)
-        description = header + '\n' + line + '\n'
-        if not self.alignments:
-            description += 'no alignments'
-        else:
-            description += '%.2f' % (100.0 * self.get_fraction_aligned()) + '% aligned\n'
-            description += '\n'.join([str(x) for x in self.alignments])
-        return description + '\n\n'
-
     def get_fraction_aligned(self):
         """
         This function returns the fraction of the read which is covered by any of the read's

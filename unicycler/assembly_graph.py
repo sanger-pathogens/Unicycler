@@ -1014,20 +1014,6 @@ class AssemblyGraph(object):
                 single_copy_segments.append(segment)
         return single_copy_segments
 
-    def is_path_valid(self, path_segments):
-        """
-        Returns whether or not a path exists in the graph, i.e. an edge connects each segment in
-        the path to the next segment in the path.
-        """
-        for i, seg_num in enumerate(path_segments):
-            if abs(seg_num) not in self.segments:
-                return False
-            if i > 0:
-                prev_seg = path_segments[i - 1]
-                if seg_num not in self.get_downstream_seg_nums(prev_seg):
-                    return False
-        return True
-
     def get_path_sequence(self, path_segments):
         """
         Gets a linear (i.e. not circular) path sequence from the graph.

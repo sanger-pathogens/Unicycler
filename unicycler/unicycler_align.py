@@ -57,16 +57,6 @@ SAM_WRITE_LOCK = threading.Lock()
 # 4 = tons of stuff is printed, including all k-mer positions in each Seqan alignment
 VERBOSITY = 0
 
-# EXPECTED_SLOPE is the anticipated reference to read ratio. It is used by the C++ Seqan code to
-# rotate the common k-mer rectangles when looking for alignment lines. It is a global because it
-# will be constantly updated as reads are aligned.
-# TOTAL_REF_LENGTH and TOTAL_READ_LENGTH are the totals used to calculate EXPECTED_SLOPE. They
-# start at 10000 (not the more literal value of 0) so EXPECTED_SLOPE isn't too prone to fluctuation
-# at the start.
-EXPECTED_SLOPE = 1.0
-TOTAL_REF_LENGTH = 10000
-TOTAL_READ_LENGTH = 10000
-
 
 def main():
     """
@@ -524,8 +514,6 @@ def seqan_alignment(read, reference_dict, scoring_scheme, ref_seqs_ptr, low_scor
             sam_file.close()
             SAM_WRITE_LOCK.release()
 
-        update_expected_slope(read, low_score_threshold)
-
     # Colour the output title based on the alignment quality.
     if read.mostly_aligns_to_contamination() or not read.alignments:
         title_colour = 'red'
@@ -608,19 +596,3 @@ def get_auto_score_threshold(scoring_scheme, std_devs_over_mean):
     threshold = max(threshold, 50.0)
 
     return threshold, mean, std_dev
-
-
-def update_expected_slope(read, low_score_threshold):
-    """
-    This function updates the EXPECTED_SLOPE and ALIGNMENTS_CONTRIBUTING_TO_EXPECTED_SLOPE global
-    variables using a read, but only if the read's alignment looks good.
-    """
-    if len(read.alignments) == 1 and read.alignments[0].read_start_pos == 0 and \
-            read.alignments[0].read_end_gap == 0 and \
-            read.alignments[0].scaled_score > low_score_threshold:
-        global EXPECTED_SLOPE
-        global TOTAL_REF_LENGTH
-        global TOTAL_READ_LENGTH
-        TOTAL_REF_LENGTH += read.alignments[0].get_aligned_ref_length()
-        TOTAL_READ_LENGTH += read.alignments[0].get_aligned_read_length()
-        EXPECTED_SLOPE = TOTAL_REF_LENGTH / TOTAL_READ_LENGTH

@@ -81,14 +81,6 @@ def check_file_exists(filename):
         quit_with_error('could not find ' + filename)
 
 
-def check_directory_exists(dir_name):
-    """
-    Checks to make sure the single given directory exists.
-    """
-    if not os.path.isdir(dir_name):
-        quit_with_error('could not find ' + dir_name)
-
-
 def quit_with_error(message):  # type: (str) -> None
     """
     Displays the given message and ends the program's execution.
@@ -719,10 +711,6 @@ def red(text):
 
 def bold_red(text):
     return RED + BOLD + text + END_FORMATTING
-
-
-def clear_red(text):
-    return END_FORMATTING + RED + text + END_FORMATTING
 
 
 def bold(text):

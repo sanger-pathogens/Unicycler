@@ -538,41 +538,6 @@ def get_high_depth_cutoff(max_depth_dist, p_val):
     return max_depth_dist[-1][0]
 
 
-def depths_to_capture_fraction(depth_distribution, fraction):
-    """
-    Returns a min and max depth which capture at least the given fraction of the distribution.
-    """
-    depths = list(depth_distribution.keys())
-    proportions = list(depth_distribution.values())
-    mode_depth = depths[proportions.index(max(proportions))]
-    low_cutoff = mode_depth
-    high_cutoff = mode_depth
-    fraction_captured = depth_distribution[mode_depth]
-    while fraction_captured < fraction:
-        next_possible_low = low_cutoff - 1
-        next_possible_high = high_cutoff + 1
-        fraction_from_next_low = 0.0
-        fraction_from_next_high = 0.0
-        if next_possible_low in depth_distribution:
-            fraction_from_next_low = depth_distribution[next_possible_low]
-        if next_possible_high in depth_distribution:
-            fraction_from_next_high = depth_distribution[next_possible_high]
-        if fraction_from_next_low > fraction_from_next_high:
-            low_cutoff = next_possible_low
-            fraction_captured += fraction_from_next_low
-        elif fraction_from_next_high > fraction_from_next_low:
-            high_cutoff = next_possible_high
-            fraction_captured += fraction_from_next_high
-        elif fraction_from_next_high > 0.0:  # they are equal but non-zero.
-            high_cutoff = next_possible_high
-            fraction_captured += fraction_from_next_high
-        else:  # they are both zero.
-            if next_possible_low >= 0:
-                low_cutoff = next_possible_low
-            high_cutoff = next_possible_high
-    return low_cutoff, high_cutoff
-
-
 def get_mean(num_list):
     """
     This function returns the mean of the given list of numbers.
@@ -1286,7 +1251,6 @@ class Alignment(object):
             self.ref_end_pos += get_ref_shift_from_cigar_part(cigar_types[i], cigar_counts[i])
         if self.ref_end_pos > ref_len:
             self.ref_end_pos = ref_len
-        self.ref_end_gap = ref_len - self.ref_end_pos
 
         self.ref_mismatch_positions = []
         self.ref_deletion_positions = []

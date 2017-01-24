@@ -62,10 +62,6 @@ class LongReadBridge(object):
         # A score used to determine the order of bridge application.
         self.quality = 1.0
 
-        # Whether or not the long read bridge got its sequence from a graph path (True) or from the
-        # read consensus (False).
-        self.path_support = None
-
         # When a bridge is applied, the segments in the bridge may have their depth reduced
         # accordingly. This member stores which segments have had their depth reduced and by how
         # much due to this bridge's application. It is stored so if this bridge is later deleted,
@@ -271,7 +267,6 @@ class LongReadBridge(object):
             self.graph_path = self.all_paths[0][0]
             self.bridge_sequence = self.graph.get_bridge_path_sequence(self.graph_path,
                                                                        self.start_segment)
-            self.path_support = True
 
             # We start this bridge's quality using a function that takes into account the
             # actual, expected and minimum acceptable scores. If the actual scaled score is 100,
@@ -289,7 +284,6 @@ class LongReadBridge(object):
         # If a path wasn't found, the consensus sequence is the bridge (with the overlaps added).
         else:
             self.graph_path = []
-            self.path_support = False
             output += ['', '', '', '', '']
             start_overlap = \
                 self.graph.seq_from_signed_seg_num(self.start_segment)[-self.graph.overlap:]

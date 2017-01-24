@@ -106,7 +106,6 @@ BOLD_MIN_BRIDGE_QUAL = 1.0
 LOADING_REFERENCES_PROGRESS_STEP = 1.0
 LOADING_READS_PROGRESS_STEP = 1.0
 LOADING_ALIGNMENTS_PROGRESS_STEP = 1.0
-BUILDING_BRIDGES_PROGRESS_STEP = 1.0
 
 # These settings control how willing Unicycler is to make bridges that don't have a graph path.
 # This depends on whether one or both of the segments being bridged ends in a dead end and
