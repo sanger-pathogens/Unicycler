@@ -107,7 +107,7 @@ class UnicyclerInstall(install):
             # Display a success message!
             print(get_ascii_art())
             print('Unicycler is installed!')
-            print()
+            print('')
             print('Example commands:')
             print('  unicycler --help')
             print('  unicycler --help_all')
@@ -115,7 +115,7 @@ class UnicyclerInstall(install):
                   '-o path/to/output_dir')
             print('  unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz '
                   '-l long_reads.fastq.gz -o path/to/output_dir')
-            print()
+            print('')
 
             # Check for required programs.
             tools = ['spades.py', 'java', 'pilon.jar', 'samtools', 'bowtie2',
@@ -127,7 +127,7 @@ class UnicyclerInstall(install):
                 print('WARNING: some tools required by Unicycler could not be found: ' +
                       ', '.join(missing_tools))
                 print('You may need to install them to use all Unicycler features.')
-                print()
+                print('')
 
 
 class UnicyclerClean(Command):

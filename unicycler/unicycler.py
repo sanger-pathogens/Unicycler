@@ -52,7 +52,7 @@ def main():
     # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
     if os.path.isfile(unbridged_graph_filename):
         if verbosity > 0:
-            print()
+            print('')
             print('Unbridged graph already exists. Will use this graph instead of running SPAdes:')
             print('  ' + unbridged_graph_filename)
         unbridged_graph = AssemblyGraph(unbridged_graph_filename, None)
@@ -619,7 +619,7 @@ def get_single_copy_segments(graph, verbosity, min_single_copy_length):
                             if x.get_length() >= min_single_copy_length]
 
     if verbosity > 1:
-        print()
+        print('')
     if verbosity > 0:
         total_single_copy_length = sum([x.get_length() for x in single_copy_segments])
         print(int_to_str(len(single_copy_segments)),
@@ -667,7 +667,7 @@ def print_intro_message(args, verbosity, full_command):
     print_section_header('Starting Unicycler', verbosity)
     print('Command: ' + bold(full_command))
     if verbosity > 1:
-        print()
+        print('')
         if args.mode == 0:
             print('Bridging mode: conservative')
             if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:

@@ -32,7 +32,7 @@ def determine_copy_depth(graph, verbosity):
                   ', '.join([str(x) for x in initial_single_copy_segments]))
         else:
             print('Initial single copy segments: none')
-        print()
+        print('')
 
     # Propagate copy depth as possible using those initial assignments.
     copy_depth_table = [['Input', '', 'Output']]

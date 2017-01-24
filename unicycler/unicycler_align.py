@@ -305,7 +305,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     delete_ref_seqs(ref_seqs_ptr)
 
     if VERBOSITY == 1:
-        print()
+        print('')
 
     print_alignment_summary_table(read_dict, VERBOSITY, using_contamination)
     return read_dict
@@ -429,7 +429,7 @@ def load_sam_alignments(sam_filename, read_dict, reference_dict, scoring_scheme,
     if verbosity > 0:
         if len(sam_alignments) < num_alignments:
             print_progress_line(len(sam_alignments), len(sam_alignments))
-        print()
+        print('')
 
     return sam_alignments
 

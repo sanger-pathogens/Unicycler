@@ -222,7 +222,7 @@ def spades_read_correction(short1, short2, short_unpaired, spades_dir, verbosity
         corrected_u = None
 
     if verbosity > 0:
-        print()
+        print('')
         print('Corrected reads:')
         print('  ' + corrected_1)
         print('  ' + corrected_2)

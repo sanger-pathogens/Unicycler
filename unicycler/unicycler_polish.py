@@ -28,7 +28,7 @@ def main():
     args, short, pacbio, long_reads = get_arguments()
     get_tool_paths(args, short, pacbio, long_reads)
     if args.verbosity > 1:
-        print()
+        print('')
     clean_up(args)
     print_intro_message(args.verbosity, full_command)
 
@@ -821,7 +821,7 @@ def run_ale(fasta, args, all_ale_outputs):
     with potentially different depth.
     """
     if args.verbosity > 1:
-        print()
+        print('')
     if not os.path.isfile(all_ale_outputs):
         open(all_ale_outputs, 'a').close()
     ale_output = 'ale.out'
@@ -1133,14 +1133,14 @@ def print_round_header(text, verbosity):
 
 def print_empty_result(verbosity):
     if verbosity > 1:
-        print()
+        print('')
     if verbosity > 0:
         print('No variants found', flush=True)
 
 
 def print_result(variants, fasta, verbosity):
     if verbosity > 1:
-        print()
+        print('')
     if verbosity > 0:
         if variants:
             var = ' variant' if len(variants) == 1 else ' variants'
@@ -1196,9 +1196,9 @@ def finish(current, all_ale_scores, round_num, args, short):
                         sub_colour=sub_colour)
 
     if args.verbosity > 0:
-        print()
+        print('')
         print('All done! Final assembly: ' + bold_green(final_fasta), flush=True)
-        print()
+        print('')
 
 
 def run_command(command, args):
@@ -1499,7 +1499,7 @@ class Variant(object):
 def print_small_variant_table(rows, freebayes_qual, short_read_assessed, verbosity):
     if verbosity < 2:
         return
-    print()
+    print('')
     header = ['Contig', 'Position', 'Ref', 'Alt', 'Type']
     alignments = 'LRLLL'
     sub_colour = None
@@ -1516,7 +1516,7 @@ def print_small_variant_table(rows, freebayes_qual, short_read_assessed, verbosi
 
 
 def print_variant_table(variants, best_ale_score, initial_ale_score, all_variants_ale_score):
-    print()
+    print('')
     table = [['Source', 'Contig', 'Position', 'Ref', 'Alt', 'ALE score']]
     text_colour = 'green' if initial_ale_score == best_ale_score else 'red'
     table.append(['No variant', '', '', '', '', colour('%.6f' % initial_ale_score, text_colour)])
@@ -1562,7 +1562,7 @@ def analyse_insert_sizes(args):
 
 
 def print_insert_sizes(min_insert, mean_insert, max_insert):
-    print()
+    print('')
     print(' 2.5th percentile:', min_insert)
     print(' mean insert size:', '\033[1m' + '%.1f' % mean_insert + '\033[0m')
     print('97.5th percentile:', max_insert, flush=True)

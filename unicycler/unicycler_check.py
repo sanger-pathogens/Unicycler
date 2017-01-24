@@ -313,7 +313,7 @@ def count_depth_and_errors_per_base(references, reference_dict, alignments):
     finished_bases = 0
     base_sum = 0
     if VERBOSITY > 0:
-        print()
+        print('')
         base_sum = sum([x.get_length() for x in references])
         print_section_header('Totalling depth and errors', VERBOSITY)
         print_progress_line(finished_bases, base_sum)
@@ -332,7 +332,7 @@ def count_depth_and_errors_per_base(references, reference_dict, alignments):
 
     if VERBOSITY > 0:
         print_progress_line(base_sum, base_sum, end_newline=True)
-        print()
+        print('')
 
 
 def count_depth_and_errors_per_window(references, er_window_size, depth_window_size,
@@ -471,7 +471,7 @@ def determine_thresholds(scoring_scheme, references, alignments, threads, depth_
     if VERBOSITY > 0:
         print(lr_justify('Random alignment error rate:',
                          float_to_str(random_seq_error_rate * 100.0, 2) + '%'))
-        print()
+        print('')
 
     # The mean error rate should not be as big as the random alignment error rate.
     if mean_error_rate >= random_seq_error_rate:
@@ -488,7 +488,7 @@ def determine_thresholds(scoring_scheme, references, alignments, threads, depth_
                          float_to_str(high_error_rate * 100.0, 2) + '%'))
         print(lr_justify('Error rate threshold 2:',
                          float_to_str(very_high_error_rate * 100.0, 2) + '%'))
-        print()
+        print('')
 
     for ref in references:
         determine_depth_thresholds(ref, alignments, threads, 0.1, depth_p_val)
@@ -517,7 +517,7 @@ def determine_depth_thresholds(ref, alignments, threads, depth_p_val_1, depth_p_
         print(ref.name + ':')
         print(lr_justify('   low depth threshold: ', int_to_str(ref.very_low_depth_cutoff)))
         print(lr_justify('   high depth threshold:', int_to_str(ref.very_high_depth_cutoff)))
-        print()
+        print('')
 
 
 def get_low_depth_cutoff(min_depth_dist, p_val):
@@ -552,14 +552,14 @@ def produce_console_output(references):
     Write a summary of the results to std out.
     """
     for ref in references:
-        print()
+        print('')
         print('Results: ' + ref.name)
         print('-' * max(CONSOLE_WIDTH, len(ref.name) + 9))
         ref_length = ref.get_length()
 
         print(lr_justify('Length:', int_to_str(ref_length) + ' bp'))
         print(lr_justify('Alignments:', int_to_str(ref.alignment_count)))
-        print()
+        print('')
         min_er = ref.min_window_error_rate
         print(lr_justify('Min error rate:', 'n/a') if min_er is None else
               lr_justify('Min error rate:', (float_to_str(min_er * 100.0, 1) + '%')))
@@ -569,7 +569,7 @@ def produce_console_output(references):
         max_er = ref.max_window_error_rate
         print(lr_justify('Max error rate:', 'n/a') if max_er is None else
               lr_justify('Max error rate:', (float_to_str(max_er * 100.0, 1) + '%')))
-        print()
+        print('')
 
         if ref.high_error_regions:
             print('High error regions:')
@@ -578,19 +578,19 @@ def produce_console_output(references):
                       ' bp to ' + int_to_str(high_error_region[1]) + ' bp')
         else:
             print(lr_justify('High error regions:', 'none'))
-        print()
+        print('')
 
         print(lr_justify('Min depth:', float_to_str(ref.min_window_depth, 1) + 'x'))
         print(lr_justify('Mean depth:', float_to_str(ref.mean_window_depth, 1) + 'x'))
         print(lr_justify('Max depth:', float_to_str(ref.max_window_depth, 1) + 'x'))
-        print()
+        print('')
 
         if ref.low_depth_regions:
             print('Low depth regions:')
             for i, low_depth_region in enumerate(ref.low_depth_regions):
                 print(str(i + 1) + ') ' + int_to_str(low_depth_region[0]) +
                       ' bp to ' + int_to_str(low_depth_region[1]) + ' bp')
-            print()
+            print('')
         else:
             print(lr_justify('Low depth regions:', 'none'))
 
@@ -601,7 +601,7 @@ def produce_console_output(references):
                       int_to_str(high_depth_region[1]) + ' bp')
         else:
             print(lr_justify('High depth regions:', 'none'))
-        print()
+        print('')
 
 
 def lr_justify(str_1, str_2):
@@ -1211,139 +1211,6 @@ def get_reference_depth_html_table(ref, depth_window_size, depth_p_val):
     table += '</table>\n'
 
     return table
-
-
-class Alignment(object):
-    """
-    This class describes an alignment between a long read and a reference.
-    """
-
-    def __init__(self, sam_line, read_dict, reference_dict, scoring_scheme):
-
-        # Grab the important parts of the alignment from the SAM line.
-        sam_parts = sam_line.split('\t')
-        self.rev_comp = bool(int(sam_parts[1]) & 0x10)
-        cigar_parts = re.findall(r'\d+\w', sam_parts[5])
-        cigar_types = [x[-1] for x in cigar_parts]
-        cigar_counts = [int(x[:-1]) for x in cigar_parts]
-
-        read_name = sam_parts[0]
-        if read_name not in read_dict:
-            print()
-            quit_with_error('the read ' + read_name + ' is in the SAM file but not in the '
-                                                      'provided reads')
-        self.read = read_dict[read_name]
-        read_len = self.read.get_length()
-        self.read_start_pos = self.get_start_soft_clips(cigar_parts)
-        self.read_end_pos = self.read.get_length() - self.get_end_soft_clips(cigar_parts)
-        self.read_end_gap = self.get_end_soft_clips(cigar_parts)
-
-        ref_name = get_nice_header(sam_parts[2])
-        if ref_name not in reference_dict:
-            print()
-            quit_with_error('the reference ' + ref_name + ' is in the SAM file but not in the '
-                                                          'provided references')
-        self.ref = reference_dict[get_nice_header(sam_parts[2])]
-        ref_len = self.ref.get_length()
-        self.ref_start_pos = int(sam_parts[3]) - 1
-        self.ref_end_pos = self.ref_start_pos
-        for i in range(len(cigar_types)):
-            self.ref_end_pos += get_ref_shift_from_cigar_part(cigar_types[i], cigar_counts[i])
-        if self.ref_end_pos > ref_len:
-            self.ref_end_pos = ref_len
-
-        self.ref_mismatch_positions = []
-        self.ref_deletion_positions = []
-        self.ref_insertion_positions = []
-
-        # Remove the soft clipping parts of the CIGAR for tallying.
-        if cigar_types[0] == 'S':
-            cigar_types.pop(0)
-            cigar_counts.pop(0)
-        if cigar_types and cigar_types[-1] == 'S':
-            cigar_types.pop()
-            cigar_counts.pop()
-        if not cigar_types:
-            return
-
-        if self.rev_comp:
-            read_seq = reverse_complement(self.read.sequence)
-        else:
-            read_seq = self.read.sequence
-
-        read_i = self.read_start_pos
-        ref_i = self.ref_start_pos
-
-        for i in range(len(cigar_types)):
-            cigar_count = cigar_counts[i]
-            cigar_type = cigar_types[i]
-
-            # Insertions are only counted as a single error, regardless of size.
-            if cigar_type == 'I':
-                self.ref_insertion_positions += [ref_i]
-                read_i += cigar_count
-            elif cigar_type == 'D':
-                for j in range(cigar_count):
-                    self.ref_deletion_positions.append(ref_i + j)
-                ref_i += cigar_count
-            else:  # match/mismatch
-                for _ in range(cigar_count):
-                    # If all is good with the CIGAR, then we should never end up with a sequence
-                    # index out of the sequence range. But a CIGAR error can cause this, so check
-                    # here.
-                    if read_i >= read_len or ref_i >= ref_len:
-                        break
-                    if read_seq[read_i] != self.ref.sequence[ref_i]:
-                        self.ref_mismatch_positions.append(ref_i)
-                    read_i += 1
-                    ref_i += 1
-
-    def __repr__(self):
-        read_start, read_end = self.read_start_end_positive_strand()
-        return_str = self.read.name + ' (' + str(read_start) + '-' + str(read_end) + ', '
-        if self.rev_comp:
-            return_str += 'strand: -), '
-        else:
-            return_str += 'strand: +), '
-        return_str += self.ref.name + ' (' + str(self.ref_start_pos) + '-' + \
-            str(self.ref_end_pos) + ')'
-        error_count = len(self.ref_mismatch_positions) + len(self.ref_deletion_positions) + \
-            len(self.ref_insertion_positions)
-        return_str += ', errors = ' + int_to_str(error_count)
-        return return_str
-
-    @staticmethod
-    def get_start_soft_clips(cigar_parts):
-        """
-        Returns the number of soft-clipped bases at the start of the alignment.
-        """
-        if cigar_parts[0][-1] == 'S':
-            return int(cigar_parts[0][:-1])
-        else:
-            return 0
-
-    @staticmethod
-    def get_end_soft_clips(cigar_parts):
-        """
-        Returns the number of soft-clipped bases at the start of the alignment.
-        """
-        if cigar_parts[-1][-1] == 'S':
-            return int(cigar_parts[-1][:-1])
-        else:
-            return 0
-
-    def read_start_end_positive_strand(self):
-        """
-        This function returns the read start/end coordinates for the positive strand of the read.
-        For alignments on the positive strand, this is just the normal start/end. But for
-        alignments on the negative strand, the coordinates are flipped to the other side.
-        """
-        if not self.rev_comp:
-            return self.read_start_pos, self.read_end_pos
-        else:
-            start = self.read.get_length() - self.read_end_pos
-            end = self.read.get_length() - self.read_start_pos
-            return start, end
 
 
 def get_ref_shift_from_cigar_part(cigar_type, cigar_count):

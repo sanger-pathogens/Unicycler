@@ -609,7 +609,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
     if row_extra_text is None:
         row_extra_text = {}
     if leading_newline:
-        print()
+        print('')
     alignments += 'L' * (column_count - len(alignments))  # Fill out with L, if incomplete
     if fixed_col_widths is not None:
         col_widths = fixed_col_widths
