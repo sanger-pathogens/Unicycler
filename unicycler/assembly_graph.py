@@ -798,7 +798,7 @@ class AssemblyGraph(object):
 
     def lead_exclusively_from(self, segment_num_1, segment_num_2):
         """
-        Does the same thing as lead_exclusively_to, but follows links in the opposite direction.
+        Returns whether the first segment has inputs from and only from the second segment.
         """
         if segment_num_1 not in self.reverse_links:
             return False
@@ -810,27 +810,19 @@ class AssemblyGraph(object):
         positive values mean an increase in dead ends, negative values mean a decrease.
         """
         potential_dead_ends = 0
-        if seg_num in self.forward_links:
-            downstream_segments = self.forward_links[seg_num]
-        else:
-            downstream_segments = []
-        for downstream_segment in downstream_segments:
-            if len(self.reverse_links[downstream_segment]) == 1:
+        for downstream_segment in self.get_downstream_seg_nums(seg_num):
+            if len(self.reverse_links[downstream_segment]) == 1 and downstream_segment != seg_num:
                 potential_dead_ends += 1
 
-        if seg_num in self.reverse_links:
-            upstream_segments = self.reverse_links[seg_num]
-        else:
-            upstream_segments = []
-        for upstream_segment in upstream_segments:
-            if len(self.forward_links[upstream_segment]) == 1:
+        for upstream_segment in self.get_upstream_seg_nums(seg_num):
+            if len(self.forward_links[upstream_segment]) == 1 and upstream_segment != seg_num:
                 potential_dead_ends += 1
 
         return potential_dead_ends - self.dead_end_count(seg_num)
 
     def dead_end_change_if_path_deleted(self, path_segments):
         """
-        Like the above function, but considered the whole path at once. It assumes that the path is
+        Like the above function, but considers the whole path at once. It assumes that the path is
         simple and unbranching (i.e. could be merged into a single segment).
         This function does not check whether the path start and end both connect to the same
         segment. So if they form a hairpin loop, this function will return 0 even though the
@@ -841,26 +833,20 @@ class AssemblyGraph(object):
         end = path_segments[-1]
 
         potential_dead_ends = 0
-        if end in self.forward_links:
-            downstream_segments = self.forward_links[end]
-        else:
-            downstream_segments = []
+        downstream_segments = self.get_downstream_seg_nums(end)
         for downstream_segment in downstream_segments:
-            if len(self.reverse_links[downstream_segment]) == 1:
+            if len(self.reverse_links[downstream_segment]) == 1 and downstream_segment != end:
                 potential_dead_ends += 1
 
-        if start in self.reverse_links:
-            upstream_segments = self.reverse_links[start]
-        else:
-            upstream_segments = []
+        upstream_segments = self.get_upstream_seg_nums(start)
         for upstream_segment in upstream_segments:
-            if len(self.forward_links[upstream_segment]) == 1:
+            if len(self.forward_links[upstream_segment]) == 1 and upstream_segment != start:
                 potential_dead_ends += 1
 
         dead_ends = 0
-        if downstream_segments == 0:
+        if len(downstream_segments) == 0:
             dead_ends += 1
-        if upstream_segments == 0:
+        if len(upstream_segments) == 0:
             dead_ends += 1
         return potential_dead_ends - dead_ends
 
