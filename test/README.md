@@ -1,6 +1,6 @@
 # Unicycler tests
 
-This page briefly describes the tests written to check Unicycler. Users of Unicycler are probabaly uninterested in this stuff, but if you are a Unicycler developer, then read on!
+This page briefly describes the tests written to check Unicycler. Users of Unicycler are probably uninterested in this stuff, but if you are a Unicycler developer, then read on!
 
 All tests are run from the root Unicycler repository (i.e the directory which contains `unicycler-runner.py`).
 

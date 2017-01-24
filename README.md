@@ -172,7 +172,7 @@ Most assemblers use graphs internally to produce their assemblies, but users oft
 
 ### Limitations of short reads
 
-The main reason we can't get a complete assembly from short reads is that DNA usually contains _repeats_ – the same sequence occuring two or more times in the genome. When a repeat is longer than the reads (or for paired-end sequencing, longer than the insert size), it forms a single contig in the assembly graph with multiple connections in and multiple connections out.
+The main reason we can't get a complete assembly from short reads is that DNA usually contains _repeats_ – the same sequence occurring two or more times in the genome. When a repeat is longer than the reads (or for paired-end sequencing, longer than the insert size), it forms a single contig in the assembly graph with multiple connections in and multiple connections out.
 
 Here is what happens to a simple bacterial assembly graph as you add repeats to the genome:
 <p align="center"><img src="misc/repeats_in_graph.png" alt="Repeats in graph"></p>
@@ -544,8 +544,7 @@ Unicycler polish is a script to repeatedly polish a completed assembly using all
 * If polishing with Illumina reads: [Pilon](https://github.com/broadinstitute/pilon/wiki), Java, [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/), [Samtools](http://www.htslib.org/) (version 1.0 or later)
 * If polishing with PacBio reads: [pbalign](https://github.com/PacificBiosciences/pbalign), [BLASR](https://github.com/PacificBiosciences/blasr), [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)
     * PacBio software is most easily installed using [pitchfork](https://github.com/PacificBiosciences/pitchfork).
-* If polishing with Nanopore reads: [Nanopolish](https://github.com/jts/nanopolish), [BWA-MEM](http://bio-bwa.sourceforge.net/)
-* If polishing with both Illumina and long reads: [FreeBayes](https://github.com/ekg/freebayes)
+* If polishing with both Illumina and long reads (e.g. Nanopore): [Racon](https://github.com/isovic/racon), [FreeBayes](https://github.com/ekg/freebayes)
 
 
 ### Process
