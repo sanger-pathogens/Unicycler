@@ -297,6 +297,9 @@ def get_tool_paths(args, short, pacbio, long_reads):
 
 
 def make_pacbio_reads_bam(args):
+    # TO DO: this function should be able to take multiple SMRT cells and run bax2bam on each group
+    # of three bax files. It can then make a fofn for pbalign.
+    # http://seqanswers.com/forums/showthread.php?p=202314
     print_round_header('Converting bax.h5 reads to BAM format', args.verbosity)
     args.pb_bam = 'subreads.bam'
     run_command([args.bax2bam] + args.pb_bax, args)

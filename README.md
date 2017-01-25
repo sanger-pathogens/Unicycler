@@ -555,11 +555,11 @@ Unicycler polish uses an exhaustive iterative process that is time-consuming but
     1. Run [Pilon](https://github.com/broadinstitute/pilon/wiki) in 'bases' mode (substitutions and small indels). If any changes were suggested, apply them and repeat this step.
     2. Run Pilon in 'local' mode (larger variants), and assess each change with ALE. If any variant improves the ALE score, apply it and go back to step 1-i.
 2. If long reads are available:
-    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Nanopolish](https://github.com/jts/nanopolish) and gather all suggested small changes.
+    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Racon](https://github.com/isovic/racon) and gather all suggested small changes.
     2. Use [FreeBayes](https://github.com/ekg/freebayes) to assess each long read-suggested change by looking for ambiguity in the Illumina read mapping. If any were found, apply them and go back to step 2-i.
 3. If Illumina reads are available:
     1. Execute step 1 again.
-    2. Run Pilon/GenomicConsensus/Nanopolish again (all that apply) and assess each suggested variant with ALE. If any improves the ALE score, apply it and repeat this step.
+    2. Run Pilon/GenomicConsensus/Racon again (all that apply) and assess each suggested variant with ALE. If any improves the ALE score, apply it and repeat this step.
 
 
 ### Example commands
