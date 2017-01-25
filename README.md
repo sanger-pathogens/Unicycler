@@ -571,8 +571,10 @@ __Polishing with only PacBio reads:__<br>
 `unicycler_polish --pb_bax path/to/*bax.h5 -a assembly.fasta`
 
 __Hybrid read set (Illumina and PacBio) polishing:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --pb_bax path/to/*bax.h5 -a assembly.fasta`
+`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --pb_bax *bax.h5 -a assembly.fasta`
 
+__Hybrid read set (Illumina and Nanopore) polishing:__<br>
+`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --long_reads nanopore.fastq.gz -a assembly.fasta`
 
 
 # Paper
