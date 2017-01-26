@@ -26,10 +26,6 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     """
     Runs Pilon on the graph to hopefully fix up small mistakes.
     """
-    pilon_path = get_pilon_jar_path(pilon_path)
-    if not pilon_path:
-        raise CannotPolish('could not find pilon.jar')
-
     segments_to_polish = [x for x in graph.segments.values() if x.get_length() >= min_polish_size]
     if not segments_to_polish:
         raise CannotPolish('no segments are long enough to polish')

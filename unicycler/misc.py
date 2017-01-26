@@ -151,7 +151,7 @@ def check_pilon(pilon_path, java_path, samtools_path, bowtie2_path, bowtie2_buil
 
     # If pilon_path is the default and a working executable, then that's great!
     elif args.pilon_path == 'pilon' and shutil.which(pilon_path) is not None:
-        args.pilon_path = pilon_path
+        args.pilon_path = shutil.which(pilon_path)
 
     # If the user didn't specify a path and 'pilon' doesn't work, then we need to look for a
     # Pilon jar file.
@@ -163,9 +163,22 @@ def check_pilon(pilon_path, java_path, samtools_path, bowtie2_path, bowtie2_buil
         if found_pilon_path:
             args.pilon_path = found_pilon_path
         else:
-            quit_with_error(
-                'could not find pilon or pilon*.jar - either specify its location using '
-                '--pilon_path or use --no_pilon to remove Pilon dependency')
+            quit_with_error('could not find pilon or pilon*.jar - either specify its location '
+                            'using --pilon_path or use --no_pilon to remove Pilon dependency')
+
+    # Now that we've found Pilon, run the help command to make sure it works.
+    if args.pilon_path.endswith('.jar'):
+        test_command = [java_path, '-jar', args.pilon_path, '--help']
+    else:
+        test_command = [args.pilon_path, '--help']
+    try:
+        pilon_help_out = subprocess.check_output(test_command, stderr=subprocess.STDOUT).decode()
+        if 'pilon' not in pilon_help_out.lower():
+            raise OSError
+    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+        quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
+                        'fix it, specify a different location using --pilon_path or use '
+                        '--no_pilon to remove Pilon dependency')
 
 
 def get_pilon_jar_path(pilon_path):
