@@ -52,10 +52,9 @@ with open('README.md', 'rb') as readme:
 
 
 def missing_tool(tool_name):
-    if tool_name == 'pilon.jar':
+    path = shutil.which(tool_name)
+    if path is None and tool_name == 'pilon':
         path = get_pilon_jar_path(None)
-    else:
-        path = shutil.which(tool_name)
     if path is None:
         return [tool_name]
     else:
@@ -131,8 +130,8 @@ class UnicyclerInstall(install):
             print('')
 
             # Check for required programs.
-            tools = ['spades.py', 'java', 'pilon.jar', 'samtools', 'bowtie2',
-                     'bowtie2-build', 'makeblastdb', 'tblastn']
+            tools = ['spades.py', 'java', 'pilon', 'samtools', 'bowtie2', 'bowtie2-build',
+                     'makeblastdb', 'tblastn']
             missing_tools = []
             for tool in tools:
                 missing_tools += missing_tool(tool)

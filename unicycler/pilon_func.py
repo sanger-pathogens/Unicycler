@@ -17,8 +17,7 @@ import os
 import subprocess
 import statistics
 from collections import defaultdict
-from .misc import load_fasta, reverse_complement, int_to_str, float_to_str, get_pilon_jar_path, \
-                  get_percentile_sorted
+from .misc import load_fasta, reverse_complement, int_to_str, float_to_str, get_percentile_sorted
 
 
 class CannotPolish(Exception):
