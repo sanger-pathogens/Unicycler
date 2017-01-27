@@ -1,8 +1,16 @@
 """
-Various hard-coded settings for Unicycler.
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+This module contains various hard-coded Unicycler settings.
+
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
 
 # Unicycler will only work with read alignments if they are long enough. This values specifies

@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """
-Unicycler check - a long read assembly error checker
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+This module contains the main script for the Unicycler assembly checker. It is executed when a user
+runs `unicycler_check` (after installation) or `unicycler_check-runner.py`.
+
+It performs semi-global alignment of the long reads to the assembly and tallies up errors in
+windows of the assembly. It then uses Plotly to generate an HTML file with an interactive plot.
+Misassemblies (or more generally, disagreements between the long reads and the assembly) can be
+spotted as regions with unusually high alignment error rates.
+
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
 
 import sys
-import re
 import importlib.util
 import os
 import string
@@ -15,8 +28,8 @@ import argparse
 import random
 import shutil
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
-    get_nice_header, reverse_complement, print_progress_line, print_section_header, \
-    MyHelpFormatter, get_default_thread_count
+    reverse_complement, print_progress_line, print_section_header, MyHelpFormatter, \
+    get_default_thread_count
 from .read_ref import load_references, load_long_reads
 from .alignment import AlignmentScoringScheme
 from .cpp_function_wrappers import simulate_depths, get_random_sequence_alignment_error_rates

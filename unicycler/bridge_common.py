@@ -1,14 +1,19 @@
 """
-Bridges are links between two single-copy segments in an assembly graph.
-Bridges can come from multiple sources, so there are a few different classes which all share
-the important members/methods (for duck-typing purposes).
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
 
-This module has a few functions that are common to multiple bridge types.
+Bridges are links between two single-copy segments in an assembly graph. Bridges can come from
+multiple sources, each described in a separate module. This module has a few functions that are
+common to multiple bridge types.
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
-
 
 import math
 from .misc import weighted_average

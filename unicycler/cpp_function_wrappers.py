@@ -1,14 +1,23 @@
 """
-This script makes use of several C++ functions which are in cpp_functions.so. They are wrapped in
-similarly named Python functions.
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+Unicycler makes use of several C++ functions which are in cpp_functions.so. This module uses ctypes
+to wrap them in similarly named Python functions.
+
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
 from ctypes import CDLL, cast, c_char_p, c_int, c_double, c_void_p, c_bool, POINTER
 from .misc import quit_with_error
+
 
 SO_FILE = 'cpp_functions.so'
 SO_FILE_FULL = os.path.join(os.path.dirname(os.path.realpath(__file__)), SO_FILE)

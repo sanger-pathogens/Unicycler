@@ -1,13 +1,20 @@
 """
-Loop unrolling bridges are strive to unroll simple loops in the graph. They require a SPAdes contig
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
+
+Loop unrolling bridges strive to unroll simple loops in the graph. They require a SPAdes contig
 that connects the loop sequence with the base sequence, in order to be reasonably sure that we are
 dealing with a loop and not a separate circular sequence. They use the relative depths of the
 segments to determine how many times to traverse the loop.
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
-
 
 import math
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor

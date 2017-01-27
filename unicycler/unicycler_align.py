@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Unicycler align - a sensitive semi-global long read aligner
+Copyright 2017 Ryan Wick (rrwick@gmail.com)
+https://github.com/rrwick/Unicycler
 
-This is a script to align error-prone long reads (e.g. PacBio or Nanopore) to one or more
-references in a semi-global manner. Semi-global alignment does not penalise end gaps, but the
-alignment will continue until one of the two sequences ends. This includes cases where the two
-sequences overlap and cases where one sequence is contained within the other:
+This module makes Unicycler's semi-global long read alignment available as a stand-alone program.
+It is executed when a user runs `unicycler_align` (after installation) or
+`unicycler_align-runner.py`.
+
+Semi-global alignment does not penalise end gaps, but the alignment will continue until one of the
+two sequences ends. This includes cases where the two sequences overlap and cases where one
+sequence is contained within the other:
 
   TAGAA        GTGCCGGAACA         GGCCACAC     AGTAAGAT
   |||||          |||||||           |||||           |||||
@@ -22,11 +26,15 @@ Required inputs:
 
 Output: SAM file of alignments
 
-Author: Ryan Wick
-email: rrwick@gmail.com
+This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+details. You should have received a copy of the GNU General Public License along with Unicycler. If
+not, see <http://www.gnu.org/licenses/>.
 """
 
-# import subprocess
 import sys
 import os
 import argparse
