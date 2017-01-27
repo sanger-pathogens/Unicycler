@@ -55,8 +55,6 @@
 #include <cstdlib> // for abs()
 #include <limits>
 
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 // Avoid conflicting declaration of min/max macros in windows headers
 #if !defined(NOMINMAX) && (defined(_WIN32) || defined(_WIN32_)  || defined(WIN32) || defined(_WIN64))
 # define NOMINMAX
@@ -72,7 +70,7 @@ namespace nanoflann
   *  @{ */
 
   	/** Library version: 0xMmP (M=Major,m=minor,P=patch) */
-	#define NANOFLANN_VERSION 0x122
+	#define NANOFLANN_VERSION 0x123
 
 	/** @addtogroup result_sets_grp Result set classes
 	  *  @{ */
@@ -921,7 +919,7 @@ namespace nanoflann
 		 * the result object.
 		 *  \sa radiusSearch, findNeighbors
 		 * \note nChecks_IGNORED is ignored but kept for compatibility with the original FLANN interface.
-		 * \return Number `N` of valid points in the result set. Only the first `N` entries in `out_indices` and `out_distances_sq` will be valid. 
+		 * \return Number `N` of valid points in the result set. Only the first `N` entries in `out_indices` and `out_distances_sq` will be valid.
 		 *         Return may be less than `num_closest` only if the number of elements in the tree is less than `num_closest`.
 		 */
 		size_t knnSearch(const ElementType *query_point, const size_t num_closest, IndexType *out_indices, DistanceType *out_distances_sq, const int /* nChecks_IGNORED */ = 10) const
@@ -1118,7 +1116,7 @@ namespace nanoflann
 				ElementType span = bbox[i].high-bbox[i].low;
 				if (span>(1-EPS)*max_span) {
 					ElementType min_elem, max_elem;
-					computeMinMax(ind, count, cutfeat, min_elem, max_elem);
+					computeMinMax(ind, count, i, min_elem, max_elem);
 					ElementType spread = max_elem-min_elem;;
 					if (spread>max_spread) {
 						cutfeat = i;
