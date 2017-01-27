@@ -46,6 +46,8 @@
 #ifndef  NANOFLANN_HPP_
 #define  NANOFLANN_HPP_
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include <vector>
 #include <cassert>
 #include <algorithm>
