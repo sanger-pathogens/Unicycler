@@ -22,7 +22,7 @@ from collections import defaultdict
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
 from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
     print_table, get_right_arrow
-from .cpp_function_wrappers import consensus_alignment
+from .cpp_wrappers import consensus_alignment
 from . import settings
 from .path_finding import get_best_paths_for_seq
 

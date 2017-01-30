@@ -16,7 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 from collections import defaultdict
 from .misc import weighted_average, reverse_complement, get_num_agreement
-from .cpp_function_wrappers import fully_global_alignment, path_alignment
+from .cpp_wrappers import fully_global_alignment, path_alignment
 from . import settings
 
 

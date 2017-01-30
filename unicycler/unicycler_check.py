@@ -32,7 +32,7 @@ from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, 
     get_default_thread_count
 from .read_ref import load_references, load_long_reads
 from .alignment import AlignmentScoringScheme
-from .cpp_function_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
+from .cpp_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
 from .unicycler_align import semi_global_align_long_reads, add_aligning_arguments, \
     fix_up_arguments, load_sam_alignments
 

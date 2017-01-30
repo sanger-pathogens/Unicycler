@@ -47,7 +47,7 @@ import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     print_progress_line, print_section_header, weighted_average_list, get_sequence_file_type, \
     MyHelpFormatter, dim, colour, print_v, get_default_thread_count
-from .cpp_function_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
+from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
     delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
 from .alignment import Alignment, AlignmentScoringScheme

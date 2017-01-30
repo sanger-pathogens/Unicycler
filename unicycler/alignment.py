@@ -15,7 +15,6 @@ not, see <http://www.gnu.org/licenses/>.
 
 import re
 from .misc import get_nice_header, reverse_complement, float_to_str
-# from .cpp_function_wrappers import start_extension_alignment, end_extension_alignment
 
 
 class AlignmentScoringScheme(object):
