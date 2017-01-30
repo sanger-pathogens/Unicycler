@@ -29,15 +29,14 @@
 // DAMAGE.
 //
 // ==========================================================================
-// Authors: Tobias Raussch <rausch@embl.de>, Ryan Wick <rrwick@gmail.com>
+// Author: Tobias Raussch <rausch@embl.de>
+// Author: Ryan Wick <rrwick@gmail.com>
 // ==========================================================================
 // Implementation of Depth-First-Search algorithm.
 // ==========================================================================
 
 #ifndef INCLUDE_SEQAN_GRAPH_ALGORITHMS_DEPTH_FIRST_SEARCH_H_
 #define INCLUDE_SEQAN_GRAPH_ALGORITHMS_DEPTH_FIRST_SEARCH_H_
-#include <vector>
-#include <utility>
 
 namespace seqan {
 
@@ -60,34 +59,6 @@ namespace seqan {
 // ----------------------------------------------------------------------------
 // Function depthFirstSearch()
 // ----------------------------------------------------------------------------
-
-template <typename TSpec, typename TVertexDescriptor, typename TTokenMap, typename TPredecessorMap, typename TDiscoveryTimeMap, typename TFinishingTimeMap, typename TVal>
-void
-_dfsVisit(Graph<TSpec> const& g,
-           TVertexDescriptor const u,
-           TTokenMap& tokenMap,
-           TPredecessorMap& predecessor,
-           TDiscoveryTimeMap& disc,
-           TFinishingTimeMap& finish,
-           TVal& time)
-{
-    typedef typename Iterator<Graph<TSpec>, AdjacencyIterator>::Type TAdjacencyIterator;
-
-    assignProperty(tokenMap, u, true);
-    ++time;
-    assignProperty(disc, u, time);
-    TAdjacencyIterator itad(g,u);
-    for(;!atEnd(itad);goNext(itad)) {
-        TVertexDescriptor v = getValue(itad);
-        if (getProperty(tokenMap, v) == false) {
-            assignProperty(predecessor, v, u);
-            _dfsVisit(g, v, tokenMap, predecessor, disc, finish, time);
-        }
-    }
-    ++time;
-    assignProperty(finish, u, time);
-}
-
 /*!
  * @fn depthFirstSearch
  * @headerfile <seqan/graph_algorithms.h>
@@ -124,8 +95,12 @@ void depthFirstSearch(TPredecessorMap & predecessor,
     typedef typename VertexDescriptor<TGraph>::Type TVertexDescriptor;
     typedef typename Value<TPredecessorMap>::Type TPredVal;
     typedef typename Iterator<Graph<TSpec>, AdjacencyIterator>::Type TAdjacencyIterator;
-    enum Task {EXPLORE, FINISH};
-    typedef std::pair<TVertexDescriptor, Task> StackItem;
+
+    enum class _DfsTask : uint8_t
+    {
+        EXPLORE,
+        FINISH
+    };
 
     // Initialization - set each vertex as unvisited and with no predecessor.
     resizeVertexMap(predecessor, g);
@@ -135,7 +110,8 @@ void depthFirstSearch(TPredecessorMap & predecessor,
     String<bool> tokenMap;
     resizeVertexMap(tokenMap, g);
     TVertexIterator it(g);
-    for(;!atEnd(it);goNext(it)) {
+    for(;!atEnd(it);goNext(it))
+    {
         assignProperty(tokenMap, getValue(it), false);
         assignProperty(predecessor, getValue(it), nil);
     }
@@ -144,47 +120,50 @@ void depthFirstSearch(TPredecessorMap & predecessor,
     // We do the DFS non-recursively using a stack. The stack holds two possible tasks:
     //   EXPLORE, which means we must follow that vertex's edges
     //   FINISH, which means the vertex just needs a finish time
-    std::vector<StackItem> vStack;
+    std::vector<std::pair<TVertexDescriptor, _DfsTask> > vStack;
 
     // The graph may not be connected, so start at every vertex.
     goBegin(it);
-    for(; !atEnd(it); goNext(it)) {
-
+    for(; !atEnd(it); goNext(it))
+    {
         // If the vertex has already been visited, skip it.
         TVertexDescriptor v = getValue(it);
-        if (getProperty(tokenMap, v)) {
+        if (getProperty(tokenMap, v))
+        {
             continue;
         }
 
         vStack.clear();
-        vStack.push_back(StackItem(v, EXPLORE));
-        while (!vStack.empty()) {
-
+        vStack.emplace_back(v, _DfsTask::EXPLORE);
+        while (!vStack.empty())
+        {
             // Get the vertex and task from the top of the stack.
-            StackItem stackItem = vStack.back();
+            auto stackItem = vStack.back();
             vStack.pop_back();
             TVertexDescriptor v = stackItem.first;
 
-            if (stackItem.second == FINISH) {
+            if (stackItem.second == _DfsTask::FINISH)
+            {
                 assignProperty(finish, v, ++time);
             }
-
-            // If the task is EXPLORE and the vertex is not visited...
-            else if (!getProperty(tokenMap, v)) {
-                assignProperty(tokenMap, v, true);      // label as visited
-                assignProperty(disc, v, ++time);        // set discovery time
-                vStack.push_back(StackItem(v, FINISH)); // add a task to the stack so the vertex will get a finish time
+            else if (!getProperty(tokenMap, v))       // If the task is EXPLORE and the vertex is not visited...
+            {
+                assignProperty(tokenMap, v, true);    // label as visited
+                assignProperty(disc, v, ++time);      // set discovery time
+                vStack.emplace_back(v, _DfsTask::FINISH); // add a task to the stack so the vertex will get a finish time
 
                 // Add EXPLORE tasks to the stack for each unvisited adjacent vertex. They are added in reverse order
                 // so the first adjacent vertex will be the first to come off the stack. This is to mimic the behaviour
                 // of the original recursive implementation of this function.
                 TAdjacencyIterator itad(g, v);
                 goEnd(itad);
-                while (!atBegin(itad)) {
+                while (!atBegin(itad))
+                {
                     goPrevious(itad);
                     TVertexDescriptor nextV = getValue(itad);
-                    if (!getProperty(tokenMap, nextV)) {
-                        vStack.push_back(StackItem(nextV, EXPLORE));
+                    if (!getProperty(tokenMap, nextV))
+                    {
+                        vStack.emplace_back(nextV, _DfsTask::EXPLORE);
                         assignProperty(predecessor, nextV, v);
                     }
                 }

@@ -232,11 +232,7 @@ struct GffRecord
     }
 
     GffRecord() :
-
-        // RRW: change to quiet ICC compiler warnings.
-        beginPos(std::numeric_limits<uint32_t>::max()),
-        endPos(std::numeric_limits<uint32_t>::max()),
-        score(INVALID_SCORE()),
+        beginPos(-1), endPos(-1), score(INVALID_SCORE()),
         strand('.'), phase('.')
     {}
 };
@@ -318,9 +314,8 @@ _parseReadGffKeyValue(TValueString & outValue, TKeyString & key, TForwardIter & 
  */
 inline void clear(GffRecord & record)
 {
-    // RRW: change to quiet ICC compiler warnings.
-    record.beginPos = std::numeric_limits<uint32_t>::max();
-    record.endPos = std::numeric_limits<uint32_t>::max();
+    record.beginPos = -1;
+    record.endPos = -1;
     record.score = record.INVALID_SCORE();
     record.strand = '.';
     record.phase = '.';
@@ -415,6 +410,9 @@ void readRecord(GffRecord & record, CharString & buffer, TFwdIterator & iter)
         return;
     }
     skipOne(iter, IsTab());
+    // There is often a space character between phase and attribute columns.
+    // We can safely skip that!
+    skipUntil(iter, NotFunctor<IsSpace>());  //skip empty lines
 
     // read column 9: attributes
     while (!atEnd(iter))

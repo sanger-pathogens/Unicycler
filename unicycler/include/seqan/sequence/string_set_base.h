@@ -69,7 +69,7 @@ struct Owner {};
  * chromosomes of a genome.  This facilitates writing generic data structures and algorithms to operate on single
  * strings and genomes which is captured by the @link TextConcept @endlink.
  *
- * Second, the @link DependentStringSet @endlink specialization allows to create subsets of string sets without
+ * Second, the @link DependentStringSet @endlink specialization allows one to create subsets of string sets without
  * storing copies of strings and identifying strings by a common id.
  *
  * @section Examples
@@ -300,41 +300,39 @@ struct Size< StringSet< TString, TSpec > >
 // Default Size<T const> redirects to non-const.
 
 // --------------------------------------------------------------------------
-// Metafunction Prefix
+// Metafunction PrefixOnValue
 // --------------------------------------------------------------------------
-// TODO(holtgrew): Do Prefix, Suffix, Infix make sense if defined in this way for all StringSet classes?
-// TODO(holtgrew): However, if this works nicely then it shows that implementing segments as Strings would not be advantageous since they now work for arbitrary sequential-access containers.
 
 template <typename TString, typename TSpec>
-struct Prefix< StringSet< TString, TSpec > >
+struct PrefixOnValue< StringSet< TString, TSpec > >
     : Prefix<TString > {};
 
 template <typename TString, typename TSpec>
-struct Prefix<StringSet< TString, TSpec > const>
+struct PrefixOnValue<StringSet< TString, TSpec > const>
     : Prefix<TString const > {};
 
 // --------------------------------------------------------------------------
-// Metafunction Suffix
+// Metafunction SuffixOnValue
 // --------------------------------------------------------------------------
 
 template <typename TString, typename TSpec>
-struct Suffix<StringSet< TString, TSpec> >
+struct SuffixOnValue<StringSet< TString, TSpec> >
     : Suffix<TString> {};
 
 template <typename TString, typename TSpec>
-struct Suffix<StringSet< TString, TSpec> const>
+struct SuffixOnValue<StringSet< TString, TSpec> const>
     : Suffix<TString const> {};
 
 // --------------------------------------------------------------------------
-// Metafunction Infix
+// Metafunction InfixOnValue
 // --------------------------------------------------------------------------
 
 template <typename TString, typename TSpec>
-struct Infix<StringSet< TString, TSpec> >
+struct InfixOnValue<StringSet< TString, TSpec> >
     : Infix<TString> {};
 
 template <typename TString, typename TSpec>
-struct Infix<StringSet< TString, TSpec > const>
+struct InfixOnValue<StringSet< TString, TSpec > const>
     : Infix< TString const > {};
 
 // --------------------------------------------------------------------------
@@ -413,7 +411,7 @@ stringSetLimits(StringSet<TString, TSpec> const & stringSet)
 
 // TODO(holtgrew): Auto-sequences should go away!
 template <typename TPosition>
-SEQAN_HOST_DEVICE inline TPosition
+inline TPosition
 getSeqNo(TPosition const &, Nothing const &)
 {
     return 0;
@@ -421,7 +419,7 @@ getSeqNo(TPosition const &, Nothing const &)
 
 // TODO(holtgrew): Auto-sequences should go away!
 template <typename TPosition>
-SEQAN_HOST_DEVICE inline TPosition
+inline TPosition
 getSeqNo(TPosition const &)
 {
     return 0;
@@ -429,14 +427,14 @@ getSeqNo(TPosition const &)
 
 // n sequences (position type is Pair)
 template <typename T1, typename T2, typename TPack, typename TLimitsString>
-SEQAN_HOST_DEVICE inline T1 getSeqNo(Pair<T1, T2, TPack> const & pos, TLimitsString const &)
+inline T1 getSeqNo(Pair<T1, T2, TPack> const & pos, TLimitsString const &)
 {
     return getValueI1(pos);
 }
 
 // n sequences (position type is Pair)
 template <typename T1, typename T2, typename TPack>
-SEQAN_HOST_DEVICE inline T1 getSeqNo(Pair<T1, T2, TPack> const & pos)
+inline T1 getSeqNo(Pair<T1, T2, TPack> const & pos)
 {
     return getValueI1(pos);
 }
@@ -458,7 +456,7 @@ inline TPos getSeqNo(TPos const & pos, TLimitsString const & limits)
 
 // TODO(holtgrew): Auto-sequences should go away!
 template <typename TPosition>
-SEQAN_HOST_DEVICE inline TPosition
+inline TPosition
 getSeqOffset(TPosition const & pos, Nothing const &)
 {
     return pos;
@@ -466,7 +464,7 @@ getSeqOffset(TPosition const & pos, Nothing const &)
 
 // TODO(holtgrew): Auto-sequences should go away!
 template <typename TPosition>
-SEQAN_HOST_DEVICE inline TPosition
+inline TPosition
 getSeqOffset(TPosition const & pos)
 {
     return pos;
@@ -474,13 +472,13 @@ getSeqOffset(TPosition const & pos)
 
 // n sequences (position type is Pair)
 template <typename T1, typename T2, typename TPack, typename TLimitsString>
-SEQAN_HOST_DEVICE inline T2 getSeqOffset(Pair<T1, T2, TPack> const & pos, TLimitsString const &) {
+inline T2 getSeqOffset(Pair<T1, T2, TPack> const & pos, TLimitsString const &) {
     return getValueI2(pos);
 }
 
 // n sequences (position type is Pair)
 template <typename T1, typename T2, typename TPack>
-SEQAN_HOST_DEVICE inline T2 getSeqOffset(Pair<T1, T2, TPack> const & pos) {
+inline T2 getSeqOffset(Pair<T1, T2, TPack> const & pos) {
     return getValueI2(pos);
 }
 
@@ -598,11 +596,12 @@ inline void posLocalize(TResult & result, Pair<T1, T2, TPack> const & pos, Strin
 }
 
 // --------------------------------------------------------------------------
-// Function prefix()
+// Function prefix(); For local string set position.
 // --------------------------------------------------------------------------
 
 template < typename TString, typename TSpec, typename TPosition >
-inline typename Prefix<TString>::Type
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename PrefixOnValue<StringSet< TString, TSpec > >::Type)
 prefix(StringSet< TString, TSpec > & me, TPosition const & pos)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
@@ -616,7 +615,8 @@ prefix(StringSet< TString, TSpec > & me, TPosition const & pos)
 }
 
 template < typename TString, typename TSpec, typename TPosition >
-inline typename Prefix<TString const>::Type
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename PrefixOnValue<StringSet< TString, TSpec > const>::Type)
 prefix(StringSet< TString, TSpec > const & me, TPosition const & pos)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
@@ -630,11 +630,12 @@ prefix(StringSet< TString, TSpec > const & me, TPosition const & pos)
 }
 
 // --------------------------------------------------------------------------
-// Function suffix()
+// Function suffix(); For local string set position.
 // --------------------------------------------------------------------------
 
 template < typename TString, typename TSpec, typename TPosition >
-inline typename Suffix<TString>::Type
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename SuffixOnValue<StringSet< TString, TSpec > >::Type)
 suffix(StringSet< TString, TSpec > & me, TPosition const & pos)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
@@ -648,7 +649,8 @@ suffix(StringSet< TString, TSpec > & me, TPosition const & pos)
 }
 
 template < typename TString, typename TSpec, typename TPosition >
-inline typename Suffix<TString const>::Type
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename SuffixOnValue<StringSet< TString, TSpec > const>::Type)
 suffix(StringSet< TString, TSpec > const & me, TPosition const & pos)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
@@ -662,12 +664,13 @@ suffix(StringSet< TString, TSpec > const & me, TPosition const & pos)
 }
 
 // --------------------------------------------------------------------------
-// Function infixWithLength()
+// Function infixWithLength(); For local string set position.
 // --------------------------------------------------------------------------
 
 template < typename TString, typename TSpec, typename TPosition, typename TSize >
-inline typename Infix<TString>::Type
-infixWithLength(StringSet< TString, TSpec > & me, TPosition const & pos, TSize length)
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename InfixOnValue<StringSet< TString, TSpec > >::Type)
+infixWithLength(StringSet< TString, TSpec > & me, TPosition const & pos, TSize const length)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
     typedef typename Size<TStringSet>::Type         TSetSize;
@@ -680,8 +683,9 @@ infixWithLength(StringSet< TString, TSpec > & me, TPosition const & pos, TSize l
 }
 
 template < typename TString, typename TSpec, typename TPosition, typename TSize >
-inline typename Infix<TString const>::Type
-infixWithLength(StringSet< TString, TSpec > const & me, TPosition const & pos, TSize length)
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosition> >,
+                             typename InfixOnValue<StringSet< TString, TSpec > const>::Type)
+infixWithLength(StringSet< TString, TSpec > const & me, TPosition const & pos, TSize const length)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
     typedef typename Size<TStringSet>::Type         TSetSize;
@@ -694,12 +698,13 @@ infixWithLength(StringSet< TString, TSpec > const & me, TPosition const & pos, T
 }
 
 // --------------------------------------------------------------------------
-// Function infix()
+// Function infix(); For local string set position.
 // --------------------------------------------------------------------------
 
-template < typename TString, typename TSpec, typename TPosBegin, typename TPosEnd >
-inline typename Infix<TString>::Type
-infix(StringSet< TString, TSpec > & me, TPosBegin const & posBegin, TPosEnd const & posEnd)
+template < typename TString, typename TSpec, typename TPosBeg, typename TPosEnd>
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosBeg> >,
+                             typename InfixOnValue<StringSet< TString, TSpec > >::Type)
+infix(StringSet<TString, TSpec > & me, TPosBeg const & posBegin, TPosEnd const & posEnd)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
     typedef typename Size<TStringSet>::Type         TSetSize;
@@ -712,9 +717,10 @@ infix(StringSet< TString, TSpec > & me, TPosBegin const & posBegin, TPosEnd cons
     return infix(me[getSeqNo(localPosBegin)], getSeqOffset(localPosBegin), getSeqOffset(localPosEnd));
 }
 
-template < typename TString, typename TSpec, typename TPosBegin, typename TPosEnd >
-inline typename Infix<TString const>::Type
-infix(StringSet< TString, TSpec > const & me, TPosBegin const & posBegin, TPosEnd const & posEnd)
+template < typename TString, typename TSpec, typename TPosBeg, typename TPosEnd>
+inline SEQAN_FUNC_DISABLE_IF(Is<IntegerConcept<TPosBeg> >,
+                             typename InfixOnValue<StringSet< TString, TSpec > const>::Type)
+infix(StringSet<TString, TSpec > const & me, TPosBeg const & posBegin, TPosEnd const & posEnd)
 {
     typedef StringSet<TString, TSpec>               TStringSet;
     typedef typename Size<TStringSet>::Type         TSetSize;
@@ -884,12 +890,12 @@ posNext(Pair<T1, T2, TPack> const & pos) {
  */
 
 template <typename TPos, typename TDelta>
-SEQAN_HOST_DEVICE inline TPos posAdd(TPos pos, TDelta delta) {
+inline TPos posAdd(TPos pos, TDelta delta) {
     return pos + delta;
 }
 
 template <typename T1, typename T2, typename TPack, typename TDelta>
-SEQAN_HOST_DEVICE inline Pair<T1, T2, TPack>
+inline Pair<T1, T2, TPack>
 posAdd(Pair<T1, T2, TPack> const & pos, TDelta delta) {
     return Pair<T1, T2, TPack>(getValueI1(pos), getValueI2(pos) + delta);
 }
@@ -1049,21 +1055,21 @@ countSequences(StringSet<TString, TSpec> const & stringSet) {
 // --------------------------------------------------------------------------
 
 template <typename TSeqNo, typename TString>
-SEQAN_HOST_DEVICE inline typename GetSequenceByNo<TString>::Type
+inline typename GetSequenceByNo<TString>::Type
 getSequenceByNo(TSeqNo /*seqNo*/, TString & string)
 {
     return string;
 }
 
 template <typename TSeqNo, typename TString, typename TSpec>
-SEQAN_HOST_DEVICE inline typename GetSequenceByNo< StringSet<TString, TSpec> >::Type
+inline typename GetSequenceByNo< StringSet<TString, TSpec> >::Type
 getSequenceByNo(TSeqNo seqNo, StringSet<TString, TSpec> & stringSet)
 {
     return stringSet[seqNo];
 }
 
 template <typename TSeqNo, typename TString, typename TSpec>
-SEQAN_HOST_DEVICE inline typename GetSequenceByNo< StringSet<TString, TSpec> const>::Type
+inline typename GetSequenceByNo< StringSet<TString, TSpec> const>::Type
 getSequenceByNo(TSeqNo seqNo, StringSet<TString, TSpec> const & stringSet)
 {
     return stringSet[seqNo];
@@ -1074,7 +1080,7 @@ getSequenceByNo(TSeqNo seqNo, StringSet<TString, TSpec> const & stringSet)
 // --------------------------------------------------------------------------
 
 template <typename TSeqNo, typename TText>
-SEQAN_HOST_DEVICE inline typename Size< typename GetSequenceByNo<TText const>::Type>::Type
+inline typename Size< typename GetSequenceByNo<TText const>::Type>::Type
 sequenceLength(TSeqNo seqNo, TText const & text)
 {
     return length(getSequenceByNo(seqNo, text));
@@ -1430,6 +1436,7 @@ return iter(me, length(me), tag);
 /*!
  * @mfn StringSet#Id
  * @brief Return the id type for the string set.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature Id<TStringSet>::Type
  *
@@ -1441,9 +1448,9 @@ return iter(me, length(me), tag);
 /*!
  * @fn StringSet#getValueById
  * @brief Get the value from a string set by its id.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature TString getValueById(s, id);
- * @deprecated Use the subscript operator (<tt>operator[]</tt>) instead.
  *
  * @param[in] s  The string set to get string from.
  * @param[in] id The id of the string to get.
@@ -1460,9 +1467,9 @@ return iter(me, length(me), tag);
 /*!
  * @fn StringSet#valueById
  * @brief Get the value from a string set by its id.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature TString valueById(s, id);
- * @deprecated Use the subscript operator (<tt>operator[]</tt>) instead.
  *
  * @param[in] s  The string set to get string from.
  * @param[in] id The id of the string to get.
@@ -1496,9 +1503,9 @@ valueById(StringSet<TString, TSpec> & me,
 /*!
  * @fn StringSet#assignValueById
  * @brief Set the member of a string set by its id.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature TId assignValueById(set, s[, id]);
- * @deprecated Use @link StringSet#assignValue @endlink instead.
  *
  * @param[in] set The string set to assign value in.
  * @param[in] s   The string set to assign.
@@ -1533,9 +1540,9 @@ assignValueById(StringSet<TString, TSpec1>& dest,
 /*!
  * @fn StringSet#removeValueById
  * @brief Remove a value from a string set by its id.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature void removeValueById(set, id);
- * @deprecated Use @link StringConcept#erase @endlink.
  *
  * @param[in,out] set The string to remove value in.
  * @param[in]     id  The id of the string to remove.
@@ -1550,9 +1557,9 @@ assignValueById(StringSet<TString, TSpec1>& dest,
 /*!
  * @fn StringSet#positionToId
  * @brief Convert a position/index in the string set to a string id.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature Id positionToId(set, pos);
- * @deprecated ID is the same as the position
  *
  * @param[in] set The string to convert positions for.
  * @param[in] pos The position to convert.
@@ -1579,7 +1586,7 @@ assignValueById(StringSet<TString, TSpec1>& dest,
 
 // TODO(holtgrew): Why default concat() for any class?
 template <typename TString>
-SEQAN_HOST_DEVICE inline typename Concatenator<TString>::Type &
+inline typename Concatenator<TString>::Type &
 concat(TString & string)
 {
     return string;
@@ -1587,7 +1594,7 @@ concat(TString & string)
 
 // TODO(holtgrew): Why default concat() for any class?
 template <typename TString>
-SEQAN_HOST_DEVICE inline typename Concatenator<TString const>::Type &
+inline typename Concatenator<TString const>::Type &
 concat(TString const & string)
 {
     return string;
@@ -1671,9 +1678,9 @@ inline void prefixSums(TPrefixSums & sums, TText const & text)
 /*!
  * @fn StringSet#idToPosition
  * @brief Convert a string id to a position/index in the string set.
+ * Note: Position is the same as id for all string sets but the @link DependentStringSet @endlink.
  *
  * @signature TPos idToPosition(set, id);
- * @deprecated ID is the same as the position
  *
  * @param[in] set The string to convert positions for.
  * @param[in] id  The id to convert.

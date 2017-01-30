@@ -81,7 +81,7 @@ Reasons to __not__ use Unicycler:
 * Linux or macOS
 * [Python](https://www.python.org/) 3.4 or later
 * C++ compiler
-    * [GCC](https://gcc.gnu.org/), [Clang](http://clang.llvm.org/) and [ICC](https://software.intel.com/en-us/c-compilers) should all work if the version isn't too old (C++11 support is required).
+    * Recent versions of [GCC](https://gcc.gnu.org/), [Clang](http://clang.llvm.org/) and [ICC](https://software.intel.com/en-us/c-compilers) should all work (C++14 support is required).
 * [SPAdes](http://bioinf.spbau.ru/spades) 3.6.2 or later
 
 Unicycler needs the following tools for certain parts of its pipeline. They are optional, but without them Unicycler will not be able to perform all tasks:

@@ -13,7 +13,7 @@
 CXXFLAGS    ?= -Wall -Wextra -pedantic -march=native
 
 # These flags are required for the build to work.
-FLAGS        = -std=c++11 -Iunicycler/include -fPIC
+FLAGS        = -std=c++14 -Iunicycler/include -fPIC
 LDFLAGS      = -shared -lz
 
 # Different debug/optimisation levels for debug/release builds.

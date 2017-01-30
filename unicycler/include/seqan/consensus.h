@@ -48,7 +48,6 @@
 #include <seqan/graph_msa.h>
 #include <seqan/store.h>
 #include <seqan/seq_io.h>
-#include <limits>
 
 // ==========================================================================
 // Old Consensus Module

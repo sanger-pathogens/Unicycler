@@ -207,7 +207,7 @@ _copyHeapElement (PriorityType<TValue, TLess, PriorityHeap> & me, TValue const &
 
 template <typename TValue, typename TLess>
 inline void
-adjustTop (PriorityType<TValue, TLess, PriorityHeap> & me)    // so kÃ¶nnte man es dann auch nennen
+adjustTop (PriorityType<TValue, TLess, PriorityHeap> & me)    // so könnte man es dann auch nennen
 {
     if (!empty(me.heap))
         _adjustHeapTowardLeaves (me, me.heap[0], 0, 2);
@@ -301,7 +301,7 @@ _adjustHeapTowardLeaves(
     PriorityType<TValue, TLess, PriorityHeap> & me,
     TValue element,
     TSize h,
-    TSize i ) //fÃ¼r mich: h=0, i=1
+    TSize i ) //für mich: h=0, i=1
 {
     // root index is zero
     const TSize heapsize = length(me.heap);

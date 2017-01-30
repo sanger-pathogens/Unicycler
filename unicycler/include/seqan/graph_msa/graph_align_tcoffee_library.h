@@ -506,106 +506,6 @@ selectPairs(StringSet<TString, TSpec> const& str,
     }
 }
 
-
-// I (Ryan Wick) made this function to make three groups of pairs for my particular MSA needs.
-template<typename TString, typename TSpec, typename TSize2, typename TSpec2>
-inline void
-selectPairs(StringSet<TString, TSpec> const& str,
-            String<TSize2, TSpec2>& pListFullSpan,
-            String<TSize2, TSpec2>& pListStartOnly,
-            String<TSize2, TSpec2>& pListEndOnly,
-            String<TSize2, TSpec2>& pListStartOnlyToEndOnly,
-            int fullSpanCountInt, int startOnlyCountInt, int endOnlyCountInt)
-{
-    typedef StringSet<TString, TSpec> TStringSet;
-    typedef typename Size<TStringSet>::Type TSize;
-    typedef typename Iterator<String<TSize2, TSpec2>, Standard>::Type TPairIter;
-
-    TSize nseqAll = length(str);
-    TSize fullSpanCount = fullSpanCountInt;
-    TSize startOnlyCount = startOnlyCountInt;
-    TSize endOnlyCount = endOnlyCountInt;
-
-    // Create the full-span to full-span pairs.
-    resize(pListFullSpan, fullSpanCount * (fullSpanCount - 1));
-    TPairIter itPair = begin(pListFullSpan, Standard());
-    for (TSize i = 0; i < fullSpanCount - 1; ++i) {
-        for (TSize j = i + 1; j < fullSpanCount; ++j) {
-            *itPair = i; ++itPair;
-            *itPair = j; ++itPair;
-        }
-    }
-
-    // Create the start-only pairs (start-only to start-only and start-only to full-span).
-    if (startOnlyCount > 0) {
-        resize(pListStartOnly, startOnlyCount * ((2 * fullSpanCount) + startOnlyCount - 1));
-        itPair = begin(pListStartOnly, Standard());
-        for (TSize i = 0; i < fullSpanCount + startOnlyCount - 1; ++i) {
-            for (TSize j = i + 1; j < fullSpanCount + startOnlyCount; ++j) {
-
-                // Skip full-span to full-span
-                if (i < fullSpanCount and j < fullSpanCount)
-                    continue;
-
-                *itPair = i; ++itPair;
-                *itPair = j; ++itPair;
-            }
-        }
-    }
-
-    // Create the end-only pairs (end-only to end-only and end-only to full-span).
-    if (endOnlyCount > 0) {
-        resize(pListEndOnly, endOnlyCount * ((2 * fullSpanCount) + endOnlyCount - 1));
-        itPair = begin(pListEndOnly, Standard());
-        for (TSize i = 0; i < nseqAll - 1; ++i) {
-
-            // Skip any start-only sequences.
-            if (i >= fullSpanCount and i < fullSpanCount + startOnlyCount)
-                continue;
-
-            for (TSize j = i + 1; j < nseqAll; ++j) {
-
-                // Skip full-span to full-span
-                if (i < fullSpanCount and j < fullSpanCount)
-                    continue;
-
-                // Skip any start-only sequences.
-                if (j >= fullSpanCount and j < fullSpanCount + startOnlyCount)
-                    continue;
-                
-                *itPair = i; ++itPair;
-                *itPair = j; ++itPair;
-            }
-        }
-    }
-
-    // Create the start-only to end-only (and vice-versa) pairs.
-    if (startOnlyCount > 0 && endOnlyCount > 0) {
-        resize(pListStartOnlyToEndOnly, (nseqAll * (nseqAll-1)) - length(pListFullSpan) - length(pListStartOnly) - length(pListEndOnly));
-        itPair = begin(pListStartOnlyToEndOnly, Standard());
-        for (TSize i = 0; i < nseqAll - 1; ++i) {
-            for (TSize j = i + 1; j < nseqAll; ++j) {
-
-                // Skip any full-span pairs.
-                if (i < fullSpanCount || j < fullSpanCount)
-                    continue;
-
-                // Skip any start-only to start-only pairs.
-                if ((i >= fullSpanCount and i < fullSpanCount + startOnlyCount) &&
-                    (j >= fullSpanCount and j < fullSpanCount + startOnlyCount))
-                    continue;
-
-                // Skip any end-only to end-only pairs.
-                if ((i >= fullSpanCount + startOnlyCount) && (j >= fullSpanCount + startOnlyCount))
-                    continue;
-                
-                *itPair = i; ++itPair;
-                *itPair = j; ++itPair;
-            }
-        }
-    }
-}
-
 //////////////////////////////////////////////////////////////////////////////
 // Alignment statistics
 //////////////////////////////////////////////////////////////////////////////
@@ -621,7 +521,7 @@ getAlignmentStatistics(String<TFragment, TSpec1> const& matches,
                        TPos const from,
                        TPos const to,
                        TSize1& matchLength,    // Number of identical characters
-                       TSize1& overlapLength,    // Number of character in overlapping segments (with mismatches and gaps)
+                       TSize1& overlapLength,  // Number of character in overlapping segments (with mismatches and gaps)
                        TSize1& alignLength)    // Length of the alignment
 {
     typedef String<TFragment, TSpec1> const TFragmentMatches;
@@ -634,7 +534,6 @@ getAlignmentStatistics(String<TFragment, TSpec1> const& matches,
     TSize len1 = length(str[0]);
     TSize len2 = length(str[1]);
 
-
     TSize minId1 = len1 + len2;
     TSize minId2 = len1 + len2;
     TSize maxId1 = 0;
@@ -643,23 +542,29 @@ getAlignmentStatistics(String<TFragment, TSpec1> const& matches,
 
     if (length(matches) > 0)
     {
-        TFragIter itFrag = begin(matches, Standard());
-        TFragIter itFragEnd = itFrag;
-        itFrag += from;
-        itFragEnd += to;
+        TFragIter itFrag = begin(matches, Standard()) + from;
+        TFragIter itFragEnd = begin(matches, Standard()) + to;
+
         TId id1 = sequenceId(*itFrag, 0);
         TId id2 = sequenceId(*itFrag, 1);
         TSize fragLen = 0;
         TSize beginI = 0;
         TSize beginJ = 0;
-        for(;itFrag != itFragEnd; ++itFrag) {
+
+        for(; itFrag != itFragEnd; ++itFrag)
+        {
             fragLen = fragmentLength(*itFrag, id1);
             beginI = fragmentBegin(*itFrag, id1);
             beginJ = fragmentBegin(*itFrag, id2);
-            if (beginI < minId1) minId1 = beginI;
-            if (beginJ < minId2) minId2 = beginJ;
-            if (beginI + fragLen > maxId1) maxId1 = beginI + fragLen;
-            if (beginJ + fragLen > maxId2) maxId2 = beginJ + fragLen;
+            if (beginI < minId1)
+                minId1 = beginI;
+            if (beginJ < minId2)
+                minId2 = beginJ;
+            if (beginI + fragLen > maxId1)
+                maxId1 = beginI + fragLen;
+            if (beginJ + fragLen > maxId2)
+                maxId2 = beginJ + fragLen;
+
             typedef typename Infix<TString>::Type TInfix;
             typedef typename Iterator<TInfix, Standard>::Type TInfixIter;
             TInfix inf1 = label(*itFrag, str, id1);
@@ -668,12 +573,15 @@ getAlignmentStatistics(String<TFragment, TSpec1> const& matches,
             TInfixIter sIt2 = begin(inf2, Standard());
             TInfixIter sIt1End = end(inf1, Standard());
             matchMismatch_length += fragLen;
-            for(;sIt1 != sIt1End; ++sIt1, ++sIt2)
-                if ( (TAlphabet) *sIt1  == (TAlphabet) *sIt2) ++matchLength;
+            for(; sIt1 != sIt1End; ++sIt1, ++sIt2)
+            {
+                if ( (TAlphabet) *sIt1 == (TAlphabet) *sIt2)
+                    ++matchLength;
+            }
         }
     }
     alignLength = static_cast<TSize1>(matchMismatch_length + (len1 - matchMismatch_length) + (len2 - matchMismatch_length));
-    overlapLength = alignLength -  minId1 - minId2 - (len1 + len2 - maxId1 - maxId2);
+    overlapLength = alignLength - minId1 - minId2 - (len1 + len2 - maxId1 - maxId2);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1081,12 +989,8 @@ appendSegmentMatches(StringSet<TString, Dependent<TSpec> > const& str,
     TSize nseq = length(str);
     _resizeWithRespectToDistance(dist, nseq);
 
-
     // Pairwise alignments
     for (TPairIter itPair = begin(pList, Standard()), itPairEnd = end(pList, Standard()); itPair != itPairEnd; itPair += 2) {
-        
-        // std::cout << "OVERLAP SEGMENT MATCHES: " << *itPair << ", " << *(itPair+1) << std::endl; //TEMP
-
         TStringSet pairSet = _makePairSet(str, itPair, itPair + 1);
 
         // Alignment
@@ -1129,9 +1033,6 @@ appendSegmentMatches(StringSet<TString, Dependent<TSpec> > const& str,
 
     // Pairwise alignments
     for (TPairIter itPair = begin(pList, Standard()), itPairEnd = end(pList, Standard()); itPair != itPairEnd; itPair += 2) {
-
-        // std::cout << "GLOBAL SEGMENT MATCHES: " << *itPair << ", " << *(itPair+1) << std::endl; //TEMP
-
         TStringSet pairSet = _makePairSet(str, itPair, itPair + 1);
 
         Pair<int, int> bandBottomRight = assureBandedRestriction_(pairSet, bandWidth);

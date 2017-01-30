@@ -29,81 +29,66 @@
 // DAMAGE.
 //
 // ==========================================================================
-// Author: David Weese <david.weese@fu-berlin.de>
-// ==========================================================================
-// Critical Section class. In conjunction with a condition object it allows
-// to suspend a thread until another wakes it up.
-// ==========================================================================
 
-#ifndef SEQAN_HEADER_SYSTEM_CRITICAL_SECTION_H_
-#define SEQAN_HEADER_SYSTEM_CRITICAL_SECTION_H_
+#ifndef SEQAN_HEADER_GRAPH_UTILITY_PARSING_H
+#define SEQAN_HEADER_GRAPH_UTILITY_PARSING_H
 
-namespace seqan {
 
-#ifdef PLATFORM_WINDOWS
+#include <fstream>
 
-struct CriticalSection
+namespace seqan
 {
-    CRITICAL_SECTION data_cs;
 
-    CriticalSection()
-    {
-        InitializeCriticalSection(&data_cs);
-    }
+//////////////////////////////////////////////////////////////////////////////
+// File reading
+//////////////////////////////////////////////////////////////////////////////
 
-    ~CriticalSection()
-    {
-        DeleteCriticalSection(&data_cs);
-    }
-};
+//////////////////////////////////////////////////////////////////////////////
 
-#else
+//////////////////////////////////////////////////////////////////////////////
 
-struct CriticalSection
+// This is unused and a deletion candidate.
+// TODO(singer): Remove this!
+/*
+template<typename TPath, typename TStringSet, typename TNames>
+inline unsigned int
+_loadSequences(TPath const& in_path,
+               TStringSet& origStrSet,
+               TNames& names)
 {
-    pthread_mutex_t data_cs;
+//IOREV _nodoc_ uses custom IO, with ifstream, should be adapted to File()
+    typedef typename Size<TStringSet>::Type TSize;
 
-    CriticalSection()
-    {
-        int result = pthread_mutex_init(&data_cs, NULL);
-        ignoreUnusedVariableWarning(result);
-        SEQAN_ASSERT_EQ(result, 0);
+    // Count sequences and read names
+    TSize seqCount = 0;
+    std::ifstream file;
+    std::stringstream input;
+    input << in_path;
+    file.open(input.str().c_str(), std::ios_base::in | std::ios_base::binary);
+    if (!file.is_open()) return 0;
+    while (!file.eof()) {
+        String<char> id;
+        readID(file, id, Fasta());
+        appendValue(names, id);
+        goNext(file, Fasta());
+        ++seqCount;
     }
 
-    ~CriticalSection()
-    {
-        int result = pthread_mutex_destroy(&data_cs);
-        ignoreUnusedVariableWarning(result);
-        SEQAN_ASSERT_EQ(result, 0);
+    // Load sequences
+    file.clear();
+    file.seekg(0, std::ios_base::beg);
+    resize(origStrSet, seqCount);
+    TSize count = 0;
+    for(TSize i = 0; (i < seqCount) && !file.eof(); ++i)     {
+        read(file, origStrSet[i], Fasta());
+        count += length(origStrSet[i]);
     }
-};
+    file.close();
 
-#endif
-
-inline void
-lock(CriticalSection &cs)
-{
-#ifdef PLATFORM_WINDOWS
-    EnterCriticalSection(&cs.data_cs);
-#else
-    int result = pthread_mutex_lock(&cs.data_cs);
-    ignoreUnusedVariableWarning(result);
-    SEQAN_ASSERT_EQ(result, 0);
-#endif
+    return count;
 }
+*/
 
-inline void
-unlock(CriticalSection &cs)
-{
-#ifdef PLATFORM_WINDOWS
-    LeaveCriticalSection(&cs.data_cs);
-#else
-    int result = pthread_mutex_unlock(&cs.data_cs);
-    ignoreUnusedVariableWarning(result);
-    SEQAN_ASSERT_EQ(result, 0);
-#endif
-}
+}// namespace seqan
 
-}
-
-#endif  // SEQAN_HEADER_SYSTEM_CRITICAL_SECTION_H_
+#endif //#ifndef SEQAN_HEADER_...

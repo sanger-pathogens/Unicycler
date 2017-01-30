@@ -74,8 +74,7 @@ struct OverlapInfo_
     int len0, pos1;
     int numErrors;  // number of alignment errors
 
-    // RRW: change to quiet ICC compiler warnings.
-    OverlapInfo_() : seq0(std::numeric_limits<unsigned>::max()), seq1(std::numeric_limits<unsigned>::max()), len0(0), pos1(0), numErrors(0) {}
+    OverlapInfo_() : seq0(-1), seq1(-1), len0(0), pos1(0), numErrors(0) {}
     OverlapInfo_(unsigned seq0, unsigned seq1, int len0, int pos1, int numErrors = -1) :
             seq0(seq0), seq1(seq1), len0(len0), pos1(pos1), numErrors(numErrors) {}
 
