@@ -75,16 +75,11 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
     globalMsaAlignment(gAlign, sequenceSet, sequenceNames, msaOpt);
     convertAlignment(gAlign, align);
 
-    std::cout << align << "\n";  // TEMP
-
     for (int i = 0; i < count; ++i) {
         std::ostringstream stream;
         stream << row(align, i);
         gappedSequences.push_back(stream.str());
     }
-
-    for (auto seq : gappedSequences)  // TEMP
-        std::cout << seq << "\n";  // TEMP
 
     // Add gaps to the quality scores so they match up with the bases.
     int alignmentLength = gappedSequences[0].length();
