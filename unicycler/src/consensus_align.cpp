@@ -23,9 +23,9 @@
 
 using namespace seqan;
 
-char * multipleSequenceAlignment(char * sequences[], char * qualities[], int count, int bandwidth,
-                                 int matchScore, int mismatchScore, int gapOpenScore,
-                                 int gapExtensionScore) {
+char * multipleSequenceAlignment(char * sequences[], char * qualities[], unsigned long count,
+                                 unsigned int bandwidth, int matchScore, int mismatchScore,
+                                 int gapOpenScore, int gapExtensionScore) {
 
     // Convert the inputs (arrays of C strings) to C++ vectors, and ensure that the qualities have
     // the same length as their corresponding sequences.
@@ -37,27 +37,10 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
     gappedSequences.reserve(count);
     gappedQualities.reserve(count);
 
-    // We want to use a scoring scheme which is almost like the simple scoring scheme we use for
-    // read alignment, but with the addition of free Ns.
-    typedef Score<int, ScoreMatrix<Dna5, Default> > TScore;
-    TScore scoringScheme(gapExtensionScore, gapOpenScore);
-    for (int i = 0; i < 5; ++i) {
-        for (int j = 0; j < 5; ++j) {
-            int score;
-            if (i == 4 || j == 4) // either base is N
-                score = 0;
-            else if (i == j)
-                score = matchScore;
-            else
-                score = mismatchScore;
-            setScore(scoringScheme, Dna5(i), Dna5(j), score);
-        }
-    }
-
     // Prepare data structures for the alignment.
     Align<Dna5String> align;
     resize(rows(align), count);
-    for (int i = 0; i < count; ++i)
+    for (unsigned long i = 0; i < count; ++i)
         assignSource(row(align, i), ungappedSequences[i]);
     typedef StringSet<Dna5String, Dependent<> > TStringSet;
     TStringSet sequenceSet = stringSet(align);
@@ -65,29 +48,29 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
     String<String<char> > sequenceNames;
     resize(sequenceNames, length(sequenceSet), String<char>("tmpName"));
 
-    MsaOptions<AminoAcid, TScore> msaOpt;
-    msaOpt.sc = scoringScheme;
+    MsaOptions<AminoAcid, Score<int, Simple>> msaOpt;
+    msaOpt.sc = Score<int, Simple>(matchScore, mismatchScore, gapExtensionScore, gapOpenScore);
     msaOpt.isDefaultPairwiseAlignment = false;
     msaOpt.method = 0;  // global alignment
     msaOpt.pairwiseAlignmentMethod = 2; // banded
-    msaOpt.bandWidth = (unsigned int)bandwidth;
+    msaOpt.bandWidth = bandwidth;
 
     globalMsaAlignment(gAlign, sequenceSet, sequenceNames, msaOpt);
     convertAlignment(gAlign, align);
 
-    for (int i = 0; i < count; ++i) {
+    for (unsigned long i = 0; i < count; ++i) {
         std::ostringstream stream;
         stream << row(align, i);
         gappedSequences.push_back(stream.str());
     }
 
     // Add gaps to the quality scores so they match up with the bases.
-    int alignmentLength = gappedSequences[0].length();
-    for (int i = 0; i < count; ++i) {
+    unsigned long alignmentLength = gappedSequences[0].length();
+    for (unsigned long i = 0; i < count; ++i) {
         std::string gappedQuality;
         gappedQuality.resize(gappedSequences[i].length(), ' ');
         int pos = 0;
-        for (int j = 0; j < alignmentLength; ++j) {
+        for (unsigned long j = 0; j < alignmentLength; ++j) {
             if (gappedSequences[i][j] != '-')
                 gappedQuality[j] = ungappedQualities[i][pos++];
         }
@@ -97,29 +80,25 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
     // Before we build a consensus sequence, we may need to deal with one base vs one gap cases,
     // e.g. 'A' vs '-' or '-' vs 'T'. We can't always keep the base, as this would lead to an
     // inflated consensus. So we want a good base quality score threshold, above which we keep the
-    // base and below which we keep the gap. This is only necessary if there are places in the
-    // alignment with exactly two sequences.
+    // base and below which we keep the gap. This is only necessary if there are exactly two
+    // sequences.
     char oneBaseVsOneGapQualityThreshold = '+';
     if (count == 2) {
         std::vector<char> oneBaseVsOneGapQualities;
-        for (int i = 0; i < alignmentLength; ++i) {
+        for (unsigned long i = 0; i < alignmentLength; ++i) {
             std::vector<char> bases;
-            std::vector<char> qualities;
-            for (int j = 0; j < count; ++j) {
-                char base = toupper(gappedSequences[j][i]);
-                char quality = gappedQualities[j][i];
-                if (base != 'N') {
-                    bases.push_back(base);
-                    qualities.push_back(quality);
-                }
+            std::vector<char> quals;
+            for (unsigned long j = 0; j < count; ++j) {
+                bases.push_back(char(toupper(gappedSequences[j][i])));
+                quals.push_back(gappedQualities[j][i]);
             }
             if (bases.size() == 2) {
                 bool base0IsGap = bases[0] == '-';
                 bool base1IsGap = bases[1] == '-';
                 if (base0IsGap && !base1IsGap)
-                    oneBaseVsOneGapQualities.push_back(qualities[1]);
+                    oneBaseVsOneGapQualities.push_back(quals[1]);
                 else if (base1IsGap && !base0IsGap)
-                    oneBaseVsOneGapQualities.push_back(qualities[0]);
+                    oneBaseVsOneGapQualities.push_back(quals[0]);
             }
         }
 
@@ -135,26 +114,20 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
         }
     }
 
-    // Build a consensus sequence. Sequences are ignored before their first non-N base was seen
-    // (for end-only sequences) and after their last non-N base was seen (for start-only
-    // sequences).
+    // Build a consensus sequence!
     std::string consensus, gappedConsensus;
-    for (int i = 0; i < alignmentLength; ++i) {
+    for (unsigned long i = 0; i < alignmentLength; ++i) {
         std::vector<char> bases;
-        std::vector<char> qualities;
+        std::vector<char> quals;
         bases.reserve(count);
-        qualities.reserve(count);
+        quals.reserve(count);
         
-        for (int j = 0; j < count; ++j) {
-            char base = toupper(gappedSequences[j][i]);
-            char quality = gappedQualities[j][i];
-            if (base != 'N') {
-                bases.push_back(base);
-                qualities.push_back(quality);
-            }
+        for (unsigned long j = 0; j < count; ++j) {
+            bases.push_back(char(toupper(gappedSequences[j][i])));
+            quals.push_back(gappedQualities[j][i]);
         }
         if (bases.size() > 0) {
-            char mostCommonBase = getMostCommonBase(bases, qualities, oneBaseVsOneGapQualityThreshold);
+            char mostCommonBase = getMostCommonBase(bases, quals, oneBaseVsOneGapQualityThreshold);
             if (mostCommonBase != '-')
                 consensus.push_back(mostCommonBase);
             gappedConsensus.push_back(mostCommonBase);
@@ -167,7 +140,7 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
     size_t consensusFirstNonNPos = gappedConsensus.find_first_of("ACGTacgt");
     size_t consensusLastNonNPos = gappedConsensus.find_last_of("ACGTacgt");
     std::vector<double> percentIdentitiesWithConsensus;
-    for (int i = 0; i < count; ++i) {
+    for (unsigned long i = 0; i < count; ++i) {
         double identity = getAlignmentIdentity(gappedConsensus, gappedSequences[i],
                                                consensusFirstNonNPos, consensusLastNonNPos);
         percentIdentitiesWithConsensus.push_back(identity);
@@ -177,13 +150,14 @@ char * multipleSequenceAlignment(char * sequences[], char * qualities[], int cou
 
     returnString += ';';
     returnString += std::to_string(percentIdentitiesWithConsensus[0]);
-    for (int i = 1; i < count; ++i)
+    for (unsigned long i = 1; i < count; ++i)
         returnString += ',' + std::to_string(percentIdentitiesWithConsensus[i]);
 
     return cppStringToCString(returnString);
 }
 
-char getMostCommonBase(std::vector<char> & bases, std::vector<char> & qualities, char oneBaseVsOneGapQualityThreshold) {
+char getMostCommonBase(std::vector<char> & bases, std::vector<char> & qualities,
+                       char oneBaseVsOneGapQualityThreshold) {
     std::string baseValues = "ACGT-";
 
     // Check for the special case of one base vs one gap.
@@ -252,7 +226,7 @@ char getMostCommonBase(std::vector<char> & bases, std::vector<char> & qualities,
     for (size_t i = 0; i < bases.size(); ++i) {
         char base = bases[i];
         if (base != '-' && phredSums[base] == largestPhredSum &&
-            std::find(mostCommonBases.begin(), mostCommonBases.end(), base) != mostCommonBases.end())
+                std::find(mostCommonBases.begin(), mostCommonBases.end(), base) != mostCommonBases.end())
             return base;
     }
 
@@ -291,13 +265,13 @@ void fillOutQualities(std::vector<std::string> & sequences, std::vector<std::str
 }
 
 
-void cArrayToCppVector(char * seqArray[], char * qualArray[], int count,
+void cArrayToCppVector(char * seqArray[], char * qualArray[], unsigned long count,
                        std::vector<std::string> & seqVector, std::vector<std::string> & qualVector) {
     seqVector.reserve(count);
     qualVector.reserve(count);
-    for (int i = 0; i < count; ++i)
+    for (unsigned long i = 0; i < count; ++i)
         seqVector.push_back(std::string(seqArray[i]));
-    for (int i = 0; i < count; ++i)
+    for (unsigned long i = 0; i < count; ++i)
         qualVector.push_back(std::string(qualArray[i]));
     fillOutQualities(seqVector, qualVector);
 }
