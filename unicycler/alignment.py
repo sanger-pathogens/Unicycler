@@ -375,22 +375,6 @@ class Alignment(object):
         else:
             return self.ref.number
 
-    def get_start_overlapping_read_seq(self):
-        """
-        If the read extends past the start of the reference, this function will return the
-        overlapping read sequence(s).
-        """
-        start, _ = self.read_start_end_positive_strand()
-        return self.read.sequence[:start], self.read.qualities[:start]
-
-    def get_end_overlapping_read_seq(self):
-        """
-        If the read extends past the end of the reference, this function will return the
-        overlapping read sequence(s).
-        """
-        _, end = self.read_start_end_positive_strand()
-        return self.read.sequence[end:], self.read.qualities[end:]
-
 
 def get_ref_shift_from_cigar_part(cigar_part):
     """

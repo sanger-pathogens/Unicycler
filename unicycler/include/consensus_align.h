@@ -20,27 +20,21 @@ using namespace seqan;
 
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
 extern "C" {
-
-    char * multipleSequenceAlignment(char * fullSpanSequences[], char * fullSpanQualities[], int fullSpanCount, 
-                                     char * startOnlySequences[], char * startOnlyQualities[], int startOnlyCount, 
-                                     char * endOnlySequences[], char * endOnlyQualities[], int endOnlyCount, 
+    char * multipleSequenceAlignment(char * sequences[], char * qualities[], int count,
                                      int bandwidth, int matchScore, int mismatchScore,
                                      int gapOpenScore, int gapExtensionScore);
-
 }
 
 
-char getMostCommonBase(std::vector<char> & bases, std::vector<char> & qualities, char oneBaseVsOneGapQualityThreshold);
+char getMostCommonBase(std::vector<char> & bases, std::vector<char> & qualities,
+                       char oneBaseVsOneGapQualityThreshold);
 
-double getAlignmentIdentity(std::string & seq1, std::string & seq2,
-                            int seq1StartPos, int seq1EndPos, int seq2StartPos, int seq2EndPos);
+double getAlignmentIdentity(std::string & seq1, std::string & seq2, int seq1StartPos,
+                            int seq1EndPos);
 
 void fillOutQualities(std::vector<std::string> & sequences, std::vector<std::string> & qualities);
-void padToLength(std::vector<std::string> & sequences, std::vector<std::string> & qualities, int length, bool putAtStart);
-void setStartAndEndPositions(std::vector<std::string> & sequences,
-                             std::vector<int> & startPositions, std::vector<int> & endPositions);
+
 void cArrayToCppVector(char * seqArray[], char * qualArray[], int count,
                        std::vector<std::string> & seqVector, std::vector<std::string> & qualVector);
-
 
 #endif // CONSENSUS_ALIGN_H

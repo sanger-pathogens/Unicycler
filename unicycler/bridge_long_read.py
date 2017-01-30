@@ -22,7 +22,7 @@ from collections import defaultdict
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
 from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
     print_table, get_right_arrow
-from .cpp_function_wrappers import multiple_sequence_alignment
+from .cpp_function_wrappers import consensus_alignment
 from . import settings
 from .path_finding import get_best_paths_for_seq
 
@@ -40,13 +40,7 @@ class LongReadBridge(object):
         # The individual reads contributing to the bridge. The sequences/qualities are not for the
         # entire read, just the part in the bridge. In the case of overlapping alignments, this has
         # the overlap size instead of the sequence.
-        self.full_span_reads = []
-
-        # The bridge can also contain incomplete read sequences which don't bridge the entire span
-        # between the start and end segments. These are still useful as they can contribute to the
-        # consensus sequence.
-        self.start_only_reads = []
-        self.end_only_reads = []
+        self.reads = []
 
         # The consensus of all read sequences. If there is only one read, then this is the same as
         # that read's sequence. If there are multiple reads, this is hopefully a more accurate
@@ -88,24 +82,23 @@ class LongReadBridge(object):
         meant to be particularly accurate, but can hopefully be used to roughly order the bridges
         from slow to fast.
         """
-        total_full_span_seq_length = 0
-        full_span_seq_count = 0
-        for full_span in self.full_span_reads:
-            if not isinstance(full_span[0], int):
-                total_full_span_seq_length += len(full_span[0])
-                full_span_seq_count += 1
-        if not full_span_seq_count:
-            mean_full_span_seq_length = 0.0
+        total_seq_length = 0
+        seq_count = 0
+        for read in self.reads:
+            if not isinstance(read[0], int):
+                total_seq_length += len(read[0])
+                seq_count += 1
+        if not seq_count:
+            mean_seq_length = 0.0
         else:
-            mean_full_span_seq_length = total_full_span_seq_length / full_span_seq_count
+            mean_seq_length = total_seq_length / seq_count
 
-        if full_span_seq_count > 1:
-            predicted_consensus_time = ((1.34e-9 * (total_full_span_seq_length ** 2)) +
-                                        (2.76e-5 * total_full_span_seq_length))
+        if seq_count > 1:
+            predicted_consensus_time = ((1.34e-9 * (total_seq_length ** 2)) +
+                                        (2.76e-5 * total_seq_length))
         else:
             predicted_consensus_time = 0.0
-        predicted_path_time = ((1.78e-7 * (mean_full_span_seq_length ** 2)) +
-                               (3.75e-3 * mean_full_span_seq_length))
+        predicted_path_time = ((1.78e-7 * (mean_seq_length ** 2)) + (3.75e-3 * mean_seq_length))
 
         return predicted_consensus_time + predicted_path_time
 
@@ -119,96 +112,58 @@ class LongReadBridge(object):
         start_seg = self.graph.segments[abs(self.start_segment)]
         end_seg = self.graph.segments[abs(self.end_segment)]
 
-        output = [str(self.start_segment), str(self.end_segment), str(len(self.full_span_reads))]
+        output = [str(self.start_segment), str(self.end_segment), str(len(self.reads))]
 
-        start_alignment_scaled_scores = [x[2].scaled_score for x in self.full_span_reads]
-        end_alignment_scaled_scores = [x[3].scaled_score for x in self.full_span_reads]
+        start_alignment_scaled_scores = [x[2].scaled_score for x in self.reads]
+        end_alignment_scaled_scores = [x[3].scaled_score for x in self.reads]
         best_overall_scaled_score = min(max(start_alignment_scaled_scores),
                                         max(end_alignment_scaled_scores))
         alignment_scaled_scores = start_alignment_scaled_scores + end_alignment_scaled_scores
         mean_alignment_scaled_score = statistics.mean(alignment_scaled_scores)
-        read_to_ref_ratios = [x[2].get_read_to_ref_ratio() for x in self.full_span_reads] + \
-                             [x[3].get_read_to_ref_ratio() for x in self.full_span_reads]
+        read_to_ref_ratios = [x[2].get_read_to_ref_ratio() for x in self.reads] + \
+                             [x[3].get_read_to_ref_ratio() for x in self.reads]
         mean_read_to_ref_ratio = statistics.mean(read_to_ref_ratios)
 
         # Partition the full span reads into two groups: those with negative numbers (implying that
         # the two segments overlap) and those with actual sequences.
-        full_spans_without_seq = []
-        full_spans_with_seq = []
-        for full_span in self.full_span_reads:
-            if isinstance(full_span[0], int):
-                full_spans_without_seq.append(full_span)
+        reads_without_seq = []
+        reads_with_seq = []
+        for read in self.reads:
+            if isinstance(read[0], int):
+                reads_without_seq.append(read)
             else:
-                full_spans_with_seq.append(full_span)
+                reads_with_seq.append(read)
 
         # There shouldn't usually be both full spans with sequence and without. If there are some
         # of each, we'll throw out the minority group.
-        if full_spans_with_seq and full_spans_without_seq:
-            if len(full_spans_without_seq) > len(full_spans_with_seq):
-                full_spans_with_seq = []
+        if reads_with_seq and reads_without_seq:
+            if len(reads_without_seq) > len(reads_with_seq):
+                reads_with_seq = []
             else:
-                full_spans_without_seq = []
+                reads_without_seq = []
 
-        # For full spans with sequence, we perform a MSA and get a consensus sequence.
-        if full_spans_with_seq:
+        # For reads with sequence, we perform a MSA and get a consensus sequence.
+        if reads_with_seq:
 
-            # Full-span sequences are faster in the MSA and are very useful for the consensus
-            # sequence, so we want to use a lot! But we still set an upper limit for cases of very
-            # high read depth, as getting the consensus sequence will be slow if there are too many
-            # reads.
-            max_full_span = settings.MAX_READS_FOR_CONSENSUS
-            if len(full_spans_with_seq) <= max_full_span:
-                full_span_seqs = [x[0] for x in full_spans_with_seq]
-                full_span_quals = [x[1] for x in full_spans_with_seq]
+            # We set an upper limit on read count for cases of very high read depth, as getting the
+            # consensus sequence will be slow if there are too many reads.
+            max_reads = settings.MAX_READS_FOR_CONSENSUS
+            if len(reads_with_seq) <= max_reads:
+                read_seqs = [x[0] for x in reads_with_seq]
+                read_quals = [x[1] for x in reads_with_seq]
             else:
-                sorted_full_span = sorted(full_spans_with_seq,
-                                          key=lambda x: x[2].raw_score + x[3].raw_score,
-                                          reverse=True)
-                full_span_seqs = [x[0] for x in sorted_full_span[:max_full_span]]
-                full_span_quals = [x[1] for x in sorted_full_span[:max_full_span]]
-
-            # # Start-only and end-only sequences make the MSA a lot slower, contribute less to the
-            # # consensus and can screw up the MSA if they are too abundant. So if there are too
-            # # many of them, we only include the ones with the best alignments.
-            # # Also, if we have a lot of full span reads, there's no need to include any partial
-            # # sequences at all.
-            # max_partial = min(3, len(full_span_seqs))  # TO DO: make this a parameter?
-            # if len(full_span_seqs) > max_full_span / 2:
-            #     max_partial = 0
-
-            # TEMP - turning partial sequences off to test the effect. If I decided to turn them
-            # permanently off, I can simplify quite a lot of code.
-            max_partial = 0
-
-            if len(self.start_only_reads) <= max_partial:
-                start_only_seqs = [x[0] for x in self.start_only_reads]
-                start_only_quals = [x[1] for x in self.start_only_reads]
-            else:
-                sorted_start_only = sorted(self.start_only_reads,
-                                           key=lambda x: x[2].raw_score, reverse=True)
-                start_only_seqs = [x[0] for x in sorted_start_only[:max_partial]]
-                start_only_quals = [x[1] for x in sorted_start_only[:max_partial]]
-
-            if len(self.end_only_reads) <= max_partial:
-                end_only_seqs = [x[0] for x in self.end_only_reads]
-                end_only_quals = [x[1] for x in self.end_only_reads]
-            else:
-                sorted_end_only = sorted(self.end_only_reads,
-                                         key=lambda x: x[2].raw_score, reverse=True)
-                end_only_seqs = [x[0] for x in sorted_end_only[:max_partial]]
-                end_only_quals = [x[1] for x in sorted_end_only[:max_partial]]
+                sorted_full_span = sorted(reads_with_seq, reverse=True,
+                                          key=lambda x: x[2].raw_score + x[3].raw_score)
+                read_seqs = [x[0] for x in sorted_full_span[:max_reads]]
+                read_quals = [x[1] for x in sorted_full_span[:max_reads]]
 
             consensus_start_time = time.time()
-            self.consensus_sequence = multiple_sequence_alignment(full_span_seqs, full_span_quals,
-                                                                  start_only_seqs, start_only_quals,
-                                                                  end_only_seqs, end_only_quals,
-                                                                  scoring_scheme)[0]
+            self.consensus_sequence = consensus_alignment(read_seqs, read_quals,
+                                                          scoring_scheme)[0]
             consensus_time = time.time() - consensus_start_time
 
             output.append(str(len(self.consensus_sequence)))
             output.append(float_to_str(consensus_time, 1))
-            # if verbosity > 3:
-            #     output += '                           ' + self.consensus_sequence + '\n'
 
             # We now make an expected scaled score for an alignment between the consensus and a
             # graph path. I.e. when we find a path in the graph for this consensus, this is about
@@ -218,7 +173,7 @@ class LongReadBridge(object):
             #     y=100\cdot \left(\left(1-\frac{a}{100}\right)
             #       \left(1-\frac{3}{2+x}\right)+\frac{a}{100}\right)
             #     y = expected_scaled_score, x = num_span_reads, a = mean_alignment_scaled_score
-            num_span_reads = len(self.full_span_reads)
+            num_span_reads = len(self.reads)
             expected_scaled_score = 100.0 * ((1.0 - mean_alignment_scaled_score / 100.0) *
                                              (1.0 - (3.0 / (2.0 + num_span_reads))) +
                                              mean_alignment_scaled_score / 100.0)
@@ -237,11 +192,11 @@ class LongReadBridge(object):
 
             mean_overlap = 0
 
-        # For full spans without sequence, we simply need a mean distance.
+        # For reads without sequence, we simply need a mean distance.
         else:
             self.consensus_sequence = ''
-            mean_overlap = int(round(sum(x[0] for x in full_spans_without_seq) /
-                                     len(full_spans_without_seq)))
+            mean_overlap = int(round(sum(x[0] for x in reads_without_seq) /
+                                     len(reads_without_seq)))
             output.append(str(mean_overlap))
             output.append('')
             target_path_length = mean_overlap + (2 * self.graph.overlap)
@@ -365,7 +320,7 @@ class LongReadBridge(object):
             possible_read_placements *= max(self.depth, 1)
             total_possible_placements += possible_read_placements
         expected_read_count = total_possible_placements / estimated_genome_size
-        actual_read_count = len(self.full_span_reads)
+        actual_read_count = len(self.reads)
 
         # Adjust the expected read count down, especially for higher values.
         # TO DO: reevaluate this step - is it necessary?
@@ -386,8 +341,8 @@ class LongReadBridge(object):
         # to reward bridges with long alignments. Specifically, we want there to be at least one
         # spanning read with a long alignment to the start segment and at least one spanning read
         # with a long alignment to the end segment.
-        longest_start_alignment = max(x[2].get_aligned_ref_length() for x in self.full_span_reads)
-        longest_end_alignment = max(x[3].get_aligned_ref_length() for x in self.full_span_reads)
+        longest_start_alignment = max(x[2].get_aligned_ref_length() for x in self.reads)
+        longest_end_alignment = max(x[3].get_aligned_ref_length() for x in self.reads)
         alignment_length = min(longest_start_alignment, longest_end_alignment)
         align_length_factor = score_function(alignment_length, min_alignment_length * 4)
         self.quality *= align_length_factor
@@ -396,8 +351,8 @@ class LongReadBridge(object):
         # so bridges with high quality alignments are rewarded. Specifically, we want there to be at
         # least one spanning read with a high quality alignment to the start segment and at least
         # one spanning read with a high quality alignment to the end segment.
-        best_start_alignment = max(x[2].scaled_score for x in self.full_span_reads)
-        best_end_alignment = max(x[3].scaled_score for x in self.full_span_reads)
+        best_start_alignment = max(x[2].scaled_score for x in self.reads)
+        best_end_alignment = max(x[3].scaled_score for x in self.reads)
         alignment_quality = min(best_start_alignment, best_end_alignment)
         align_score_factor = alignment_quality / 100.0
         self.quality *= align_score_factor
@@ -464,18 +419,6 @@ class LongReadBridge(object):
         self.graph_path = best_path
         self.bridge_sequence = best_sequence
 
-    def contains_full_span_sequence(self):
-        """
-        Some LongReadBridge objects bridge two close segments, and therefore do not actually have
-        any bridging read sequence (just a negative number implying overlap). This function returns
-        True if any full span read sequences exist and False if they are just negative numbers.
-        """
-        for full_span_read in self.full_span_reads:
-            seq_or_num = full_span_read[0]
-            if not isinstance(seq_or_num, int):
-                return True
-        return False
-
     @staticmethod
     def get_type_score():
         """
@@ -509,12 +452,6 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     # Value = list of tuples containing the bridging sequence and the single-copy segment
     #         alignments.
     spanning_read_seqs = defaultdict(list)
-
-    # This dictionary will collect all of the read sequences which don't manage to span between
-    # two single-copy segments, but they do overlap one single-copy segment and can therefore be
-    # useful for generating consensus sequences in a bridge.
-    # Key = signed segment number, Value = list of tuples containing the sequence and alignment
-    overlapping_read_seqs = defaultdict(list)
 
     for read_name in read_names:
         read = read_dict[read_name]
@@ -584,24 +521,6 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
                                                          alignment_2))
                     already_added.add(seg_nums)
 
-        # At this point all of the alignments have been added and we are interested in the first
-        # and last alignments (which may be the same if there's only one). If the read extends
-        # past these alignments, then the overlapping part might be useful for consensus sequences.
-        first_alignment = available_alignments[0]
-        start_overlap, start_qual = first_alignment.get_start_overlapping_read_seq()
-        if start_overlap:
-            seg_num = -first_alignment.get_signed_ref_num()
-            seq = reverse_complement(start_overlap)
-            qual = start_qual[::-1]
-            if seg_num not in overlapping_read_seqs:
-                overlapping_read_seqs[seg_num] = []
-            overlapping_read_seqs[seg_num].append((seq, qual, first_alignment))
-        last_alignment = available_alignments[-1]
-        end_overlap, end_qual = last_alignment.get_end_overlapping_read_seq()
-        if end_overlap:
-            seg_num = last_alignment.get_signed_ref_num()
-            overlapping_read_seqs[seg_num].append((end_overlap, end_qual, last_alignment))
-
     # If a bridge already exists for a spanning sequence, we add the sequence to the bridge. If
     # not, we create a new bridge and add it.
     new_bridges = []
@@ -623,27 +542,9 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
             new_bridge = LongReadBridge(graph, start, end)
             new_bridges.append(new_bridge)
             matching_bridge = new_bridge
-        matching_bridge.full_span_reads += span
+        matching_bridge.reads += span
     all_bridges = existing_bridges + new_bridges
     all_bridges = sorted(all_bridges, key=lambda x: (x.start_segment, x.end_segment))
-
-    # Add overlapping sequences to appropriate bridges, but only if they have some full span
-    # sequence (if their full span reads only have overlap-indicating negative numbers, then we
-    # won't be doing a consensus sequence and don't need overlapping sequences).
-    for seg_num, overlaps in overlapping_read_seqs.items():
-        for bridge in all_bridges:
-            if not isinstance(bridge, LongReadBridge) or not bridge.contains_full_span_sequence():
-                continue
-            start_overlap = (bridge.start_segment == seg_num)
-            end_overlap = (bridge.end_segment == -seg_num)
-            if start_overlap or end_overlap:
-                for overlap in overlaps:
-                    if start_overlap:
-                        bridge.start_only_reads.append(overlap)
-                    elif end_overlap:
-                        overlap_seq, overlap_qual, alignment = overlap
-                        bridge.start_only_reads.append((reverse_complement(overlap_seq),
-                                                        overlap_qual[::-1], alignment))
 
     # During finalisation, we will compare the expected read count to the actual read count for
     # each bridge. To do this, we'll need the lengths of all reads (excluding those with no
@@ -668,6 +569,8 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     if verbosity > 0:
         print_long_read_bridge_table_header(alignments, col_widths, verbosity)
     completed_count = 0
+
+    # Use a simple loop if we only have one thread.
     if threads == 1:
         for bridge in long_read_bridges:
             output = bridge.finalise(scoring_scheme, min_alignment_length, read_lengths,
@@ -676,6 +579,8 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
             if verbosity > 0:
                 print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
                                                  num_long_read_bridges, min_bridge_qual, verbosity)
+
+    # Use a thread pool if we have more than one thread.
     else:
         pool = ThreadPool(threads)
         arg_list = []
@@ -686,11 +591,9 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
         # only one core (bad), but if it was at the start, other work could be done in parallel.
         long_read_bridges = sorted(long_read_bridges, reverse=True,
                                    key=lambda x: x.predicted_time_to_finalise())
-
         for bridge in long_read_bridges:
             arg_list.append((bridge, scoring_scheme, min_alignment_length, read_lengths,
                              estimated_genome_size, expected_linear_seqs))
-
         for output in pool.imap_unordered(finalise_bridge, arg_list):
             completed_count += 1
             if verbosity > 0:

@@ -112,73 +112,74 @@ def load_long_reads(filename, verbosity):
     step = settings.LOADING_READS_PROGRESS_STEP
     duplicate_read_names_found = False
 
+    num_reads = 0
     if file_type == 'FASTQ':
-        num_reads = sum(1 for _ in open_func(filename, 'rt')) // 4
+        with open_func(filename, 'rt') as fastq:
+            num_reads = sum(1 for _ in fastq) // 4
     else:  # file_type == 'FASTA'
-        num_reads = sum(1 for line in open_func(filename, 'rt') if line.startswith('>'))
+        with open_func(filename, 'rt') as fasta:
+            num_reads = sum(1 for line in fasta if line.startswith('>'))
     if not num_reads:
         quit_with_error('There are no read sequences in ' + filename)
     if verbosity > 0:
         print_progress_line(0, num_reads)
 
     if file_type == 'FASTQ':
-        fastq = open_func(filename, 'rt')
-        for line in fastq:
-            original_name = line.strip()[1:].split()[0]
-            sequence = next(fastq).strip()
-            _ = next(fastq)
-            qualities = next(fastq).strip()
+        with open_func(filename, 'rt') as fastq:
+            for line in fastq:
+                original_name = line.strip()[1:].split()[0]
+                sequence = next(fastq).strip()
+                _ = next(fastq)
+                qualities = next(fastq).strip()
 
-            # Don't allow duplicate read names, so add a trailing number when they occur.
-            name = original_name
-            duplicate_name_number = 1
-            while name in read_dict:
-                duplicate_read_names_found = True
-                duplicate_name_number += 1
-                name = original_name + '_' + str(duplicate_name_number)
+                # Don't allow duplicate read names, so add a trailing number when they occur.
+                name = original_name
+                duplicate_name_number = 1
+                while name in read_dict:
+                    duplicate_read_names_found = True
+                    duplicate_name_number += 1
+                    name = original_name + '_' + str(duplicate_name_number)
 
-            read_dict[name] = Read(name, sequence, qualities)
-            read_names.append(name)
-            total_bases += len(sequence)
-            if verbosity > 0:
-                progress = 100.0 * len(read_dict) / num_reads
-                progress_rounded_down = math.floor(progress / step) * step
-                if progress == 100.0 or progress_rounded_down > last_progress:
-                    print_progress_line(len(read_dict), num_reads, total_bases)
-                    last_progress = progress_rounded_down
-        fastq.close()
+                read_dict[name] = Read(name, sequence, qualities)
+                read_names.append(name)
+                total_bases += len(sequence)
+                if verbosity > 0:
+                    progress = 100.0 * len(read_dict) / num_reads
+                    progress_rounded_down = math.floor(progress / step) * step
+                    if progress == 100.0 or progress_rounded_down > last_progress:
+                        print_progress_line(len(read_dict), num_reads, total_bases)
+                        last_progress = progress_rounded_down
 
     else:  # file_type == 'FASTA'
-        fasta = open_func(filename, 'rt')
-        name = ''
-        sequence = ''
-        last_progress = 0.0
-        for line in fasta:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith('>'):  # Header line = start of new contig
-                if name:
-                    read_dict[name] = Read(name, sequence, None)
-                    read_names.append(name)
-                    total_bases += len(sequence)
-                    if verbosity > 0:
-                        progress = 100.0 * len(read_dict) / num_reads
-                        progress_rounded_down = math.floor(progress / step) * step
-                        if progress == 100.0 or progress_rounded_down > last_progress:
-                            print_progress_line(len(read_dict), num_reads, total_bases)
-                            last_progress = progress_rounded_down
-                    sequence = ''
-                name = get_nice_header(line[1:])
-            else:
-                sequence += line
-        fasta.close()
-        if name:
-            read_dict[name] = Read(name, sequence, None)
-            read_names.append(name)
-            total_bases += len(sequence)
-            if verbosity > 0:
-                print_progress_line(len(read_dict), num_reads, total_bases)
+        with open_func(filename, 'rt') as fasta:
+            name = ''
+            sequence = ''
+            last_progress = 0.0
+            for line in fasta:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith('>'):  # Header line = start of new contig
+                    if name:
+                        read_dict[name] = Read(name, sequence, None)
+                        read_names.append(name)
+                        total_bases += len(sequence)
+                        if verbosity > 0:
+                            progress = 100.0 * len(read_dict) / num_reads
+                            progress_rounded_down = math.floor(progress / step) * step
+                            if progress == 100.0 or progress_rounded_down > last_progress:
+                                print_progress_line(len(read_dict), num_reads, total_bases)
+                                last_progress = progress_rounded_down
+                        sequence = ''
+                    name = get_nice_header(line[1:])
+                else:
+                    sequence += line
+            if name:
+                read_dict[name] = Read(name, sequence, None)
+                read_names.append(name)
+                total_bases += len(sequence)
+                if verbosity > 0:
+                    print_progress_line(len(read_dict), num_reads, total_bases)
 
     if verbosity > 0:
         print_progress_line(len(read_dict), len(read_dict), total_bases, end_newline=True)

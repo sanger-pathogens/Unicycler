@@ -213,15 +213,9 @@ def simulate_depths(read_lengths, ref_length, iterations, threads):
 
 
 # This function gets the mean and standard deviation of alignments between random sequences.
-C_LIB.multipleSequenceAlignment.argtypes = [POINTER(c_char_p),  # Full-span sequences
-                                            POINTER(c_char_p),  # Full-span qualities
-                                            c_int,  # Full-span count
-                                            POINTER(c_char_p),  # Start-only sequences
-                                            POINTER(c_char_p),  # Start-only qualities
-                                            c_int,  # Start-only count
-                                            POINTER(c_char_p),  # End-only sequences
-                                            POINTER(c_char_p),  # End-only qualities
-                                            c_int,  # End-only count
+C_LIB.multipleSequenceAlignment.argtypes = [POINTER(c_char_p),  # Sequences
+                                            POINTER(c_char_p),  # Qualities
+                                            c_int,  # Count
                                             c_int,  # Bandwidth
                                             c_int,  # Match score
                                             c_int,  # Mismatch score
@@ -230,64 +224,31 @@ C_LIB.multipleSequenceAlignment.argtypes = [POINTER(c_char_p),  # Full-span sequ
 C_LIB.multipleSequenceAlignment.restype = c_void_p
 
 
-def multiple_sequence_alignment(full_length_sequences, full_length_qualities,
-                                start_only_sequences, start_only_qualities,
-                                end_only_sequences, end_only_qualities,
-                                scoring_scheme, bandwidth=1000):
+def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
     """
     Python wrapper for multipleSequenceAlignment C++ function.
     """
-    full_count = len(full_length_sequences)
-    start_count = len(start_only_sequences)
-    end_count = len(end_only_sequences)
+    count = len(sequences)
+    if not count:  # At least one sequence is required.
+        return "", []
 
-    # At least one full length sequence is required.
-    if not full_count:
-        return "", [], [], []
+    if len(qualities) < len(sequences):
+        qualities += [""] * (len(sequences) - len(qualities))
 
-    if len(full_length_qualities) < len(full_length_sequences):
-        full_length_qualities += [""] * (len(full_length_sequences) - len(full_length_qualities))
-    if len(start_only_qualities) < len(start_only_sequences):
-        start_only_qualities += [""] * (len(start_only_sequences) - len(start_only_qualities))
-    if len(end_only_qualities) < len(end_only_sequences):
-        end_only_qualities += [""] * (len(end_only_sequences) - len(end_only_qualities))
+    sequences = [x.encode('utf-8') for x in sequences]
+    qualities = [x.encode('utf-8') for x in qualities]
 
-    full_length_sequences = [x.encode('utf-8') for x in full_length_sequences]
-    full_length_qualities = [x.encode('utf-8') for x in full_length_qualities]
-    start_only_sequences = [x.encode('utf-8') for x in start_only_sequences]
-    start_only_qualities = [x.encode('utf-8') for x in start_only_qualities]
-    end_only_sequences = [x.encode('utf-8') for x in end_only_sequences]
-    end_only_qualities = [x.encode('utf-8') for x in end_only_qualities]
+    sequences = (c_char_p * len(sequences))(*sequences)
+    qualities = (c_char_p * len(qualities))(*qualities)
 
-    sequences_1 = (c_char_p * len(full_length_sequences))(*full_length_sequences)
-    qualities_1 = (c_char_p * len(full_length_qualities))(*full_length_qualities)
-    sequences_2 = (c_char_p * len(start_only_sequences))(*start_only_sequences)
-    qualities_2 = (c_char_p * len(start_only_qualities))(*start_only_qualities)
-    sequences_3 = (c_char_p * len(end_only_sequences))(*end_only_sequences)
-    qualities_3 = (c_char_p * len(end_only_qualities))(*end_only_qualities)
-
-    ptr = C_LIB.multipleSequenceAlignment(sequences_1, qualities_1, full_count,
-                                          sequences_2, qualities_2, start_count,
-                                          sequences_3, qualities_3, end_count,
-                                          bandwidth,
+    ptr = C_LIB.multipleSequenceAlignment(sequences, qualities, count, bandwidth,
                                           scoring_scheme.match, scoring_scheme.mismatch,
                                           scoring_scheme.gap_open, scoring_scheme.gap_extend)
     result = c_string_to_python_string(ptr)
     result_parts = result.split(';')
-
     consensus = result_parts[0]
-
-    all_scores = result_parts[1].split(',')
-    full_length_scores = all_scores[:full_count]
-    start_only_scores = all_scores[full_count:full_count + start_count]
-    if end_count:
-        end_only_scores = all_scores[-end_count:]
-    else:
-        end_only_scores = []
-
-    # between_seq_scores = [x.split(',') for x in result_parts[2:]]
-
-    return consensus, full_length_scores, start_only_scores, end_only_scores
+    scores = result_parts[1].split(',')
+    return consensus, scores
 
 
 # This function conducts a minimap alignment between reads and reference.
