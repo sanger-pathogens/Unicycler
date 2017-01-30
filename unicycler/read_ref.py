@@ -112,7 +112,6 @@ def load_long_reads(filename, verbosity):
     step = settings.LOADING_READS_PROGRESS_STEP
     duplicate_read_names_found = False
 
-    num_reads = 0
     if file_type == 'FASTQ':
         with open_func(filename, 'rt') as fastq:
             num_reads = sum(1 for _ in fastq) // 4
