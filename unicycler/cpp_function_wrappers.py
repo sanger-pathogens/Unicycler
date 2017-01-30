@@ -247,7 +247,7 @@ def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
     result = c_string_to_python_string(ptr)
     result_parts = result.split(';')
     consensus = result_parts[0]
-    scores = result_parts[1].split(',')
+    scores = [float(x) for x in result_parts[1].split(',')]
     return consensus, scores
 
 

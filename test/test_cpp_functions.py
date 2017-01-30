@@ -4,6 +4,7 @@ import unicycler.cpp_function_wrappers
 import unicycler.read_ref
 import unicycler.alignment
 
+
 class TestSemiGlobalAlignment(unittest.TestCase):
     pass
 
@@ -60,3 +61,21 @@ class TestMultipleSequenceAlignment(unittest.TestCase):
         consensus, scores = unicycler.cpp_function_wrappers.consensus_alignment(seqs, quals,
                                                                                 self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
+
+    def test_two_way_consensus(self):
+        seqs = self.seqs[10:12]
+        quals = self.quals[10:12]
+        consensus, scores = unicycler.cpp_function_wrappers.consensus_alignment(seqs, quals,
+                                                                                self.scoring_scheme)
+        self.assertEqual(consensus, self.original_seq)
+
+    def test_consensus_different_qualities(self):
+        seqs = self.seqs[12:16]
+        quals = self.quals[12:16]
+        consensus, scores = unicycler.cpp_function_wrappers.consensus_alignment(seqs, quals,
+                                                                                self.scoring_scheme)
+        self.assertEqual(consensus, self.original_seq)
+        self.assertEqual(scores[0], 1.0)
+        self.assertTrue(scores[0] > scores[1])
+        self.assertTrue(scores[1] > scores[2])
+        self.assertTrue(scores[2] > scores[3])
