@@ -161,11 +161,11 @@ def main():
                                         settings.ALLOWED_ALIGNMENT_OVERLAP))
             low_score_threshold = [args.low_score]
             semi_global_align_long_reads(references, graph_fasta, read_dict, read_names,
-                                         long_read_filename,
-                                         args.threads, scoring_scheme, low_score_threshold,
-                                         False, min_alignment_length, alignments_1_in_progress,
-                                         full_command, allowed_overlap, 0, args.contamination,
-                                         verbosity, stdout_header='Aligning reads (first pass)',
+                                         long_read_filename, args.threads, scoring_scheme,
+                                         low_score_threshold, False, min_alignment_length,
+                                         alignments_1_in_progress, full_command, allowed_overlap,
+                                         0, args.contamination, verbosity,
+                                         stdout_header='Aligning reads (first pass)',
                                          single_copy_segment_names=single_copy_segment_names)
             shutil.move(alignments_1_in_progress, alignments_1_sam)
 

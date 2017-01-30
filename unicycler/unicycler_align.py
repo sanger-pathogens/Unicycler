@@ -180,11 +180,8 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
                                  single_copy_segment_names=None):
     """
     This function does the primary work of this module: aligning long reads to references in an
-    end-gap-free, semi-global manner. It returns a list of Read objects which contain their
+    end-gap-free, semi-global manner. It returns a dictionary of Read objects which contain their
     alignments.
-    If seqan_all is True, then every Alignment object will be refined by using Seqan.
-    If seqan_all is False, then only the overlap alignments and a small set of long contained
-    alignments will be run through Seqan.
     The low score threshold is taken as a list so the function can alter it and the caller can
     get the altered value.
     """
@@ -234,26 +231,24 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     # Create the SAM file.
     if sam_filename:
-        sam_file = open(sam_filename, 'w')
+        with open(sam_filename, 'w') as sam_file:
+            # Header line.
+            sam_file.write('@HD' + '\t')
+            sam_file.write('VN:1.5' + '\t')
+            sam_file.write('SO:unknown' + '\n')
 
-        # Header line.
-        sam_file.write('@HD' + '\t')
-        sam_file.write('VN:1.5' + '\t')
-        sam_file.write('SO:unknown' + '\n')
+            # Reference lines.
+            for ref in references:
+                sam_file.write('@SQ' + '\t')
+                sam_file.write('SN:' + ref.name + '\t')
+                sam_file.write('LN:' + str(ref.get_length()) + '\n')
 
-        # Reference lines.
-        for ref in references:
-            sam_file.write('@SQ' + '\t')
-            sam_file.write('SN:' + ref.name + '\t')
-            sam_file.write('LN:' + str(ref.get_length()) + '\n')
-
-        # Program line.
-        sam_file.write('@PG' + '\t')
-        sam_file.write('ID:' + 'unicycler_align')
-        if full_command:
-            sam_file.write('\tCL:' + full_command + '\t')
-        sam_file.write('SC:' + str(scoring_scheme) + '\n')
-        sam_file.close()
+            # Program line.
+            sam_file.write('@PG' + '\t')
+            sam_file.write('ID:' + 'unicycler_align')
+            if full_command:
+                sam_file.write('\tCL:' + full_command + '\t')
+            sam_file.write('SC:' + str(scoring_scheme) + '\n')
 
     reads_to_align = [read_dict[x] for x in read_names]
 

@@ -19,10 +19,6 @@ import unicycler.alignment
 import unicycler.misc
 
 
-class TestSemiGlobalAlignment(unittest.TestCase):
-    pass
-
-
 class TestFullyGlobalAlignment(unittest.TestCase):
 
     def setUp(self):
