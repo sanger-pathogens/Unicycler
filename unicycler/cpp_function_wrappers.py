@@ -206,6 +206,7 @@ def simulate_depths(read_lengths, ref_length, iterations, threads):
     """
     Python wrapper for simulateDepths C++ function.
     """
+    # noinspection PyCallingNonCallable
     read_lengths_array = (c_int * len(read_lengths))(*read_lengths)
     ptr = C_LIB.simulateDepths(read_lengths_array, len(read_lengths), ref_length, iterations,
                                threads)
@@ -238,7 +239,9 @@ def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
     sequences = [x.encode('utf-8') for x in sequences]
     qualities = [x.encode('utf-8') for x in qualities]
 
+    # noinspection PyCallingNonCallable
     sequences = (c_char_p * len(sequences))(*sequences)
+    # noinspection PyCallingNonCallable
     qualities = (c_char_p * len(qualities))(*qualities)
 
     ptr = C_LIB.multipleSequenceAlignment(sequences, qualities, count, bandwidth,
