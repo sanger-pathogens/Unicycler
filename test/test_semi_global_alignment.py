@@ -21,7 +21,7 @@ import unicycler.unicycler_align
 class TestPerfectMatchAlignments(unittest.TestCase):
 
     def setUp(self):
-        ref_fasta = os.path.join(os.path.dirname(__file__), 'test_2.fasta')
+        ref_fasta = os.path.join(os.path.dirname(__file__), 'test_3.fasta')
         read_fastq = os.path.join(os.path.dirname(__file__), 'test_3.fastq')
         verbosity = 0
         refs = unicycler.read_ref.load_references(ref_fasta, verbosity)
