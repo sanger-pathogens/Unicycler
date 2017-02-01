@@ -143,49 +143,49 @@ class TestMultipleSequenceAlignment(unittest.TestCase):
         seqs = self.seqs[1:4]
         quals = self.quals[1:4]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_consensus_with_deletions(self):
         seqs = self.seqs[4:7]
         quals = self.quals[4:7]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_consensus_with_insertions(self):
         seqs = self.seqs[7:10]
         quals = self.quals[7:10]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_consensus_with_deletions_and_insertions(self):
         seqs = self.seqs[4:10]
         quals = self.quals[4:10]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_consensus_with_all(self):
         seqs = self.seqs[1:10]
         quals = self.quals[1:10]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_two_way_consensus(self):
         seqs = self.seqs[10:12]
         quals = self.quals[10:12]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_consensus_different_qualities(self):
         seqs = self.seqs[12:16]
         quals = self.quals[12:16]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
         self.assertEqual(scores[0], 1.0)
         self.assertTrue(scores[0] > scores[1])
@@ -196,19 +196,19 @@ class TestMultipleSequenceAlignment(unittest.TestCase):
         seqs = [self.seqs[0]] + self.seqs[16:18]
         quals = [self.quals[0]] + self.quals[16:18]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_start_end_deletions(self):
         seqs = [self.seqs[0]] + self.seqs[18:20]
         quals = [self.quals[0]] + self.quals[18:20]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)
 
     def test_start_end_insertions_and_deletions(self):
         seqs = self.seqs[16:20]
         quals = self.quals[16:20]
         consensus, scores = unicycler.cpp_wrappers.consensus_alignment(seqs, quals,
-                                                                        self.scoring_scheme)
+                                                                       self.scoring_scheme)
         self.assertEqual(consensus, self.original_seq)

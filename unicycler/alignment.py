@@ -283,7 +283,7 @@ class Alignment(object):
 
     def read_end_positive_strand(self):
         """
-        This function returns the read start coordinates for the positive strand of the read.
+        This function returns the read end coordinates for the positive strand of the read.
         """
         if self.rev_comp:
             return self.read.get_length() - self.read_start_pos
