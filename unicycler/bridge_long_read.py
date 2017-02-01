@@ -145,25 +145,8 @@ class LongReadBridge(object):
         # For reads with sequence, we perform a MSA and get a consensus sequence.
         if reads_with_seq:
 
-            # We set an upper limit on read count for cases of very high read depth, as getting the
-            # consensus sequence will be slow if there are too many reads.
-            max_reads = settings.MAX_READS_FOR_CONSENSUS
-            if len(reads_with_seq) <= max_reads:
-                read_seqs = [x[0] for x in reads_with_seq]
-                read_quals = [x[1] for x in reads_with_seq]
-            else:
-                sorted_full_span = sorted(reads_with_seq, reverse=True,
-                                          key=lambda x: x[2].raw_score + x[3].raw_score)
-                read_seqs = [x[0] for x in sorted_full_span[:max_reads]]
-                read_quals = [x[1] for x in sorted_full_span[:max_reads]]
-
-            consensus_start_time = time.time()
-            self.consensus_sequence = consensus_alignment(read_seqs, read_quals,
-                                                          scoring_scheme)[0]
-            consensus_time = time.time() - consensus_start_time
-
-            output.append(str(len(self.consensus_sequence)))
-            output.append(float_to_str(consensus_time, 1))
+            self.consensus_sequence = get_consensus_sequence(reads_with_seq, scoring_scheme,
+                                                             output)
 
             # We now make an expected scaled score for an alignment between the consensus and a
             # graph path. I.e. when we find a path in the graph for this consensus, this is about
@@ -735,3 +718,46 @@ def reduce_expected_count(expected_count, a, b):
     y=x\cdot \left(\left(\frac{a}{a+x}\right)\cdot \left(1-b\right)+b\right)
     """
     return expected_count * ((a / (a + expected_count)) * (1.0 - b) + b)
+
+
+def get_consensus_sequence(reads, scoring_scheme, output):
+    consensus_start_time = time.time()
+
+    # Sort the reads from best to worst, as judged by their scaled scores (specifically,
+    # whichever scaled score is smaller of their two).
+    reads = sorted(reads, reverse=True, key=lambda x: min(x[2].scaled_score, x[3].scaled_score))
+
+    # We toss out any reads which are too much worse than the best, as they are unlikely to
+    # improve the consensus much.
+    best_scaled_score = min(reads[0][2].scaled_score, reads[0][3].scaled_score)
+    min_allowed_score = best_scaled_score - 10.0
+    reads = [x for x in reads if min(x[2].scaled_score, x[3].scaled_score) >= min_allowed_score]
+
+    # If we have exactly two sequences, we throw out the worse one unless it is very nearly as good
+    # as the best one. This is because two-sequence consensuses are difficult and if there's a
+    # major difference in quality, just using the best read will probably be better.
+    if len(reads) == 2:
+        score_diff = min(reads[0][2].scaled_score, reads[0][3].scaled_score) - \
+                     min(reads[1][2].scaled_score, reads[1][3].scaled_score)
+        if score_diff > 2.0:
+            reads = reads[0:1]
+
+    # Too many reads contributing to the consensus will probably be slow and not worth it, so we
+    # set an upper limit.
+    if len(reads) > settings.MAX_READS_FOR_CONSENSUS:
+        reads = reads[:settings.MAX_READS_FOR_CONSENSUS]
+
+    # If there's only one read, there's no consensus to be done.
+    if len(reads) == 1:
+        consensus_sequence = reads[0][0]
+
+    # If there's more than one, we make a consensus!
+    else:
+        read_seqs = [x[0] for x in reads]
+        read_quals = [x[1] for x in reads]
+        consensus_sequence = consensus_alignment(read_seqs, read_quals, scoring_scheme)[0]
+
+    consensus_time = time.time() - consensus_start_time
+    output.append(str(len(consensus_sequence)))
+    output.append(float_to_str(consensus_time, 1))
+    return consensus_sequence
