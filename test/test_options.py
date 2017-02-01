@@ -44,7 +44,8 @@ class TestUnicyclerOptions(unittest.TestCase):
         stdout = out.getvalue().strip()
         stderr = err.getvalue().strip()
         self.assertEqual(len(stdout), 0)
-        self.assertTrue('the following arguments are required' in stderr)
+        self.assertTrue('error' in stderr)
+        self.assertTrue('required' in stderr)
 
     def test_absolute_paths(self):
         reads_1, reads_2 = '/path/to/reads_1.fastq.gz', '/path/to/reads_1.fastq.gz'
