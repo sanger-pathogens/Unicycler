@@ -64,10 +64,14 @@ char * semiGlobalAlignment(char * readNameC, char * readSeqC, int verbosity,
 
     // Debugging information for use in R.
     if (verbosity > 3) {  // only at very high verbosities
-        output += "R:library(ggplot2)\n";
-        output += "R:dot.plot.1 <- function(all_points) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=0.1, alpha=0.1, shape=19) + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))}\n";
-        output += "R:dot.plot.2 <- function(all_points, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=0.1, alpha=0.02, shape=19) + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=0.1, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))}\n";
-        output += "R:dot.plot.3 <- function(all_points, filtered_data, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=0.1, alpha=0.02, shape=19) + geom_point(data=filtered_data,  aes(x=X1, y=X2), size=0.1, alpha=1, shape=19, colour=\"green\") + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=0.1, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))}\n";
+        output += "library(ggplot2)\n";
+        output += "library(readr)\n";
+        output += "dot.plot.1 <- function(all_points) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_1, shape=19) + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+        output += "dot.plot.2 <- function(all_points, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_2, shape=19) + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+        output += "dot.plot.3 <- function(all_points, filtered_data, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_2, shape=19) + geom_point(data=filtered_data,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"green\") + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+        output += "p_size <- 0.1\n";
+        output += "p_alpha_1 <- 0.1\n";
+        output += "p_alpha_2 <- 0.02\n";
     }
 
     // For each minimap alignment we find the appropriate part of the reference sequence.
@@ -217,13 +221,8 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
         for (auto k : commonKmers)
             allPointsFile << k.m_hPosition << "\t" << k.m_vPosition << "\n";
         allPointsFile.close();
-        output += "R:all.points <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
+        output += "all.points <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
     }
-
-
-//    for (int i = 0; i < commonKmers.size(); ++i)   // TEMP
-//        std::cout << commonKmers[i].m_hPosition << "\t" << commonKmers[i].m_vPosition << "\n";  // TEMP
-//    std::cout << std::endl;  // TEMP
 
     PointCloud cloud;
     addKmerPointsToNanoflann(cloud, commonKmers);
@@ -237,8 +236,6 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
     Point p = highestDensityPoint;
     std::vector<Point> traceDots;
     traceDots.push_back(p);
-//    std::cout << std::endl;
-//    std::cout << "(" << p.x << "," << p.y << ") " << std::flush;
 
     int smallLineTracingStepSize = 250;
     int smallSearchRadius = 500;
@@ -251,8 +248,10 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
     // Start the point collection using points around the starting point.
     std::unordered_set<Point> pointSet;
     std::vector<Point> nearbyPoints = radiusSearchAroundPoint(p, smallSearchRadius, cloud, index);
-    for (auto p : nearbyPoints)
-        pointSet.insert(p);
+    for (auto nearbyPoint : nearbyPoints) {
+        if (closeToDiagonal(p, nearbyPoint))
+            pointSet.insert(nearbyPoint);
+    }
 
     int smallestTraceLineX = p.x, largestTraceLineX = p.x;
     int smallestTraceLineY = p.y, largestTraceLineY = p.y;
@@ -287,14 +286,17 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
                     searchRadius = smallSearchRadius;
                 }
             }
-
             if (p.x == -1 || p.y == -1)
                 p = newP;
-    //        std::cout << "(" << p.x << "," << p.y << ") " << std::flush;
-            std::vector<Point> nearbyPoints = radiusSearchAroundPoint(p, searchRadius, cloud, index);
+
             traceDots.push_back(p);
-            for (auto p : nearbyPoints)
-                pointSet.insert(p);
+
+            // Points near the trace point get added to the point set.
+            nearbyPoints = radiusSearchAroundPoint(p, searchRadius, cloud, index);
+            for (auto nearbyPoint : nearbyPoints) {
+                if (closeToDiagonal(p, nearbyPoint))
+                    pointSet.insert(nearbyPoint);
+            }
 
             smallestTraceLineX = std::min(p.x, smallestTraceLineX);
             smallestTraceLineY = std::min(p.y, smallestTraceLineY);
@@ -307,17 +309,6 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
                 break;
         }
     }
-//
-//    // This figures out whether the read alignment is contained within a large contig. If so, then
-//    // Unicycler won't try as hard to align it well, because it won't be informative for bridging.
-//    bool containedRead = (smallestTraceLineY > 1000 && trimmedRefLen - largestTraceLineY > 1000);
-
-//    std::cout << readName << ", " << refName << std::endl;
-//    std::cout << "Trace line X: " << smallestTraceLineX << " to " << largestTraceLineX << std::endl;
-//    std::cout << "Trace line Y: " << smallestTraceLineY << " to " << largestTraceLineY << std::endl;
-//    std::cout << "Contained: " << containedRead << std::endl;
-//    std::cout << std::endl;
-
 
     if (verbosity > 3) {  // only at very high verbosities
         std::ofstream traceDotsFile;
@@ -326,7 +317,7 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
         for (auto d : traceDots)
             traceDotsFile << d.x << "\t" << d.y << "\n";
         traceDotsFile.close();
-        output += "R:trace.dots <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
+        output += "trace.dots <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
         
         std::ofstream filteredDataFile;
         filename = readName + readStrand + "_" + refName + "_filtered_data.tsv";
@@ -334,13 +325,8 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
         for (auto d : pointSet)
             filteredDataFile << d.x << "\t" << d.y << "\n";
         filteredDataFile.close();
-        output += "R:filtered.data <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
-
-        output += "R:dot.plot.1(all.points)\n";
-        output += "R:dot.plot.2(all.points, trace.dots)\n";
-        output += "R:dot.plot.3(all.points, filtered.data, trace.dots)\n";
+        output += "filtered.data <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
     }
-
 
     // Now we can do a Seqan alignment around the points we've collected!
 
@@ -351,35 +337,30 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
     for (auto p : pointSet)
         appendValue(seeds, TSeed(p.x, p.y, kSize));
 
-//    std::cout << "before local chaining: " << length(seeds) << std::endl;
-
     TSeedSet seedSet;
     for (unsigned i = 0; i < length(seeds); ++i) {
         if (!addSeed(seedSet, seeds[i], 2, Merge()))
             addSeed(seedSet, seeds[i], Single());
     }
 
-//    std::cout << "after local chaining: " << length(seedSet) << std::endl;
-//    std::cout << "Resulting seeds.\n";
-//    typedef Iterator<TSeedSet>::Type TIter;
-//    for (TIter it = begin(seedSet, Standard());
-//         it != end(seedSet, Standard()); ++it)
-//        std::cout << "(" << beginPositionH(*it) << ", " << endPositionH(*it)
-//                  << ", " << beginPositionV(*it) << ", " << endPositionV(*it)
-//                  << ", " << lowerDiagonal(*it) << ", " << upperDiagonal(*it)
-//                  << ")\n";
-
     String<TSeed> seedChain;
     chainSeedsGlobally(seedChain, seedSet, SparseChaining());
 
-//    std::cout << "after global chaining: " << length(seedChain) << std::endl;
-//    for (unsigned i = 0; i < length(seedChain); ++i) {
-//        std::cout << "(" << beginPositionH(seedChain[i]) << ", " << endPositionH(seedChain[i])
-//                  << ", " << beginPositionV(seedChain[i]) << ", " << endPositionV(seedChain[i])
-//                  << ", " << lowerDiagonal(seedChain[i]) << ", " << upperDiagonal(seedChain[i])
-//                  << ")\n";
-//    }
-
+    if (verbosity > 3) {  // only at very high verbosities
+        std::ofstream chainedSeedsFile;
+        std::string filename = readName + readStrand + "_" + refName + "_chained_seeds.tsv";
+        chainedSeedsFile.open(filename);
+        for (unsigned i = 0; i < length(seedChain); ++i)
+            chainedSeedsFile << beginPositionH(seedChain[i]) << "\t" << beginPositionV(seedChain[i]) << "\n";
+        chainedSeedsFile.close();
+        output += "chained.seeds <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
+        output += "x_limits <- c(0, max(all.points[,1]))\n";
+        output += "y_limits <- c(0, max(all.points[,2]))\n";
+        output += "dot.plot.1(all.points)\n";
+        output += "dot.plot.2(all.points, trace.dots)\n";
+        output += "dot.plot.3(all.points, filtered.data, trace.dots)\n";
+        output += "dot.plot.3(all.points, chained.seeds, trace.dots)\n";
+    }
 
     Align<Dna5String, ArrayGaps> alignment;
     resize(rows(alignment), 2);
@@ -611,4 +592,16 @@ std::vector<StartEndRange> simplifyRanges(std::vector<StartEndRange> & ranges) {
     }
     simplifiedRanges.push_back(current);
     return simplifiedRanges;
+}
+
+
+bool closeToDiagonal(Point p1, Point p2) {
+    int xDiff = p1.x - p2.x;
+    int yDiff = p1.y - p2.y;
+    double slope = 0.0;
+    if (xDiff != 0)
+        slope = double(yDiff) / double(xDiff);
+    if (xDiff == 0 && yDiff == 0)
+        slope = 1.0;
+    return (slope > 0.6667 && slope < 1.5);
 }

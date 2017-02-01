@@ -61,7 +61,7 @@ std::vector<std::pair<int, int> > simplifyRanges(std::vector<std::pair<int, int>
 // This stuff is for the nanoflann NN searching.
 struct Point
 {
-    int x,y;
+    int x, y;
     bool operator==(const Point &other) const {return x == other.x && y == other.y;}
 };
 
@@ -117,6 +117,8 @@ Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointClou
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index);
 
 void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & commonKmers);
+
+bool closeToDiagonal(Point p1, Point p2);
 
 
 #endif // SEMI_GLOBAL_ALIGN_H
