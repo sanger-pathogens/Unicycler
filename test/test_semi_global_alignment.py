@@ -21,8 +21,8 @@ import unicycler.unicycler_align
 class TestPerfectMatchAlignments(unittest.TestCase):
 
     def setUp(self):
-        ref_fasta = os.path.join(os.path.dirname(__file__), 'test_3.fasta')
-        read_fastq = os.path.join(os.path.dirname(__file__), 'test_3.fastq')
+        ref_fasta = os.path.join(os.path.dirname(__file__), 'test_semi_global_alignment.fasta')
+        read_fastq = os.path.join(os.path.dirname(__file__), 'test_semi_global_alignment.fastq')
         verbosity = 0
         refs = unicycler.read_ref.load_references(ref_fasta, verbosity)
         read_dict, read_names, _ = unicycler.read_ref.load_long_reads(read_fastq, verbosity)
@@ -223,3 +223,46 @@ class TestPerfectMatchAlignments(unittest.TestCase):
         self.assertEqual(alignment.ref_end_pos, 300)
         self.assertEqual(len(alignment.cigar_parts), 1)
         self.assertEqual(alignment.cigar_parts[0], '300M')
+
+
+class TestToughAlignments(unittest.TestCase):
+    """
+    These test cases are made from real alignments which proved to be difficult.
+    """
+
+    def setUp(self):
+        ref_fasta = os.path.join(os.path.dirname(__file__),
+                                 'test_semi_global_alignment_tough.fasta')
+        read_fastq = os.path.join(os.path.dirname(__file__),
+                                  'test_semi_global_alignment_tough.fastq')
+        verbosity = 0
+        refs = unicycler.read_ref.load_references(ref_fasta, verbosity)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(read_fastq, verbosity)
+        scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
+        sensitivity_level = 0
+        contamination_fasta = None
+        threads = 1
+        min_align_length = 10
+        allowed_overlap = 0
+        self.aligned_reads = unicycler.unicycler_align.\
+                semi_global_align_long_reads(refs, ref_fasta, read_dict, read_names, read_fastq,
+                                             threads, scoring_scheme, [None], False,
+                                             min_align_length, None, None, allowed_overlap,
+                                             sensitivity_level, contamination_fasta, verbosity)
+
+    def test_tough_alignment_1(self):
+        """
+        The beginning of the reference in this case is repetitive, which was able to throw off
+        Seqan's global chaining algorithm, resulting in an awkward alignment. I think I fixed this
+        by limiting Seqan to the seeds which are near the diagonals of line tracing points.
+        """
+        read = self.aligned_reads['0']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '0')
+        self.assertTrue(alignment.raw_score >= 126525)
+        self.assertTrue(alignment.scaled_score > 91.19)
+        self.assertTrue(abs(alignment.read_start_pos - 18662) < 20)
+        self.assertEqual(alignment.read_end_pos, 72402)
+        self.assertEqual(alignment.ref_start_pos, 0)
+        self.assertTrue(abs(alignment.ref_end_pos - 55814) < 20)

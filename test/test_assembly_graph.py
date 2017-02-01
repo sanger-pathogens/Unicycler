@@ -23,7 +23,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
     """
 
     def setUp(self):
-        test_fastg = os.path.join(os.path.dirname(__file__), 'test_1.fastg')
+        test_fastg = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25, paths_file=None,
                                                             insert_size_mean=401,
                                                             insert_size_deviation=60)
@@ -63,7 +63,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
 
     def test_load_spades_paths(self):
         self.assertEqual(len(self.graph.paths), 0)
-        paths_file = os.path.join(os.path.dirname(__file__), 'test_1.fastg.paths')
+        paths_file = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg.paths')
         self.graph.load_spades_paths(paths_file)
         self.assertEqual(len(self.graph.paths), 53)
 
@@ -297,7 +297,7 @@ class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
     """
 
     def setUp(self):
-        test_gfa = os.path.join(os.path.dirname(__file__), 'test_1.gfa')
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.gfa')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
         self.verbosity = 0
 

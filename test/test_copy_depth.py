@@ -20,7 +20,7 @@ import unicycler.assembly_graph_copy_depth
 class TestCopyDepth(unittest.TestCase):
 
     def setUp(self):
-        test_fastg = os.path.join(os.path.dirname(__file__), 'test_1.fastg')
+        test_fastg = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25, paths_file=None,
                                                             insert_size_mean=401,
                                                             insert_size_deviation=60)

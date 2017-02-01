@@ -22,7 +22,7 @@ import unicycler.misc
 class TestFullyGlobalAlignment(unittest.TestCase):
 
     def setUp(self):
-        test_fasta = os.path.join(os.path.dirname(__file__), 'test_1.fasta')
+        test_fasta = os.path.join(os.path.dirname(__file__), 'test_cpp_wrappers.fasta')
         fasta = unicycler.misc.load_fasta(test_fasta)
         self.seqs = [x[1] for x in fasta]
         self.scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
@@ -132,7 +132,7 @@ class TestPathAlignment(unittest.TestCase):
 class TestMultipleSequenceAlignment(unittest.TestCase):
 
     def setUp(self):
-        test_fastq = os.path.join(os.path.dirname(__file__), 'test_2.fastq')
+        test_fastq = os.path.join(os.path.dirname(__file__), 'test_cpp_wrappers.fastq')
         self.read_dict, self.read_names, _ = unicycler.read_ref.load_long_reads(test_fastq, 0)
         self.scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         self.seqs = [self.read_dict[name].sequence for name in self.read_names]
