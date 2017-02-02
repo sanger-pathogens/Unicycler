@@ -189,8 +189,10 @@ class TestMiscFunctions(unittest.TestCase):
         self.assertEqual(len(fasta), 3)
         self.assertEqual(fasta[0][0], 'NC_016833.1')
         self.assertEqual(fasta[2][0], 'NC_016834.1')
-        self.assertEqual(fasta[0][1], 'NC_016833.1 Shigella sonnei 53G plasmid A, complete genome')
-        self.assertEqual(fasta[2][1], 'NC_016834.1 Shigella sonnei 53G plasmid E, complete genome')
+        self.assertEqual(fasta[0][1], 'NC_016833.1 Shigella sonnei 53G plasmid A, complete genome '
+                                      'length=215774 circular=true')
+        self.assertEqual(fasta[2][1], 'NC_016834.1 Shigella sonnei 53G plasmid E, complete genome '
+                                      'length=8953 circular=true')
         self.assertTrue(fasta[0][2].startswith('ATGCTGATGAAAATACCTAAATAATCAGCCAGCACTCTATCTTTCCAAAT'
                                                'CCACAGCATAGCAAAGAGAGCAAAAGAGCCTGTAAATTCAGAAATT'))
         self.assertTrue(fasta[2][2].endswith('AGTTGATTTAAATCGCTACACCATTATGATTCATGTAGCGATTTAAATTACT'
