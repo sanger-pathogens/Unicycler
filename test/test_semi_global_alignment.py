@@ -231,13 +231,38 @@ class TestToughAlignments(unittest.TestCase):
     """
 
     def setUp(self):
-        ref_fasta = os.path.join(os.path.dirname(__file__),
-                                 'test_semi_global_alignment_tough.fasta')
-        read_fastq = os.path.join(os.path.dirname(__file__),
-                                  'test_semi_global_alignment_tough.fastq')
-        verbosity = 0
-        refs = unicycler.read_ref.load_references(ref_fasta, verbosity)
-        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(read_fastq, verbosity)
+        self.verbosity = 0
+        temp_name = 'TEMP_' + str(os.getpid())
+        self.temp_fasta = temp_name + '.fasta'
+        self.temp_fastq = temp_name + '.fastq'
+        all_ref_fasta = os.path.join(os.path.dirname(__file__),
+                                     'test_semi_global_alignment_tough.fasta')
+        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta, self.verbosity)
+        all_read_fastq = os.path.join(os.path.dirname(__file__),
+                                           'test_semi_global_alignment_tough.fastq')
+        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq, self.verbosity)
+
+        # Alignments are tests with approximate boundaries to allow for a big of wiggle room if the
+        # implementation changes.
+        self.pos_margin_of_error = 20
+
+    def do_alignment(self, read_ref_name):
+        # Save just the read/ref of interest (which will have the same name) into temporary
+        # separate files, so th alignment can be done for just them.
+        ref = [x for x in self.all_refs if x.name == read_ref_name][0]
+        read = [x for x in self.all_reads.values() if x.name == read_ref_name][0]
+        with open(self.temp_fasta, 'wt') as ref_fasta:
+            ref_fasta.write('>' + ref.name + '\n')
+            ref_fasta.write(ref.sequence + '\n')
+        with open(self.temp_fastq, 'wt') as read_fastq:
+            read_fastq.write('@' + read.name + '\n')
+            read_fastq.write(read.sequence + '\n')
+            read_fastq.write('+\n')
+            read_fastq.write(read.qualities + '\n')
+
+        refs = unicycler.read_ref.load_references(self.temp_fasta, self.verbosity)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq,
+                                                                      self.verbosity)
         scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         sensitivity_level = 0
         contamination_fasta = None
@@ -245,24 +270,70 @@ class TestToughAlignments(unittest.TestCase):
         min_align_length = 10
         allowed_overlap = 0
         self.aligned_reads = unicycler.unicycler_align.\
-                semi_global_align_long_reads(refs, ref_fasta, read_dict, read_names, read_fastq,
-                                             threads, scoring_scheme, [None], False,
-                                             min_align_length, None, None, allowed_overlap,
-                                             sensitivity_level, contamination_fasta, verbosity)
+                semi_global_align_long_reads(refs, self.temp_fasta, read_dict, read_names,
+                                             self.temp_fastq, threads, scoring_scheme, [None],
+                                             False, min_align_length, None, None, allowed_overlap,
+                                             sensitivity_level, contamination_fasta, self.verbosity)
 
-    def test_tough_alignment_1(self):
+    def tearDown(self):
+        if os.path.isfile(self.temp_fasta):
+            os.remove(self.temp_fasta)
+        if os.path.isfile(self.temp_fastq):
+            os.remove(self.temp_fastq)
+
+    def test_tough_alignment_0(self):
         """
         The beginning of the reference in this case is repetitive, which was able to throw off
         Seqan's global chaining algorithm, resulting in an awkward alignment. I think I fixed this
         by limiting Seqan to the seeds which are near the diagonals of line tracing points.
         """
+        self.do_alignment('0')
         read = self.aligned_reads['0']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
         self.assertEqual(alignment.read.name, '0')
         self.assertTrue(alignment.raw_score >= 126525)
         self.assertTrue(alignment.scaled_score > 91.19)
-        self.assertTrue(abs(alignment.read_start_pos - 18662) < 20)
-        self.assertEqual(alignment.read_end_pos, 72402)
-        self.assertEqual(alignment.ref_start_pos, 0)
-        self.assertTrue(abs(alignment.ref_end_pos - 55814) < 20)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 18662) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 72402)  # end of read
+        self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 55814) < self.pos_margin_of_error)
+
+    def test_tough_alignment_1(self):
+        """
+        This read goes through a repetitive area, which means that the densest area of common
+        k-mers is not on the correct alignment line. This means more than one line tracing is
+        required to get it right.
+        """
+        self.do_alignment('1')
+        read = self.aligned_reads['1']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '1')
+        self.assertTrue(alignment.raw_score >= 20740)
+        self.assertTrue(alignment.scaled_score > 91.02)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 10785) < self.pos_margin_of_error)
+        self.assertTrue(abs(read_end - 19629) < self.pos_margin_of_error)
+        self.assertEqual(alignment.ref_start_pos, 0)   # start of ref
+        self.assertEqual(alignment.ref_end_pos, 9241)  # end of ref
+
+    def test_tough_alignment_2(self):
+        """
+        This read goes through a repetitive area, which means that the densest area of common
+        k-mers is not on the correct alignment line. This means more than one line tracing is
+        required to get it right.
+        """
+        self.do_alignment('2')
+        read = self.aligned_reads['2']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '2')
+        self.assertTrue(alignment.raw_score >= 34449)
+        self.assertTrue(alignment.scaled_score > 90.35)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 22493) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 37581)  # end of read
+        self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 15673) < self.pos_margin_of_error)

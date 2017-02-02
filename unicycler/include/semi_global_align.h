@@ -13,8 +13,12 @@
 #define SEMI_GLOBAL_ALIGN_H
 
 #include <seqan/sequence.h>
+#include <seqan/seeds.h>
+#include <seqan/align.h>
+#include <seqan/basic.h>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include "kmers.h"
 #include "scoredalignment.h"
 #include "random_alignments.h"
@@ -25,9 +29,19 @@
 using namespace seqan;
 using namespace nanoflann;
 
-
 typedef std::pair<int, int> StartEndRange;
 typedef std::unordered_map<std::string, std::vector<StartEndRange> > RefRangeMap;
+typedef Seed<Simple> TSeed;
+typedef SeedSet<TSeed> TSeedSet;
+
+struct Point {
+    int x, y;
+    Point() {x = 0; y = 0;}
+    Point(int p_x, int p_y) {x = p_x; y = p_y;}
+    bool operator==(const Point &other) const {return x == other.x && y == other.y;}
+};
+
+typedef std::unordered_set<Point> PointSet;
 
 
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
@@ -50,20 +64,10 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
                                                          int sensitivityLevel,
                                                          int verbosity, std::string & output);
 
-double fractionOfReadAligned(std::vector<ScoredAlignment *> & alignments);
-
 std::pair<int,int> getRefRange(int refStart, int refEnd, int refLen,
                                int readStart, int readEnd, int readLen, bool posStrand);
 
 std::vector<std::pair<int, int> > simplifyRanges(std::vector<std::pair<int, int> > & ranges);
-
-
-// This stuff is for the nanoflann NN searching.
-struct Point
-{
-    int x, y;
-    bool operator==(const Point &other) const {return x == other.x && y == other.y;}
-};
 
 // http://stackoverflow.com/questions/17016175/c-unordered-map-using-a-custom-class-type-as-the-key#
 namespace std {
@@ -75,7 +79,7 @@ namespace std {
   };
 }
 
-
+// This stuff is for the nanoflann NN searching.
 struct PointCloud
 {
     std::vector<Point> pts;
@@ -116,9 +120,30 @@ Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointClou
 
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index);
 
-void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & commonKmers);
+void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & commonKmers,
+                              PointSet & usedPoints);
 
 bool closeToDiagonal(Point p1, Point p2);
 
+PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSet & usedPoints,
+                                  PointCloud & cloud, my_kd_tree_t & index, std::string readName,
+                                  char readStrand, std::string * readSeq, int readLen,
+                                  std::string refName, std::string & trimmedRefSeq, int lineNum,
+                                  int verbosity, std::string & output, bool & gotLost);
+
+void displayRFunctions(std::string & output);
+
+void displayRefRanges(std::string & output, RefRangeMap & simplifiedRefRanges);
+
+void saveCommonKmersToFile(std::string readName, char readStrand, std::string refName,
+                           std::vector<CommonKmer> & commonKmers, std::string & output);
+
+void saveChainedSeedsToFile(std::string readName, char readStrand, std::string refName,
+                            String<TSeed> & seedChain, std::string & output, int maxLineNum,
+                            int bestLineNum);
+
+void saveTraceDotsToFile(std::string readName, char readStrand, std::string refName,
+                         std::vector<Point> & traceDots, std::unordered_set<Point> & pointSet,
+                         std::string & output, int lineNum);
 
 #endif // SEMI_GLOBAL_ALIGN_H

@@ -269,6 +269,9 @@ class Reference(object):
         except ValueError:
             self.number = 0
 
+    def __repr__(self):
+        return self.name + ' (' + str(len(self.sequence)) + ' bp)'
+
     def get_length(self):
         """
         Returns the sequence length.

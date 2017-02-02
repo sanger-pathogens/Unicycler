@@ -46,7 +46,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     print_progress_line, print_section_header, weighted_average_list, get_sequence_file_type, \
-    MyHelpFormatter, dim, colour, print_v, get_default_thread_count
+    MyHelpFormatter, dim, red, colour, print_v, get_default_thread_count
 from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
     delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
@@ -527,7 +527,10 @@ def seqan_alignment(read, reference_dict, scoring_scheme, ref_seqs_ptr, low_scor
         title_colour = 'normal'
     output_title = colour(str(read), title_colour) + '\n'
 
-    return output_title + ''.join(dim(x) for x in output.splitlines(True))
+    formatted_output = ''.join(red(x[7:]) if x.startswith('R_code:') else dim(x)
+                               for x in output.splitlines(True))
+
+    return output_title + formatted_output
 
 
 def group_reads_by_fraction_aligned(read_dict):
