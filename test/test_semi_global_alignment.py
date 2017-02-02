@@ -337,3 +337,22 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(read_end, 37581)  # end of read
         self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
         self.assertTrue(abs(alignment.ref_end_pos - 15673) < self.pos_margin_of_error)
+
+    def test_tough_alignment_3(self):
+        """
+        The first line tracing of this alignment is bad but uses all the points. This previously
+        caused a crash when the program tried to do a second line trace but there were no points
+        left to find a starting position.
+        """
+        self.do_alignment('3')
+        read = self.aligned_reads['3']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '3')
+        self.assertTrue(alignment.raw_score >= 786)
+        self.assertTrue(alignment.scaled_score > 75.19)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # start of read
+        self.assertEqual(read_end, 872)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 41783) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 42680) < self.pos_margin_of_error)

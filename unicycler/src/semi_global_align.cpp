@@ -243,6 +243,10 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
         // untouched location.
         if (lineNum != maxLineTraceCount - 1)
             usedPoints.insert(pointSet.begin(), pointSet.end());
+
+        // If we've used all the points, we can't do another line!
+        if (usedPoints.size() >= commonKmers.size())
+            break;
     }
 
     // Now add the points to Seqan and get a global chain so we can do a banded alignment.
@@ -289,7 +293,6 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                   char readStrand, std::string * readSeq, int readLen,
                                   std::string refName, std::string & trimmedRefSeq, int lineNum,
                                   int verbosity, std::string & output, bool & gotLost) {
-
     // First find the highest density point in the region, which we will use to seed the alignment.
     // This search excludes any previously used points, so if we are tracing a second line (or
     // later) line we'll start from a new location.
