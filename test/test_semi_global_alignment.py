@@ -408,3 +408,22 @@ class TestToughAlignments(unittest.TestCase):
         self.assertTrue(abs(read_end - 5077) < self.pos_margin_of_error)
         self.assertTrue(abs(alignment.ref_start_pos - 253445) < self.pos_margin_of_error)
         self.assertEqual(alignment.ref_end_pos, 258801)  # end of ref
+
+    def test_tough_alignment_7(self):
+        """
+        This one misses the right alignment on lower sensitivities because the line tracing never
+        gets 'lost' but is still the wrong one. Higher sensitivities find the correct alignment by
+        trying other starting points.
+        """
+        self.do_alignment('7', 0)
+        read = self.aligned_reads['7']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '7')
+        self.assertTrue(alignment.raw_score >= 125605)
+        self.assertTrue(alignment.scaled_score > 88.93)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # start of read
+        self.assertTrue(abs(read_end - 57721) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_start_pos - 35024) < self.pos_margin_of_error)
+        self.assertEqual(alignment.ref_end_pos, 95758)  # end of ref
