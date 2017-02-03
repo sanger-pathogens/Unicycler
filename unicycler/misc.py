@@ -686,6 +686,7 @@ BOLD = '\033[1m'
 UNDERLINE = '\033[4m'
 RED = '\033[31m'
 GREEN = '\033[32m'
+MAGENTA = '\033[35m'
 YELLOW = '\033[93m'
 DIM = '\033[2m'
 
@@ -728,6 +729,10 @@ def bold_green(text):
 
 def red(text):
     return RED + text + END_FORMATTING
+
+
+def magenta(text):
+    return MAGENTA + text + END_FORMATTING
 
 
 def bold_red(text):

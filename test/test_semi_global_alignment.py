@@ -356,3 +356,24 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(read_end, 872)  # end of read
         self.assertTrue(abs(alignment.ref_start_pos - 41783) < self.pos_margin_of_error)
         self.assertTrue(abs(alignment.ref_end_pos - 42680) < self.pos_margin_of_error)
+
+
+    def test_tough_alignment_4(self):
+        """
+        Like so many of these tough ones, this case has a read which enters a repetitive region
+        after overlapping with the end of the contig. Before I fixed some aspects of the alignment,
+        the line tracing was getting caught on some of these spurious repeats instead of sticking
+        to the main line.
+        """
+        self.do_alignment('4')
+        read = self.aligned_reads['4']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '4')
+        self.assertTrue(alignment.raw_score >= 58531)
+        self.assertTrue(alignment.scaled_score > 86.47)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 9582) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 39544)  # end of read
+        self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 31277) < self.pos_margin_of_error)

@@ -431,6 +431,25 @@ std::vector<Point> radiusSearchAroundPoint(Point point, int radius, PointCloud &
 }
 
 
+Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
+                             std::string & trimmedRefSeq, std::string * readSeq,
+                             double * highestDensityScore) {
+    std::vector<Point> points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq,
+                                                                readSeq, cloud, index);
+    Point highestDensityPoint = points[0];
+    *highestDensityScore = 0.0;
+
+    for (auto const & point : points) {
+        double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
+        if (densityScore > *highestDensityScore) {
+            *highestDensityScore = densityScore;
+            highestDensityPoint = point;
+        }
+    }
+    return highestDensityPoint;
+}
+
+
 std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
                                                    std::string * readSeq, PointCloud & cloud,
                                                    my_kd_tree_t & index) {
@@ -455,11 +474,10 @@ std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string
             const size_t nMatches = index.radiusSearch(query_pt, searchRadius, ret_matches, params);
             double density = double(nMatches);
 
-            // If the search region is on the edge, increase the density (because the region has
-            // less area). It would be technically correct to double the density on the edges,
-            // but this biases the density peak towards edges, so we only use 1.5 instead.
-            if (i == 0 || i == xStepCount) density *= 1.5;
-            if (j == 0 || j == yStepCount) density *= 1.5;
+            // Search regions on the edge will have less density than they should (because the
+            // region has less area). This biases the search away from the edges, but that's okay
+            // because alignments often get tricky and repetitive near the edges (i.e. the ends of
+            // contigs) and so we probably don't want to start our line tracing there.
 
             if (density > highestDensity) {
                 highestDensity = density;
@@ -472,24 +490,6 @@ std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string
     return pointsInHighestDensity;
 }
 
-Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
-                             std::string & trimmedRefSeq, std::string * readSeq,
-                             double * highestDensityScore) {
-
-    std::vector<Point> points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq,
-                                                                readSeq, cloud, index);
-    Point highestDensityPoint = points[0];
-    *highestDensityScore = 0.0;
-
-    for (auto const & point : points) {
-        double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
-        if (densityScore > *highestDensityScore) {
-            *highestDensityScore = densityScore;
-            highestDensityPoint = point;
-        }
-    }
-    return highestDensityPoint;
-}
 
 Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointCloud & cloud,
                                       my_kd_tree_t & index, double highestDensityScore,
@@ -506,7 +506,8 @@ Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointClou
 
         // Boost the density score for points near the centre.
         int distanceFromCentre = abs(point.x - centre.x) + abs(point.y - centre.y);
-        densityScore *= (1.0 + ((densityRadius - distanceFromCentre) / densityRadius));
+        double adjustmentFactor = (1.0 + (double(densityRadius - distanceFromCentre) / densityRadius));
+        densityScore *= adjustmentFactor;
 
         if (densityScore > bestDensityScore) {
             bestDensityScore = densityScore;
@@ -581,10 +582,11 @@ bool closeToDiagonal(Point p1, Point p2) {
 void displayRFunctions(std::string & output) {
     output += "R_code:library(ggplot2)\n";
     output += "R_code:library(readr)\n";
-    output += "R_code:dot.plot.1 <- function(all_points) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_1, shape=19) + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
-    output += "R_code:dot.plot.2 <- function(all_points, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_2, shape=19) + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
-    output += "R_code:dot.plot.3 <- function(all_points, filtered_data, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size, alpha=p_alpha_2, shape=19) + geom_point(data=filtered_data,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"green\") + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
-    output += "R_code:p_size <- 0.1\n";
+    output += "R_code:dot.plot.1 <- function(all_points) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size_1, alpha=p_alpha_1, shape=19) + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+    output += "R_code:dot.plot.2 <- function(all_points, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size_1, alpha=p_alpha_2, shape=19) + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size_2, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+    output += "R_code:dot.plot.3 <- function(all_points, filtered_data, trace_dots) {ggplot() + geom_point(data=all_points,  aes(x=X1, y=X2), size=p_size_1, alpha=p_alpha_2, shape=19) + geom_point(data=filtered_data,  aes(x=X1, y=X2), size=p_size_1, alpha=1, shape=19, colour=\"green\") + geom_point(data=trace_dots,  aes(x=X1, y=X2), size=p_size_2, alpha=1, shape=19, colour=\"red\") + theme_bw() + coord_equal() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + scale_x_continuous(expand = c(0, 0), limits = x_limits) + scale_y_continuous(expand = c(0, 0), limits = y_limits)}\n";
+    output += "R_code:p_size_1 <- 0.1\n";
+    output += "R_code:p_size_2 <- 1.0\n";
     output += "R_code:p_alpha_1 <- 0.1\n";
     output += "R_code:p_alpha_2 <- 0.02\n";
 }
