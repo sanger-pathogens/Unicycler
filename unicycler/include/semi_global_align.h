@@ -135,7 +135,8 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                   PointCloud & cloud, my_kd_tree_t & index, std::string readName,
                                   char readStrand, std::string * readSeq, int readLen,
                                   std::string refName, std::string & trimmedRefSeq, int lineNum,
-                                  int verbosity, std::string & output, bool & gotLost);
+                                  int verbosity, std::string & output, bool & gotLost,
+                                  double & pointSetScore);
 
 void displayRFunctions(std::string & output);
 
@@ -151,5 +152,7 @@ void saveChainedSeedsToFile(std::string readName, char readStrand, std::string r
 void saveTraceDotsToFile(std::string readName, char readStrand, std::string refName,
                          PointVector & traceDots, PointSet & pointSet, std::string & output,
                          int lineNum);
+
+double scorePointSet(PointSet & pointSet);
 
 #endif // SEMI_GLOBAL_ALIGN_H

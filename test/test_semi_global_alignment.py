@@ -246,7 +246,7 @@ class TestToughAlignments(unittest.TestCase):
         # implementation changes.
         self.pos_margin_of_error = 20
 
-    def do_alignment(self, read_ref_name):
+    def do_alignment(self, read_ref_name, sensitivity_level):
         # Save just the read/ref of interest (which will have the same name) into temporary
         # separate files, so th alignment can be done for just them.
         ref = [x for x in self.all_refs if x.name == read_ref_name][0]
@@ -264,7 +264,6 @@ class TestToughAlignments(unittest.TestCase):
         read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq,
                                                                       self.verbosity)
         scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
-        sensitivity_level = 0
         contamination_fasta = None
         threads = 1
         min_align_length = 10
@@ -287,7 +286,7 @@ class TestToughAlignments(unittest.TestCase):
         Seqan's global chaining algorithm, resulting in an awkward alignment. I think I fixed this
         by limiting Seqan to the seeds which are near the diagonals of line tracing points.
         """
-        self.do_alignment('0')
+        self.do_alignment('0', 0)
         read = self.aligned_reads['0']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
@@ -306,7 +305,7 @@ class TestToughAlignments(unittest.TestCase):
         k-mers is not on the correct alignment line. This means more than one line tracing is
         required to get it right.
         """
-        self.do_alignment('1')
+        self.do_alignment('1', 0)
         read = self.aligned_reads['1']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
@@ -325,7 +324,7 @@ class TestToughAlignments(unittest.TestCase):
         k-mers is not on the correct alignment line. This means more than one line tracing is
         required to get it right.
         """
-        self.do_alignment('2')
+        self.do_alignment('2', 0)
         read = self.aligned_reads['2']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
@@ -344,7 +343,7 @@ class TestToughAlignments(unittest.TestCase):
         caused a crash when the program tried to do a second line trace but there were no points
         left to find a starting position.
         """
-        self.do_alignment('3')
+        self.do_alignment('3', 0)
         read = self.aligned_reads['3']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
@@ -357,7 +356,6 @@ class TestToughAlignments(unittest.TestCase):
         self.assertTrue(abs(alignment.ref_start_pos - 41783) < self.pos_margin_of_error)
         self.assertTrue(abs(alignment.ref_end_pos - 42680) < self.pos_margin_of_error)
 
-
     def test_tough_alignment_4(self):
         """
         Like so many of these tough ones, this case has a read which enters a repetitive region
@@ -365,7 +363,7 @@ class TestToughAlignments(unittest.TestCase):
         the line tracing was getting caught on some of these spurious repeats instead of sticking
         to the main line.
         """
-        self.do_alignment('4')
+        self.do_alignment('4', 0)
         read = self.aligned_reads['4']
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
@@ -377,3 +375,22 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(read_end, 39544)  # end of read
         self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
         self.assertTrue(abs(alignment.ref_end_pos - 31277) < self.pos_margin_of_error)
+
+    def test_tough_alignment_5(self):
+        """
+        This one misses the right alignment on lower sensitivities because the line tracing never
+        gets 'lost' but is still the wrong one. Higher sensitivities find the correct alignment by
+        trying other starting points.
+        """
+        self.do_alignment('5', 3)
+        read = self.aligned_reads['5']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '5')
+        self.assertTrue(alignment.raw_score >= 2792)
+        self.assertTrue(alignment.scaled_score > 89.37)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 5121) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 6396)  # end of read
+        self.assertEqual(alignment.ref_start_pos, 0)     # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 1323) < self.pos_margin_of_error)

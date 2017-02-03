@@ -219,18 +219,21 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
 
     // Use nanoflann and line tracing to get a set of common k-mer positions around a line.
     PointSet bestPointSet;
+    double bestPointScore = 0.0;
     int bestLineNum = 0;
     int maxLineNum = 0;
     for (int lineNum = 0; lineNum < maxLineTraceCount; ++lineNum) {
         maxLineNum = lineNum;
         bool gotLost = false;
+        double pointSetScore = 0.0;
         PointSet pointSet = lineTracingWithNanoflann(commonKmers, usedPoints, cloud, index,
                                                      readName, readStrand, readSeq, readLen,
                                                      refName, trimmedRefSeq, lineNum, verbosity,
-                                                     output, gotLost);
+                                                     output, gotLost, pointSetScore);
         // Keep whichever point set has the most points.
-        if (pointSet.size() > bestPointSet.size()) {
+        if (pointSetScore > bestPointScore) {
             bestPointSet = pointSet;
+            bestPointScore = pointSetScore;
             bestLineNum = lineNum;
         }
 
@@ -298,7 +301,8 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                   PointCloud & cloud, my_kd_tree_t & index, std::string readName,
                                   char readStrand, std::string * readSeq, int readLen,
                                   std::string refName, std::string & trimmedRefSeq, int lineNum,
-                                  int verbosity, std::string & output, bool & gotLost) {
+                                  int verbosity, std::string & output, bool & gotLost,
+                                  double & pointSetScore) {
     // First find the highest density point in the region, which we will use to seed the alignment.
     // This search excludes any previously used points, so if we are tracing a second line (or
     // later) line we'll start from a new location.
@@ -392,8 +396,12 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
         }
     }
 
+    pointSetScore = scorePointSet(pointSet);
+
     if (verbosity > 2) {
-        output += "    line " + std::to_string(lineNum + 1) + ": " + std::to_string(pointSet.size()) + " points (";
+        output += "    line " + std::to_string(lineNum + 1) + ": ";
+        output += std::to_string(pointSet.size()) + " points, ";
+        output += "score=" + std::to_string(pointSetScore) + " (";
         if (gotLost)
             output += "bad";
         else
@@ -665,4 +673,34 @@ void saveTraceDotsToFile(std::string readName, char readStrand, std::string refN
         filteredDataFile << d.x << "\t" << d.y << "\n";
     filteredDataFile.close();
     output += "R_code:        filtered.data." + lineNumStr + " <- read_delim(\"" + filename + "\", \"\t\", escape_double = FALSE, col_names = FALSE, trim_ws = TRUE)\n";
+}
+
+
+// Standard deviation (http://stackoverflow.com/questions/7616511/)
+double stdev(std::vector<double> & v) {
+    double sum = std::accumulate(v.begin(), v.end(), 0.0);
+    double mean = sum / v.size();
+    std::vector<double> diff(v.size());
+    std::transform(v.begin(), v.end(), diff.begin(), [mean](double x) { return x - mean; });
+    double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+    return std::sqrt(sq_sum / v.size());
+}
+
+// This function gives a point set a quality score so we can choose between alternative point sets
+// for an alignment.
+double scorePointSet(PointSet & pointSet) {
+    // Rotate the points such that the alignment line becomes horizontal instead of diagonal.
+    std::vector<double> rotatedX, rotatedY;
+    double s = -0.707106781186548;
+    double c = 0.707106781186548;
+    for (auto const & p : pointSet) {
+        rotatedX.push_back((p.x * c) - (p.y * s));
+        rotatedY.push_back((p.x * s) + (p.y * c));
+    }
+
+    // More points gives a better score. A larger rotated X stdev gives a better score, because
+    // that means there are points over a wide range of the alignment. A smaller rotated Y stdev
+    // gives a better score, because that means the alignment line is in a tight band (instead of
+    // shifting around).
+    return double(rotatedX.size()) * stdev(rotatedX) / stdev(rotatedY);
 }
