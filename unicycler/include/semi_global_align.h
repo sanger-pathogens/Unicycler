@@ -129,6 +129,8 @@ double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_k
 void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & commonKmers,
                               PointSet & usedPoints);
 
+double getSlope(Point & p1, Point & p2);
+
 bool closeToDiagonal(Point p1, Point p2);
 
 PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSet & usedPoints,
@@ -153,6 +155,8 @@ void saveTraceDotsToFile(std::string readName, char readStrand, std::string refN
                          PointVector & traceDots, PointSet & pointSet, std::string & output,
                          int lineNum);
 
-double scorePointSet(PointSet & pointSet);
+double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool gotLost);
+
+double getWorstSlope(PointVector traceDots);
 
 #endif // SEMI_GLOBAL_ALIGN_H

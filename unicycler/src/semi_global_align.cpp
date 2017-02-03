@@ -396,7 +396,11 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
         }
     }
 
-    pointSetScore = scorePointSet(pointSet);
+    pointSetScore = scorePointSet(pointSet, traceDots, gotLost);
+
+    // If the trace points have erratic slope, that counts as 'getting lost'.
+    if (getWorstSlope(traceDots) < 0.8)
+        gotLost = true;
 
     if (verbosity > 2) {
         output += "    line " + std::to_string(lineNum + 1) + ": ";
@@ -563,7 +567,7 @@ std::pair<int, int> getRefRange(int refStart, int refEnd, int refLen,
 
 
 std::vector<StartEndRange> simplifyRanges(std::vector<StartEndRange> & ranges) {
-    std::sort(ranges.begin(),ranges.end());
+    std::sort(ranges.begin(), ranges.end());
     std::vector<std::pair<int, int> > simplifiedRanges;
     std::vector<std::pair<int, int> >::iterator it = ranges.begin();
     std::pair<int,int> current = *(it)++;
@@ -581,7 +585,7 @@ std::vector<StartEndRange> simplifyRanges(std::vector<StartEndRange> & ranges) {
 }
 
 
-bool closeToDiagonal(Point p1, Point p2) {
+double getSlope(Point & p1, Point & p2) {
     int xDiff = p1.x - p2.x;
     int yDiff = p1.y - p2.y;
     double slope = 0.0;
@@ -589,6 +593,13 @@ bool closeToDiagonal(Point p1, Point p2) {
         slope = double(yDiff) / double(xDiff);
     if (xDiff == 0 && yDiff == 0)
         slope = 1.0;
+    return slope;
+}
+
+
+bool closeToDiagonal(Point p1, Point p2) {
+
+    double slope = getSlope(p1, p2);
     return (slope > 0.6667 && slope < 1.5);
 }
 
@@ -676,31 +687,33 @@ void saveTraceDotsToFile(std::string readName, char readStrand, std::string refN
 }
 
 
-// Standard deviation (http://stackoverflow.com/questions/7616511/)
-double stdev(std::vector<double> & v) {
-    double sum = std::accumulate(v.begin(), v.end(), 0.0);
-    double mean = sum / v.size();
-    std::vector<double> diff(v.size());
-    std::transform(v.begin(), v.end(), diff.begin(), [mean](double x) { return x - mean; });
-    double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
-    return std::sqrt(sq_sum / v.size());
-}
-
 // This function gives a point set a quality score so we can choose between alternative point sets
 // for an alignment.
-double scorePointSet(PointSet & pointSet) {
-    // Rotate the points such that the alignment line becomes horizontal instead of diagonal.
-    std::vector<double> rotatedX, rotatedY;
-    double s = -0.707106781186548;
-    double c = 0.707106781186548;
-    for (auto const & p : pointSet) {
-        rotatedX.push_back((p.x * c) - (p.y * s));
-        rotatedY.push_back((p.x * s) + (p.y * c));
-    }
+double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool gotLost) {
+    double pointCount = double(pointSet.size()); // More points is better.
 
-    // More points gives a better score. A larger rotated X stdev gives a better score, because
-    // that means there are points over a wide range of the alignment. A smaller rotated Y stdev
-    // gives a better score, because that means the alignment line is in a tight band (instead of
-    // shifting around).
-    return double(rotatedX.size()) * stdev(rotatedX) / stdev(rotatedY);
+    // An ideal set has trace dots which are all on a diagonal with each other. When a trace dot
+    // shifts sideways, that's bad.
+    std::sort(traceDots.begin(), traceDots.end());
+    double worstSlopeScore;
+    if (gotLost)
+        worstSlopeScore = 0.1;
+    else
+        worstSlopeScore = getWorstSlope(traceDots) * 0.9 + 0.1;
+    return pointCount * worstSlopeScore;
+}
+
+
+double getWorstSlope(PointVector traceDots) {
+    double worstSlope = 1.0;
+    for (size_t i = 0; i < traceDots.size() - 1; ++i) {
+        Point d1 = traceDots[i];
+        Point d2 = traceDots[i + 1];
+        double slope = getSlope(d1, d2);
+        if (slope > 1)
+            slope = 1.0 / slope;
+        if (slope < worstSlope)
+            worstSlope = slope;
+    }
+    return worstSlope;
 }
