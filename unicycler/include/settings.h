@@ -30,13 +30,13 @@
 #define LEVEL_0_MIN_LINE_TRACE_COUNT 1
 #define LEVEL_1_MIN_LINE_TRACE_COUNT 1
 #define LEVEL_2_MIN_LINE_TRACE_COUNT 2
-#define LEVEL_3_MIN_LINE_TRACE_COUNT 4
+#define LEVEL_3_MIN_LINE_TRACE_COUNT 3
 
 // The max line trace count controls how many line tracings will possibly be tried for each
 // alignment, assuming previous line tracings looked bad. E.g. if set to 10, up to 10 line tracings
 // will be tried, but quite possibly fewer will actually be done because the code will stop trying
 // when a line looks good.
-#define LEVEL_0_MAX_LINE_TRACE_COUNT 8
-#define LEVEL_1_MAX_LINE_TRACE_COUNT 16
-#define LEVEL_2_MAX_LINE_TRACE_COUNT 32
-#define LEVEL_3_MAX_LINE_TRACE_COUNT 64
+#define LEVEL_0_MAX_LINE_TRACE_COUNT 4
+#define LEVEL_1_MAX_LINE_TRACE_COUNT 8
+#define LEVEL_2_MAX_LINE_TRACE_COUNT 12
+#define LEVEL_3_MAX_LINE_TRACE_COUNT 16
