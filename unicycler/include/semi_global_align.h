@@ -39,7 +39,11 @@ struct Point {
     Point() {x = 0; y = 0;}
     Point(int p_x, int p_y) {x = p_x; y = p_y;}
     bool operator==(const Point &other) const {return x == other.x && y == other.y;}
-    bool operator<(const Point &other) const {if (x < other.x) return true; return y < other.y;}
+    bool operator<(const Point &other) const {  // sort using x first, then y
+        if (x == other.x)
+            return y < other.y;
+        return x < other.x;
+    }
 };
 
 typedef std::unordered_set<Point> PointSet;
