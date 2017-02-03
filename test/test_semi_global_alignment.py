@@ -330,7 +330,7 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
         self.assertEqual(alignment.read.name, '2')
-        self.assertTrue(alignment.raw_score >= 34449)
+        self.assertTrue(alignment.raw_score >= 34439)
         self.assertTrue(alignment.scaled_score > 90.35)
         read_start, read_end = alignment.read_start_end_positive_strand()
         self.assertTrue(abs(read_start - 22493) < self.pos_margin_of_error)

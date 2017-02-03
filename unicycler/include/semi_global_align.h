@@ -39,9 +39,11 @@ struct Point {
     Point() {x = 0; y = 0;}
     Point(int p_x, int p_y) {x = p_x; y = p_y;}
     bool operator==(const Point &other) const {return x == other.x && y == other.y;}
+    bool operator<(const Point &other) const {if (x < other.x) return true; return y < other.y;}
 };
 
 typedef std::unordered_set<Point> PointSet;
+typedef std::vector<Point> PointVector;
 
 
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
@@ -82,7 +84,7 @@ namespace std {
 // This stuff is for the nanoflann NN searching.
 struct PointCloud
 {
-    std::vector<Point> pts;
+    PointVector pts;
     inline size_t kdtree_get_point_count() const { return pts.size(); }
     inline int kdtree_distance(const int *p1, const size_t idx_p2,size_t /*size*/) const
     {
@@ -103,12 +105,12 @@ struct PointCloud
 
 typedef KDTreeSingleIndexAdaptor<L1_Adaptor<int, PointCloud>, PointCloud, 2> my_kd_tree_t;
 
-std::vector<Point> radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
-                                           my_kd_tree_t & index);
+PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
+                                    my_kd_tree_t & index);
 
-std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
-                                                   std::string * readSeq, PointCloud & cloud,
-                                                   my_kd_tree_t & index);\
+PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
+                                            std::string * readSeq, PointCloud & cloud,
+                                            my_kd_tree_t & index);
 
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq,
@@ -143,7 +145,7 @@ void saveChainedSeedsToFile(std::string readName, char readStrand, std::string r
                             int bestLineNum);
 
 void saveTraceDotsToFile(std::string readName, char readStrand, std::string refName,
-                         std::vector<Point> & traceDots, std::unordered_set<Point> & pointSet,
-                         std::string & output, int lineNum);
+                         PointVector & traceDots, PointSet & pointSet, std::string & output,
+                         int lineNum);
 
 #endif // SEMI_GLOBAL_ALIGN_H

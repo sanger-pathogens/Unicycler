@@ -249,9 +249,15 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
             break;
     }
 
-    // Now add the points to Seqan and get a global chain so we can do a banded alignment.
+    // Now add the points to Seqan and get a global chain so we can do a banded alignment. We sort
+    // them first so they're added in a consistent order.
     String<TSeed> seeds;
+    PointVector bestPointSetVector;
+    bestPointSetVector.reserve(bestPointSet.size());
     for (auto const & p : bestPointSet)
+        bestPointSetVector.push_back(p);
+    std::sort(bestPointSetVector.begin(), bestPointSetVector.end());
+    for (auto const & p : bestPointSetVector)
         appendValue(seeds, TSeed(size_t(p.x), size_t(p.y), size_t(kSize)));
     TSeedSet seedSet;
     for (unsigned i = 0; i < length(seeds); ++i) {
@@ -305,7 +311,7 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                                        trimmedRefSeq, readSeq,
                                                        &highestDensityScore);
     Point p = highestDensityPoint;
-    std::vector<Point> traceDots;
+    PointVector traceDots;
     traceDots.push_back(p);
 
     int smallLineTracingStepSize = 250;
@@ -318,7 +324,7 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
 
     // Start the point collection using points around the starting point.
     PointSet pointSet;
-    std::vector<Point> nearbyPoints = radiusSearchAroundPoint(p, smallSearchRadius, cloud, index);
+    PointVector nearbyPoints = radiusSearchAroundPoint(p, smallSearchRadius, cloud, index);
     for (auto const & nearbyPoint : nearbyPoints) {
         if (closeToDiagonal(p, nearbyPoint))
             pointSet.insert(nearbyPoint);
@@ -402,7 +408,7 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
 
 void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & commonKmers,
                               PointSet & usedPoints) {
-    std::vector<Point> points;
+    PointVector points;
     for (size_t i = 0; i < commonKmers.size(); ++i) {
         Point p(commonKmers[i].m_hPosition, commonKmers[i].m_vPosition);
         bool alreadyUsed = usedPoints.find(p) != usedPoints.end();
@@ -418,9 +424,9 @@ void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & comm
 }
 
 
-std::vector<Point> radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
-                                           my_kd_tree_t & index) {
-    std::vector<Point> points;
+PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
+                                    my_kd_tree_t & index) {
+    PointVector points;
     nanoflann::SearchParams params;
     std::vector<std::pair<size_t,int> > ret_matches;
     const int query_pt[2] = {point.x, point.y};
@@ -434,8 +440,8 @@ std::vector<Point> radiusSearchAroundPoint(Point point, int radius, PointCloud &
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq,
                              double * highestDensityScore) {
-    std::vector<Point> points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq,
-                                                                readSeq, cloud, index);
+    PointVector points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq, readSeq,
+                                                         cloud, index);
     Point highestDensityPoint = points[0];
     *highestDensityScore = 0.0;
 
@@ -450,9 +456,9 @@ Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t
 }
 
 
-std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
-                                                   std::string * readSeq, PointCloud & cloud,
-                                                   my_kd_tree_t & index) {
+PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
+                                            std::string * readSeq, PointCloud & cloud,
+                                            my_kd_tree_t & index) {
     int xStepCount = int(ceil(readSeq->length() / double(searchRadius)));
     int yStepCount = int(ceil(trimmedRefSeq.length() / double(searchRadius)));
     double xStepSize = double(readSeq->length()) / xStepCount;
@@ -460,7 +466,7 @@ std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string
 
     nanoflann::SearchParams params;
     double highestDensity = 0.0;
-    std::vector<Point> pointsInHighestDensity;
+    PointVector pointsInHighestDensity;
 
     for (int i = 0; i <= xStepCount; ++i) {
         int xCentre = int(0.5 + i * xStepSize);
@@ -494,7 +500,7 @@ std::vector<Point> getPointsInHighestDensityRegion(int searchRadius, std::string
 Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointCloud & cloud,
                                       my_kd_tree_t & index, double highestDensityScore,
                                       bool * failed) {
-    std::vector<Point> points = radiusSearchAroundPoint(centre, densityRadius, cloud, index);
+    PointVector points = radiusSearchAroundPoint(centre, densityRadius, cloud, index);
     if (points.size() == 0)
         return {-1, -1};
     Point highestDensityPoint = centre;
@@ -521,7 +527,7 @@ Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointClou
 
 
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index) {
-    std::vector<Point> neighbourPoints = radiusSearchAroundPoint(p, densityRadius, cloud, index);
+    PointVector neighbourPoints = radiusSearchAroundPoint(p, densityRadius, cloud, index);
     double densityScore = 0.0;
     for (auto const & neighbourPoint : neighbourPoints) {
         int xDiff = neighbourPoint.x - p.x;
@@ -641,7 +647,7 @@ void saveChainedSeedsToFile(std::string readName, char readStrand, std::string r
 
 
 void saveTraceDotsToFile(std::string readName, char readStrand, std::string refName,
-                         std::vector<Point> & traceDots, PointSet & pointSet, std::string & output,
+                         PointVector & traceDots, PointSet & pointSet, std::string & output,
                          int lineNum) {
     std::ofstream traceDotsFile;
     std::string lineNumStr = std::to_string(lineNum+1);
