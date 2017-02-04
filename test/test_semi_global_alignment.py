@@ -225,11 +225,108 @@ class TestPerfectMatchAlignments(unittest.TestCase):
         self.assertEqual(alignment.cigar_parts[0], '300M')
 
 
+class TestContainedReadAlignments(unittest.TestCase):
+    """
+    These test cases use real reads/contigs and cover cases where the read aligns to the middle of
+    the contig
+    """
+    def setUp(self):
+        self.verbosity = 0
+        temp_name = 'TEMP_' + str(os.getpid())
+        self.temp_fasta = temp_name + '.fasta'
+        self.temp_fastq = temp_name + '.fastq'
+        all_ref_fasta = os.path.join(os.path.dirname(__file__),
+                                     'test_semi_global_alignment_contained_reads.fasta')
+        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta, self.verbosity)
+        all_read_fastq = os.path.join(os.path.dirname(__file__),
+                                           'test_semi_global_alignment_contained_reads.fastq')
+        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq, self.verbosity)
+
+        # Alignments are tests with approximate boundaries to allow for a big of wiggle room if the
+        # implementation changes.
+        self.pos_margin_of_error = 10
+
+    def do_alignment(self, read_ref_name, sensitivity_level):
+        # Save just the read/ref of interest (which will have the same name) into temporary
+        # separate files, so th alignment can be done for just them.
+        ref = [x for x in self.all_refs if x.name == read_ref_name][0]
+        read = [x for x in self.all_reads.values() if x.name == read_ref_name][0]
+        with open(self.temp_fasta, 'wt') as ref_fasta:
+            ref_fasta.write('>' + ref.name + '\n')
+            ref_fasta.write(ref.sequence + '\n')
+        with open(self.temp_fastq, 'wt') as read_fastq:
+            read_fastq.write('@' + read.name + '\n')
+            read_fastq.write(read.sequence + '\n')
+            read_fastq.write('+\n')
+            read_fastq.write(read.qualities + '\n')
+
+        refs = unicycler.read_ref.load_references(self.temp_fasta, self.verbosity)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq,
+                                                                      self.verbosity)
+        scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
+        contamination_fasta = None
+        threads = 1
+        min_align_length = 10
+        allowed_overlap = 0
+        self.aligned_reads = unicycler.unicycler_align.\
+                semi_global_align_long_reads(refs, self.temp_fasta, read_dict, read_names,
+                                             self.temp_fastq, threads, scoring_scheme, [None],
+                                             False, min_align_length, None, None, allowed_overlap,
+                                             sensitivity_level, contamination_fasta, self.verbosity)
+
+    def tearDown(self):
+        if os.path.isfile(self.temp_fasta):
+            os.remove(self.temp_fasta)
+        if os.path.isfile(self.temp_fastq):
+            os.remove(self.temp_fastq)
+
+    def test_short_contained_read(self):
+        self.do_alignment('0', 0)
+        read = self.aligned_reads['0']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '0')
+        self.assertTrue(alignment.raw_score >= 1418)
+        self.assertTrue(alignment.scaled_score > 90.78)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # end of read
+        self.assertEqual(read_end, 608)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 31040) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 31679) < self.pos_margin_of_error)
+
+    def test_medium_contained_read(self):
+        self.do_alignment('1', 0)
+        read = self.aligned_reads['1']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '1')
+        self.assertTrue(alignment.raw_score >= 16608)
+        self.assertTrue(alignment.scaled_score > 90.12)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # end of read
+        self.assertEqual(read_end, 7360)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 68597) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 76202) < self.pos_margin_of_error)
+
+    def test_long_contained_read(self):
+        self.do_alignment('2', 0)
+        read = self.aligned_reads['2']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '2')
+        self.assertTrue(alignment.raw_score >= 122681)
+        self.assertTrue(alignment.scaled_score > 91.19)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # end of read
+        self.assertEqual(read_end, 52096)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 2986) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 57064) < self.pos_margin_of_error)
+
+
 class TestToughAlignments(unittest.TestCase):
     """
     These test cases are made from real alignments which proved to be difficult.
     """
-
     def setUp(self):
         self.verbosity = 0
         temp_name = 'TEMP_' + str(os.getpid())
