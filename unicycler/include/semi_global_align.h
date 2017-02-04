@@ -117,12 +117,7 @@ PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trim
                                             my_kd_tree_t & index);
 
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
-                             std::string & trimmedRefSeq, std::string * readSeq,
-                             double * highestDensityScore);
-
-Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointCloud & cloud,
-                                      my_kd_tree_t & index, double highestDensityScore,
-                                      bool * failed);
+                             std::string & trimmedRefSeq, std::string * readSeq);
 
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index);
 
@@ -131,13 +126,11 @@ void addKmerPointsToNanoflann(PointCloud & cloud, std::vector<CommonKmer> & comm
 
 double getSlope(Point & p1, Point & p2);
 
-bool closeToDiagonal(Point p1, Point p2);
-
 PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSet & usedPoints,
                                   PointCloud & cloud, my_kd_tree_t & index, std::string readName,
                                   char readStrand, std::string * readSeq, int readLen,
                                   std::string refName, std::string & trimmedRefSeq, int lineNum,
-                                  int verbosity, std::string & output, bool & gotLost,
+                                  int verbosity, std::string & output, bool & failedLine,
                                   double & pointSetScore);
 
 void displayRFunctions(std::string & output);
@@ -155,8 +148,20 @@ void saveTraceDotsToFile(std::string readName, char readStrand, std::string refN
                          PointVector & traceDots, PointSet & pointSet, std::string & output,
                          int lineNum);
 
-double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool gotLost);
+double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failedLine);
 
 double getWorstSlope(PointVector traceDots);
+
+Point mutateLineToBestFitPoints(Point previousP, Point newP, PointCloud & cloud,
+                                my_kd_tree_t & index, PointSet & pointsNearLine);
+
+void addPointsNearLine(Point p1, Point p2, PointSet & pointsNearLine, PointSet & pointSet,
+                       double radius);
+
+double distanceToLineSegment(Point p, Point l1, Point l2);
+
+double scoreLineSegment(Point p1, Point p2, PointSet & pointsNearLine);
+
+double variance(std::vector<double> & v);
 
 #endif // SEMI_GLOBAL_ALIGN_H

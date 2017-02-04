@@ -40,3 +40,30 @@
 #define LEVEL_1_MAX_LINE_TRACE_COUNT 8
 #define LEVEL_2_MAX_LINE_TRACE_COUNT 12
 #define LEVEL_3_MAX_LINE_TRACE_COUNT 16
+
+// When beginning line tracing, the location with the highest density is found by checking many
+// regions of the space. This parameter controls the size of those regions.
+#define LINE_TRACING_START_POINT_SEARCH_RADIUS 100
+
+// Common k-mer points this close to the trace line will be collected into the point set that is
+// given to Seqan for global chaining and then banded alignment.
+#define TRACE_LINE_COLLECTION_DISTANCE 20.0
+
+// The trace line points will be this far apart.
+#define TRACE_LINE_STEP_DISTANCE 500
+
+// This is how much trace line points change when we're searching for the best position.
+#define TRACE_LINE_MUTATION_SIZE 5
+
+// This is the score a line segment will get it if it exactly follows points for its whole length.
+// Increase this value to make the line finding more strongly prefer point proximity (as opposed
+// to slope).
+#define MAX_POINTS_SCORE 10000.0
+
+// This is the maximum score a line segment can get for its slope (achieved with a slope of 1).
+// Increase this value to make the line finding more strongly prefer slope (as opposed to point
+// proximity).
+#define MAX_SLOPE_SCORE 1.0
+
+// If a line segment's slope (or its reciprocal) is less than this, it gets a slope score of 0.
+#define MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE 0.5

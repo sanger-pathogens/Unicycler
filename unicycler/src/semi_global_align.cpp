@@ -224,28 +224,22 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
     int maxLineNum = 0;
     for (int lineNum = 0; lineNum < maxLineTraceCount; ++lineNum) {
         maxLineNum = lineNum;
-        bool gotLost = false;
+        bool failedLine = false;
         double pointSetScore = 0.0;
         PointSet pointSet = lineTracingWithNanoflann(commonKmers, usedPoints, cloud, index,
                                                      readName, readStrand, readSeq, readLen,
                                                      refName, trimmedRefSeq, lineNum, verbosity,
-                                                     output, gotLost, pointSetScore);
-        // Keep whichever point set has the most points.
+                                                     output, failedLine, pointSetScore);
         if (pointSetScore > bestPointScore) {
             bestPointSet = pointSet;
             bestPointScore = pointSetScore;
             bestLineNum = lineNum;
         }
 
-        // If this line looked good (i.e. we didn't get 'lost' in the line tracing) and have tried
+        // If this line looked good (i.e. we didn't get 'lost' in the line tracing) and we've tried
         // enough lines, then we're done!
-        if (!gotLost && lineNum >= minLineTraceCount - 1)
+        if (!failedLine && lineNum >= minLineTraceCount - 1)
             break;
-
-        // Add these points to the used points so the next line's starting point is in a previously
-        // untouched location.
-        if (lineNum != maxLineTraceCount - 1)
-            usedPoints.insert(pointSet.begin(), pointSet.end());
 
         // If we've used all the points, we can't do another line!
         if (usedPoints.size() >= commonKmers.size())
@@ -301,94 +295,51 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                   PointCloud & cloud, my_kd_tree_t & index, std::string readName,
                                   char readStrand, std::string * readSeq, int readLen,
                                   std::string refName, std::string & trimmedRefSeq, int lineNum,
-                                  int verbosity, std::string & output, bool & gotLost,
+                                  int verbosity, std::string & output, bool & failedLine,
                                   double & pointSetScore) {
-    // First find the highest density point in the region, which we will use to seed the alignment.
-    // This search excludes any previously used points, so if we are tracing a second line (or
-    // later) line we'll start from a new location.
+    // First find the highest density point in the region, which we will use to start the trace.
     PointCloud startingPointCloud;
     addKmerPointsToNanoflann(startingPointCloud, commonKmers, usedPoints);
     my_kd_tree_t startingPointIndex(2, startingPointCloud, KDTreeSingleIndexAdaptorParams(10));
     startingPointIndex.buildIndex();
-    double highestDensityScore = 0.0;
-    Point highestDensityPoint = getHighestDensityPoint(100, startingPointCloud, startingPointIndex,
-                                                       trimmedRefSeq, readSeq,
-                                                       &highestDensityScore);
-    Point p = highestDensityPoint;
+    Point startPoint = getHighestDensityPoint(LINE_TRACING_START_POINT_SEARCH_RADIUS,
+                                              startingPointCloud, startingPointIndex,
+                                              trimmedRefSeq, readSeq);
+    Point p = startPoint;
     PointVector traceDots;
     traceDots.push_back(p);
 
-    int smallLineTracingStepSize = 250;
-    int smallSearchRadius = 500;
-
-    // If the line is 'lost' then we will switch to larger steps to increase our change of
-    //'finding' it again.
-    int largeLineTracingStepSize = 500;
-    int largeSearchRadius = 1000;
+    // Set the points around the starting point as 'used' so they are excluded from future starting
+    // points (to ensure that subsequent line traces begin from a sufficiently different location).
+    PointVector nearStart = radiusSearchAroundPoint(p, 2 * LINE_TRACING_START_POINT_SEARCH_RADIUS,
+                                                        cloud, index);
+    usedPoints.insert(nearStart.begin(), nearStart.end());
 
     // Start the point collection using points around the starting point.
-    PointSet pointSet;
-    PointVector nearbyPoints = radiusSearchAroundPoint(p, smallSearchRadius, cloud, index);
-    for (auto const & nearbyPoint : nearbyPoints) {
-        if (closeToDiagonal(p, nearbyPoint))
-            pointSet.insert(nearbyPoint);
-    }
+    PointVector nearbyPoints = radiusSearchAroundPoint(p, TRACE_LINE_COLLECTION_DISTANCE, cloud,
+                                                       index);
+    PointSet pointSet(nearbyPoints.begin(), nearbyPoints.end());
 
-    int smallestTraceLineX = p.x, largestTraceLineX = p.x;
-    int smallestTraceLineY = p.y, largestTraceLineY = p.y;
-
-    // If at any point in the line tracing we get 'lost', then this flag will be set to true,
-    // indicating that we should perhaps try a different line.
-    gotLost = false;
+//    std::cout << "STARTING LINE TRACE\n" << std::flush;  // TEMP
 
     // Trace the line forward then backward.
     int directions[2] = {1, -1};
     for (auto const & direction : directions) {
-        p = highestDensityPoint;
-        int lineTracingStepSize = smallLineTracingStepSize;
-        int searchRadius = smallSearchRadius;
+        p = startPoint;
         int maxX = readLen;
         int maxY = int(trimmedRefSeq.length());
-        bool failed;
         while (true) {
-            Point newP = p;
-            int step = direction * lineTracingStepSize;
-            newP.x += step;
-            newP.y += step;
-            if (newP.x > maxX || newP.y > maxY)
-                p = newP;
-            else if (newP.x < 0 || newP.y < 0)
-                p = newP;
-            else {
-                p = getHighestDensityPointNearPoint(lineTracingStepSize, newP, cloud, index,
-                                                    highestDensityScore, &failed);
-                if (failed) {
-                    lineTracingStepSize = largeLineTracingStepSize;
-                    searchRadius = largeSearchRadius;
-                    gotLost = true;
-                }
-                else {
-                    lineTracingStepSize = smallLineTracingStepSize;
-                    searchRadius = smallSearchRadius;
-                }
-            }
-            if (p.x == -1 || p.y == -1)
-                p = newP;
+            int step = direction * TRACE_LINE_STEP_DISTANCE;
+            Point previousP = p;
+            Point newP(p.x + step, p.y + step);
 
+            PointSet pointsNearLine;
+            p = mutateLineToBestFitPoints(previousP, newP, cloud, index, pointsNearLine);
             traceDots.push_back(p);
+            addPointsNearLine(previousP, p, pointsNearLine, pointSet,
+                              TRACE_LINE_COLLECTION_DISTANCE);
 
-            // Points near the trace point get added to the point set.
-            nearbyPoints = radiusSearchAroundPoint(p, searchRadius, cloud, index);
-            for (auto const & nearbyPoint : nearbyPoints) {
-                if (closeToDiagonal(p, nearbyPoint))
-                    pointSet.insert(nearbyPoint);
-            }
-
-            smallestTraceLineX = std::min(p.x, smallestTraceLineX);
-            smallestTraceLineY = std::min(p.y, smallestTraceLineY);
-            largestTraceLineX = std::max(p.x, largestTraceLineX);
-            largestTraceLineY = std::max(p.y, largestTraceLineY);
-
+            // Quit advancing when we've left the alignment rectangle.
             if (direction == 1 && (p.x > maxX || p.y > maxY))
                 break;
             if (direction == -1 && (p.x < 0 || p.y < 0))
@@ -396,17 +347,14 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
         }
     }
 
-    pointSetScore = scorePointSet(pointSet, traceDots, gotLost);
-
-    // If the trace points have erratic slope, that counts as 'getting lost'.
-    if (getWorstSlope(traceDots) < 0.8)
-        gotLost = true;
+    pointSetScore = scorePointSet(pointSet, traceDots, failedLine);
+//    std::cout << "pointSetScore = " << pointSetScore << "\n" << std::flush;  // TEMP
 
     if (verbosity > 2) {
         output += "    line " + std::to_string(lineNum + 1) + ": ";
         output += std::to_string(pointSet.size()) + " points, ";
         output += "score=" + std::to_string(pointSetScore) + " (";
-        if (gotLost)
+        if (failedLine)
             output += "bad";
         else
             output += "good";
@@ -415,6 +363,133 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
     if (verbosity > 3)
         saveTraceDotsToFile(readName, readStrand, refName, traceDots, pointSet, output, lineNum);
     return pointSet;
+}
+
+
+Point shiftPointUp(Point p, int steps) {
+    p.x -= steps;
+    p.y += steps;
+    return p;
+}
+
+
+Point shiftPointDown(Point p, int steps) {
+    p.x += steps;
+    p.y -= steps;
+    return p;
+}
+
+
+Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tree_t & index,
+                                PointSet & pointsNearLine) {
+
+//    std::cout << "\n";  // TEMP
+//    std::cout << "  starting point: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
+
+    int radius = int(TRACE_LINE_STEP_DISTANCE * 1.1);
+    PointVector pointsNearP1 = radiusSearchAroundPoint(p1, radius, cloud, index);
+    PointVector pointsNearP2 = radiusSearchAroundPoint(p2, radius, cloud, index);
+    pointsNearLine.insert(pointsNearP1.begin(), pointsNearP1.end());
+    pointsNearLine.insert(pointsNearP2.begin(), pointsNearP2.end());
+
+    Point p2Up = shiftPointUp(p2, TRACE_LINE_MUTATION_SIZE);
+    Point p2Down = shiftPointDown(p2, TRACE_LINE_MUTATION_SIZE);
+    double unmutatedScore = scoreLineSegment(p1, p2, pointsNearLine);
+    double mutatedUpScore = scoreLineSegment(p1, p2Up, pointsNearLine);
+    double mutatedDownScore = scoreLineSegment(p1, p2Down, pointsNearLine);
+
+//    std::cout << "  unmutatedScore: " << unmutatedScore << "\n" << std::flush;  // TEMP
+//    std::cout << "  mutatedUpScore: " << mutatedUpScore << "\n" << std::flush;  // TEMP
+//    std::cout << "  mutatedDownScore: " << mutatedDownScore << "\n" << std::flush;  // TEMP
+
+    while (true) {
+        // If neither mutation helps, then we're done!
+        if (unmutatedScore >= mutatedUpScore && unmutatedScore >= mutatedDownScore)
+            break;
+
+        else if (mutatedUpScore > unmutatedScore) {
+            p2Down = p2;
+            mutatedDownScore = unmutatedScore;
+            p2 = p2Up;
+            unmutatedScore = mutatedUpScore;
+            p2Up = shiftPointUp(p2, TRACE_LINE_MUTATION_SIZE);
+            mutatedUpScore = scoreLineSegment(p1, p2Up, pointsNearLine);
+//            std::cout << "  mutated up: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
+        }
+
+        else if (mutatedDownScore > unmutatedScore) {
+            p2Up = p2;
+            mutatedUpScore = unmutatedScore;
+            p2 = p2Down;
+            unmutatedScore = mutatedDownScore;
+            p2Down = shiftPointDown(p2, TRACE_LINE_MUTATION_SIZE);
+            mutatedDownScore = scoreLineSegment(p1, p2Down, pointsNearLine);
+//            std::cout << "  mutated down: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
+        }
+    }
+    return p2;
+}
+
+
+// Line segments are scored on two fronts: their slope (closer to 1 is better) and the closeness
+// of points to the line segment.
+double scoreLineSegment(Point p1, Point p2, PointSet & pointsNearLine) {
+    double slope = getSlope(p1, p2);
+    if (slope > 1.0)
+        slope = 1.0 / slope;
+    double slopeScore = (MAX_SLOPE_SCORE / (1.0 - MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE)) *
+                        (slope - MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE);
+//    std::cout << "  slopeScore: " << slopeScore << "\n" << std::flush;  // TEMP
+
+    double maxScorePerPoint = MAX_POINTS_SCORE / TRACE_LINE_STEP_DISTANCE;
+    double pointDistanceScore = 0.0;
+    for (auto const & p : pointsNearLine) {
+        double dist = distanceToLineSegment(p, p1, p2);
+        pointDistanceScore += maxScorePerPoint / (dist + 1.0);
+    }
+//    std::cout << "  pointDistanceScore: " << pointDistanceScore << "\n" << std::flush;  // TEMP
+
+    double finalScore = slopeScore + pointDistanceScore;
+//    std::cout << "  finalScore: " << finalScore << "\n" << std::flush;  // TEMP
+    return finalScore;
+}
+
+void addPointsNearLine(Point p1, Point p2, PointSet & pointsNearLine, PointSet & pointSet,
+                       double radius) {
+    for (auto const & p : pointsNearLine) {
+        if (distanceToLineSegment(p, p1, p2) <= radius)
+            pointSet.insert(p);
+    }
+}
+
+
+// http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
+double distanceToLineSegment(Point p, Point l1, Point l2) {
+    double A = p.x - l1.x;
+    double B = p.y - l1.y;
+    double C = l2.x - l1.x;
+    double D = l2.y - l1.y;
+    double dot = A * C + B * D;
+    double len_sq = C * C + D * D;
+    double param = -1;
+    if (len_sq != 0) //in case of 0 length line
+        param = dot / len_sq;
+    double xx, yy;
+    if (param < 0) {
+        xx = l1.x;
+        yy = l1.y;
+    }
+    else if (param > 1) {
+        xx = l2.x;
+        yy = l2.y;
+    }
+    else {
+        xx = l1.x + param * C;
+        yy = l1.y + param * D;
+    }
+    double dx = p.x - xx;
+    double dy = p.y - yy;
+    return sqrt(dx * dx + dy * dy);
 }
 
 
@@ -450,17 +525,15 @@ PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
 
 
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
-                             std::string & trimmedRefSeq, std::string * readSeq,
-                             double * highestDensityScore) {
+                             std::string & trimmedRefSeq, std::string * readSeq) {
     PointVector points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq, readSeq,
                                                          cloud, index);
     Point highestDensityPoint = points[0];
-    *highestDensityScore = 0.0;
-
+    double highestDensityScore = 0.0;
     for (auto const & point : points) {
         double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
-        if (densityScore > *highestDensityScore) {
-            *highestDensityScore = densityScore;
+        if (densityScore > highestDensityScore) {
+            highestDensityScore = densityScore;
             highestDensityPoint = point;
         }
     }
@@ -506,35 +579,6 @@ PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trim
         }
     }
     return pointsInHighestDensity;
-}
-
-
-Point getHighestDensityPointNearPoint(int densityRadius, Point centre, PointCloud & cloud,
-                                      my_kd_tree_t & index, double highestDensityScore,
-                                      bool * failed) {
-    PointVector points = radiusSearchAroundPoint(centre, densityRadius, cloud, index);
-    if (points.size() == 0)
-        return {-1, -1};
-    Point highestDensityPoint = centre;
-    *failed = true;
-    double bestDensityScore = highestDensityScore / 10.0;
-
-    for (auto const & point : points) {
-        double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
-
-        // Boost the density score for points near the centre.
-        int distanceFromCentre = abs(point.x - centre.x) + abs(point.y - centre.y);
-        double adjustmentFactor = (1.0 + (double(densityRadius - distanceFromCentre) / densityRadius));
-        densityScore *= adjustmentFactor;
-
-        if (densityScore > bestDensityScore) {
-            bestDensityScore = densityScore;
-            highestDensityPoint = point;
-            *failed = false;
-        }
-    }
-
-    return highestDensityPoint;
 }
 
 
@@ -594,13 +638,6 @@ double getSlope(Point & p1, Point & p2) {
     if (xDiff == 0 && yDiff == 0)
         slope = 1.0;
     return slope;
-}
-
-
-bool closeToDiagonal(Point p1, Point p2) {
-
-    double slope = getSlope(p1, p2);
-    return (slope > 0.6667 && slope < 1.5);
 }
 
 
@@ -687,25 +724,62 @@ void saveTraceDotsToFile(std::string readName, char readStrand, std::string refN
 }
 
 
-// This function gives a point set a quality score so we can choose between alternative point sets
-// for an alignment.
-double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool gotLost) {
-    double pointCount = double(pointSet.size()); // More points is better.
 
-    // An ideal set has trace dots which are all on a diagonal with each other. When a trace dot
-    // shifts sideways, that's bad.
-    std::sort(traceDots.begin(), traceDots.end());
-    double worstSlopeScore;
-    if (gotLost)
-        worstSlopeScore = 0.1;
-    else
-        worstSlopeScore = getWorstSlope(traceDots) * 0.9 + 0.1;
-    return pointCount * worstSlopeScore;
+// Standard deviation (http://stackoverflow.com/questions/7616511/)
+double variance(std::vector<double> & v) {
+    double sum = std::accumulate(v.begin(), v.end(), 0.0);
+    double mean = sum / v.size();
+    std::vector<double> diff(v.size());
+    std::transform(v.begin(), v.end(), diff.begin(), [mean](double x) { return x - mean; });
+    double sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+    return sq_sum / v.size();
+}
+
+
+// This function gives a point set a quality score so we can choose between alternative point sets
+// for an alignment. It also labels the point set as failed or not.
+double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failedLine) {
+
+    // More points is better.
+    double pointCount = double(pointSet.size());
+//    std::cout << "pointCount = " << pointCount << "\n" << std::flush;  // TEMP
+
+    // Slopes near 1 are better.
+    double worstSlope = getWorstSlope(traceDots);
+    double worstSlopeScore = worstSlope * 0.9 + 0.1;
+//    std::cout << "worstSlopeScore = " << worstSlopeScore << "\n" << std::flush;  // TEMP
+
+    // A good line should have points evenly distributed over its length.
+    std::vector<double> xPlusY;
+    double min = std::numeric_limits<int>::max();
+    double max = std::numeric_limits<int>::min();
+    xPlusY.reserve(pointSet.size());
+    for (auto const & p : pointSet) {
+        double sum = p.x + p.y;
+        xPlusY.push_back(sum);
+        if (sum > max)
+            max = sum;
+        if (sum < min)
+            min = sum;
+    }
+    double uniformDistributionVariance = (max - min) * (max - min) / 12.0;
+    double thisVariance = variance(xPlusY);
+    double varianceScore = thisVariance / uniformDistributionVariance;
+    if (varianceScore > 1.0)
+        varianceScore = 1.0 / varianceScore;
+
+//    std::cout << "varianceScore = " << varianceScore << "\n" << std::flush;  // TEMP
+
+    // If the slope and variance look week, we say the line has failed.
+    failedLine = (worstSlopeScore * varianceScore) < 0.8;
+
+    return pointCount * worstSlopeScore * varianceScore;
 }
 
 
 double getWorstSlope(PointVector traceDots) {
     double worstSlope = 1.0;
+    std::sort(traceDots.begin(), traceDots.end());
     for (size_t i = 0; i < traceDots.size() - 1; ++i) {
         Point d1 = traceDots[i];
         Point d2 = traceDots[i + 1];
