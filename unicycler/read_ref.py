@@ -41,7 +41,8 @@ def load_references(fasta_filename, verbosity, contamination=False):
         open_func = open
 
     if verbosity > 0:
-        num_refs = sum(1 for line in open_func(fasta_filename, 'rt') if line.startswith('>'))
+        with open_func(fasta_filename, 'rt') as fasta:
+            num_refs = sum(1 for line in fasta if line.startswith('>'))
         if not num_refs:
             quit_with_error('There are no references sequences in ' + fasta_filename)
         print_progress_line(0, num_refs)
