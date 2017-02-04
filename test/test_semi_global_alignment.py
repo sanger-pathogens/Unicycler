@@ -244,7 +244,7 @@ class TestToughAlignments(unittest.TestCase):
 
         # Alignments are tests with approximate boundaries to allow for a big of wiggle room if the
         # implementation changes.
-        self.pos_margin_of_error = 20
+        self.pos_margin_of_error = 10
 
     def do_alignment(self, read_ref_name, sensitivity_level):
         # Save just the read/ref of interest (which will have the same name) into temporary
@@ -291,8 +291,8 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
         self.assertEqual(alignment.read.name, '0')
-        self.assertTrue(alignment.raw_score >= 126525)
-        self.assertTrue(alignment.scaled_score > 91.19)
+        self.assertTrue(alignment.raw_score >= 126074)
+        self.assertTrue(alignment.scaled_score > 91.07)
         read_start, read_end = alignment.read_start_end_positive_strand()
         self.assertTrue(abs(read_start - 18662) < self.pos_margin_of_error)
         self.assertEqual(read_end, 72402)  # end of read
@@ -420,8 +420,8 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
         self.assertEqual(alignment.read.name, '7')
-        self.assertTrue(alignment.raw_score >= 125605)
-        self.assertTrue(alignment.scaled_score > 88.93)
+        self.assertTrue(alignment.raw_score >= 125555)
+        self.assertTrue(alignment.scaled_score > 88.92)
         read_start, read_end = alignment.read_start_end_positive_strand()
         self.assertEqual(read_start, 0)  # start of read
         self.assertTrue(abs(read_end - 57721) < self.pos_margin_of_error)
