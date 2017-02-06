@@ -524,3 +524,89 @@ class TestToughAlignments(unittest.TestCase):
         self.assertTrue(abs(read_end - 57721) < self.pos_margin_of_error)
         self.assertTrue(abs(alignment.ref_start_pos - 35024) < self.pos_margin_of_error)
         self.assertEqual(alignment.ref_end_pos, 95758)  # end of ref
+
+    def test_tough_alignment_8(self):
+        """
+        This has a weird change in slope - the read has a good part and a bad part. Ideally the
+        alignment should get the whole thing!
+        """
+        self.do_alignment('8', 0)
+        read = self.aligned_reads['8']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '8')
+        self.assertTrue(alignment.raw_score >= 2812)
+        self.assertTrue(alignment.scaled_score > 76.36)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 681) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 3808)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 19594) < self.pos_margin_of_error)
+        self.assertEqual(alignment.ref_end_pos, 21983)  # end of ref
+
+    def test_tough_alignment_9(self):
+        """
+        This is a very low quality read.
+        """
+        self.do_alignment('9', 0)
+        read = self.aligned_reads['9']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '9')
+
+        # TO DO: refine the alignment algorithm to align this read correctly!
+        # TO DO: refine the alignment algorithm to align this read correctly!
+        # TO DO: refine the alignment algorithm to align this read correctly!
+        # TO DO: refine the alignment algorithm to align this read correctly!
+        # TO DO: refine the alignment algorithm to align this read correctly!
+        # TO DO: refine the alignment algorithm to align this read correctly!
+
+    def test_tough_alignment_10(self):
+        """
+        This is a very low quality read.
+        """
+        self.do_alignment('10', 0)
+        read = self.aligned_reads['10']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '10')
+        self.assertTrue(alignment.raw_score >= 4981)
+        self.assertTrue(alignment.scaled_score > 71.07)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # start of read
+        self.assertEqual(read_end, 10923)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 2001) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 12186) < self.pos_margin_of_error)
+
+    def test_tough_alignment_11(self):
+        """
+        Repeats at one end of the read.
+        """
+        self.do_alignment('11', 0)
+        read = self.aligned_reads['11']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '11')
+        self.assertTrue(alignment.raw_score >= 6996)
+        self.assertTrue(alignment.scaled_score > 92.95)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)  # start of read
+        self.assertTrue(abs(read_end - 2863) < self.pos_margin_of_error)
+        self.assertEqual(alignment.ref_start_pos, 0)  # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 2818) < self.pos_margin_of_error)
+
+    def test_tough_alignment_12(self):
+        """
+        Repeats at one end of the read.
+        """
+        self.do_alignment('12', 0)
+        read = self.aligned_reads['12']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '12')
+        self.assertTrue(alignment.raw_score >= 3805)
+        self.assertTrue(alignment.scaled_score > 92.83)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertTrue(abs(read_start - 3037) < self.pos_margin_of_error)
+        self.assertEqual(read_end, 4611)  # end of read
+        self.assertEqual(alignment.ref_start_pos, 0)  # start of ref
+        self.assertTrue(abs(alignment.ref_end_pos - 1538) < self.pos_margin_of_error)
