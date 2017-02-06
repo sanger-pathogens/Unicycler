@@ -681,7 +681,7 @@ def align_long_reads(fasta, args, bam):
 
     run_command(['unicycler_align', '--ref', fasta, '--reads', args.long_reads,
                  '--threads', str(args.threads), '--sam', 'long_read_alignments.sam',
-                 '--sensitivity', '3'], args)
+                 '--sensitivity', '3'], args, nice=True)
 
     samtools_view_command = [args.samtools, 'view', '-hu', 'long_read_alignments.sam']
     samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
@@ -916,7 +916,7 @@ def align_pacbio_reads(fasta, args):
                '--algorithmOptions="--minRawSubreadScore 800 --bestn 1"',
                reads, fasta, 'pbalign_alignments.bam']
 
-    run_command(command, args)
+    run_command(command, args, nice=True)
     files = get_all_files_in_current_dir()
     if 'pbalign_alignments.bam' not in files:
         sys.exit('Error: pbalign failed to make pbalign_alignments.bam')
@@ -961,7 +961,7 @@ def run_arrow(fasta, args, raw_variants_filename):
     subprocess.call([args.samtools, 'faidx', fasta])
     command = [args.arrow, 'pbalign_alignments.bam', '-j', str(args.threads),
                '--noEvidenceConsensusCall', 'reference', '-r', fasta, '-o', raw_variants_filename]
-    run_command(command, args)
+    run_command(command, args, nice=True)
     if raw_variants_filename not in get_all_files_in_current_dir():
         sys.exit('Error: Arrow failed to make ' + raw_variants_filename)
 
@@ -1217,10 +1217,14 @@ def finish(current, all_ale_scores, round_num, args, short):
         print('')
 
 
-def run_command(command, args):
+def run_command(command, args, nice=False):
     print_command(command, args.verbosity)
     try:
-        out = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=False)
+        if nice:
+            out = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=False,
+                                          preexec_fn=lambda: os.nice(20))
+        else:
+            out = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=False)
 
         # bowtie2-build outputs too much, even for verbose mode.
         if args.verbosity > 2 and 'bowtie2-build' not in command[0]:
