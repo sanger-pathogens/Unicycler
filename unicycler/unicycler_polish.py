@@ -299,6 +299,10 @@ def get_tool_paths(args, short, pacbio, long_reads):
         if not args.freebayes:
             sys.exit('Error: could not find freebayes')
 
+        args.freebayes = shutil.which(args.racon)
+        if not args.freebayes:
+            sys.exit('Error: could not find racon')
+
     if (pacbio or long_reads) and short:
         args.freebayes = shutil.which(args.freebayes)
         if not args.freebayes:
