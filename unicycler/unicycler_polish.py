@@ -162,12 +162,14 @@ def get_arguments():
                              help='path to java executable')
     tools_group.add_argument('--ale', type=str, default='ALE',
                              help='path to ALE executable')
-    tools_group.add_argument('--bwa', type=str, default='bwa',
-                             help='path to bwa executable')
     tools_group.add_argument('--racon', type=str, default='racon',
                              help='path to racon executable')
     tools_group.add_argument('--minimap', type=str, default='minimap',
                              help='path to miniasm executable')
+    tools_group.add_argument('--nucmer', type=str, default='nucmer',
+                             help='path to nucmer executable')
+    tools_group.add_argument('--showsnps', type=str, default='show-snps',
+                             help='path to show-snps executable')
 
     args = parser.parse_args()
 
@@ -291,17 +293,25 @@ def get_tool_paths(args, short, pacbio, long_reads):
             sys.exit('Error: could not find arrow')
 
     if long_reads:
-        args.bwa = shutil.which(args.bwa)
-        if not args.bwa:
-            sys.exit('Error: could not find bwa')
-
         args.freebayes = shutil.which(args.freebayes)
         if not args.freebayes:
             sys.exit('Error: could not find freebayes')
 
-        args.freebayes = shutil.which(args.racon)
-        if not args.freebayes:
+        args.racon = shutil.which(args.racon)
+        if not args.racon:
             sys.exit('Error: could not find racon')
+
+        args.minimap = shutil.which(args.minimap)
+        if not args.minimap:
+            sys.exit('Error: could not find minimap')
+
+        args.nucmer = shutil.which(args.nucmer)
+        if not args.nucmer:
+            sys.exit('Error: could not find nucmer')
+
+        args.showsnps = shutil.which(args.showsnps)
+        if not args.showsnps:
+            sys.exit('Error: could not find show-snps')
 
     if (pacbio or long_reads) and short:
         args.freebayes = shutil.which(args.freebayes)
@@ -589,9 +599,9 @@ def long_read_polish_small_changes_racon(fasta, round_num, args, all_ale_scores,
         print(dim(out.decode()))
 
     # Use MUMmer to align pre-Racon assembly to post-Racon assembly and get the SNPs.
-    nucmer_command = ['nucmer', '-p', 'nucmer', fasta, racon_fasta]
+    nucmer_command = [args.nucmer, '-p', 'nucmer', fasta, racon_fasta]
     run_command(nucmer_command, args)
-    show_snps_command = ['show-snps', '-C', '-T', '-r', '-H', '-I', 'nucmer.delta']
+    show_snps_command = [args.showsnps, '-C', '-T', '-r', '-H', '-I', 'nucmer.delta']
     print_command(show_snps_command, args.verbosity)
     try:
         show_snps_out = subprocess.check_output(show_snps_command, stderr=subprocess.STDOUT,
