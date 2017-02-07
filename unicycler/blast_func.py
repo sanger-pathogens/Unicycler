@@ -85,8 +85,8 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
 
 
 class BlastHit(object):
-    def __init__(self, blast_line, seq_len):
 
+    def __init__(self, blast_line, seq_len):
         self.qseqid = ''
         self.pident, self.qstart, self.bitscore, self.query_cov, self.start_pos = 0, 0, 0, 0, 0
         self.flip = False
@@ -112,3 +112,9 @@ class BlastHit(object):
                 self.flip = True
             if self.start_pos >= seq_len:
                 self.start_pos -= seq_len
+
+    def __repr__(self):
+        return 'BLAST hit: query=' + self.qseqid + ', subject start=' + str(self.start_pos) + \
+               ', strand=' + ('reverse' if self.flip else 'forward') + ', ID=' + \
+               str(self.pident) + ', cov=' + str(self.query_cov) + ', bitscore=' + \
+               str(self.bitscore)
