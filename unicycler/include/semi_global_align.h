@@ -164,4 +164,6 @@ double scoreLineSegment(Point p1, Point p2, PointSet & pointsNearLine);
 
 double variance(std::vector<double> & v);
 
+long long getMaxSeedChainGapArea(String<TSeed> & seedChain, int readLen, int trimmedRefLen);
+
 #endif // SEMI_GLOBAL_ALIGN_H

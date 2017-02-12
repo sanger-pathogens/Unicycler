@@ -610,3 +610,22 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(read_end, 4611)  # end of read
         self.assertEqual(alignment.ref_start_pos, 0)  # start of ref
         self.assertTrue(abs(alignment.ref_end_pos - 1538) < self.pos_margin_of_error)
+
+    def test_tough_alignment_13(self):
+        """
+        This read caused a crash before I added the getMaxSeedChainGapArea function in
+        semi_global_align.cpp. It left a very large gap in the global seed chain which caused some
+        problem with Seqan.
+        """
+        self.do_alignment('13', 1)
+        read = self.aligned_reads['13']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '13')
+        self.assertTrue(alignment.raw_score >= 101608)
+        self.assertTrue(alignment.scaled_score > 88.49)
+        read_start, read_end = alignment.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)    # start of read
+        self.assertEqual(read_end, 46710)  # end of read
+        self.assertTrue(abs(alignment.ref_start_pos - 109308) < self.pos_margin_of_error)
+        self.assertTrue(abs(alignment.ref_end_pos - 159675) < self.pos_margin_of_error)

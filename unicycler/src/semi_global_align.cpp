@@ -267,8 +267,17 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
         saveChainedSeedsToFile(readName, readStrand, refName, seedChain, output, maxLineNum,
                                bestLineNum);
 
-    // Finally we can actually do the Seqan alignment!
+    // If the seed chain contains too much gap area, then we don't proceed - it would take too long
+    // to align and is probably not a good alignment anyway.
     std::vector<ScoredAlignment *> alignments;
+    int seedChainLength = length(seedChain);
+    if (seedChainLength == 0)
+        return alignments;
+    long long gapArea = getMaxSeedChainGapArea(seedChain, readLen, trimmedRefLen);
+    if (gapArea > MAX_BANDED_ALIGNMENT_GAP_AREA)
+        return alignments;
+
+    // Finally we can actually do the Seqan alignment!
     Align<Dna5String, ArrayGaps> alignment;
     resize(rows(alignment), 2);
     assignSource(row(alignment, 0), *readSeq);
@@ -288,6 +297,36 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
     catch (...) {}
 
     return alignments;
+}
+
+
+// This function takes a Seqan seed chain and returns the area of the largest gap. This is because
+// Seqan will do full alignments in those gaps, and so big gaps will be slow and take lots of
+// memory.
+long long getMaxSeedChainGapArea(String<TSeed> & seedChain, int readLen, int trimmedRefLen) {
+    int seedChainLength = length(seedChain);
+    int previousH = 0;
+    int previousV = 0;
+    long long maxGapArea = 0;
+    for (int i = 0; i <= seedChainLength; ++i) {
+        int hPos, vPos;
+        if (i == seedChainLength) {
+            hPos = readLen;
+            vPos = trimmedRefLen;
+        }
+        else {
+            hPos = beginPositionH(seedChain[i]);
+            vPos = beginPositionV(seedChain[i]);
+        }
+        long long hGap = hPos - previousH;
+        long long vGap = vPos - previousV;
+        long long gapArea = hGap * vGap;
+        if (gapArea > maxGapArea)
+            maxGapArea = gapArea;
+        previousH = hPos;
+        previousV = vPos;
+    }
+    return maxGapArea;
 }
 
 

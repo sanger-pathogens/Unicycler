@@ -67,3 +67,7 @@
 
 // If a line segment's slope (or its reciprocal) is less than this, it gets a slope score of 0.
 #define MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE 0.5
+
+// If a Seqan seed chain contains a gap with an area larger than this, then we don't go ahead with
+// the alignment (because it would take too long and probably not be good anyway).
+#define MAX_BANDED_ALIGNMENT_GAP_AREA 100000000
