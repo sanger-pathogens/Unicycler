@@ -695,7 +695,7 @@ def align_long_reads(fasta, args, bam):
 
     run_command(['unicycler_align', '--ref', fasta, '--reads', args.long_reads,
                  '--threads', str(args.threads), '--sam', 'long_read_alignments.sam',
-                 '--sensitivity', '2'], args, nice=True)
+                 '--sensitivity', '0'], args, nice=True)
 
     samtools_view_command = [args.samtools, 'view', '-hu', 'long_read_alignments.sam']
     samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
