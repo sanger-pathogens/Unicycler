@@ -363,10 +363,12 @@ def print_alignment_summary_table(read_dict, verbosity, using_contamination):
     log.log('Fully aligned reads:     ' + int_to_str(len(fully_aligned), max_v))
     log.log('Partially aligned reads: ' + int_to_str(len(partially_aligned), max_v))
     if partially_aligned:
-        log.log('    ' + ', '.join([x.name for x in partially_aligned]), 3)
+        log.log(dim(', '.join([x.name for x in partially_aligned])), 3)
+        log.log('', 3)
     log.log('Unaligned reads:         ' + int_to_str(len(unaligned), max_v))
     if unaligned:
-        log.log('    ' + ', '.join([x.name for x in unaligned]), 3)
+        log.log(dim(', '.join([x.name for x in unaligned])), 3)
+        log.log('', 3)
 
     if using_contamination:
         log.log('Contaminant reads:       ' + int_to_str(contaminant_reads, max_v))

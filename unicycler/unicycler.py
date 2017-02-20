@@ -105,11 +105,13 @@ def main():
             if args.keep_temp > 1:
                 file_num += 1
                 graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
-                                  save_seg_type_info=True, save_copy_depth_info=True)
+                                  save_seg_type_info=True, save_copy_depth_info=True,
+                                  leading_newline=False)
             graph.merge_all_possible(single_copy_segments, args.mode)
             if args.keep_temp > 1:
                 file_num += 1
-                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'))
+                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
+                                  leading_newline=False)
 
     # Prepare for long read alignment.
     alignment_dir = os.path.join(args.out, 'read_alignment_temp')
@@ -237,7 +239,7 @@ def main():
             contained_scores += [x.scaled_score for x in read.alignments]
         min_scaled_score = get_percentile(contained_scores, settings.MIN_SCALED_SCORE_PERCENTILE)
 
-        log.log('Setting the minimum scaled score to the ' +
+        log.log('\nSetting the minimum scaled score to the ' +
                 float_to_str(settings.MIN_SCALED_SCORE_PERCENTILE, 1) +
                 'th percentile of full read alignments: ' + float_to_str(min_scaled_score, 2), 2)
 
@@ -266,24 +268,15 @@ def main():
                                         single_copy_segments)
         if args.keep_temp > 1:
             file_num += 1
+            log.log('', 2)
             graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
-                              save_seg_type_info=True, save_copy_depth_info=True)
+                              save_seg_type_info=True, save_copy_depth_info=True,
+                              leading_newline=False)
         graph.merge_all_possible(single_copy_segments, args.mode)
         if args.keep_temp > 1:
             file_num += 1
-            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'))
-
-    # # If we are getting long reads incrementally, then we do the process iteratively.
-    # elif args.long_dir:
-    #     finished = False
-    #     while not finished:
-    #         # TO DO: WAIT FOR NEW READS TO BECOME AVAILABLE
-    #         # TO DO: ALIGN LONG READS TO GRAPH
-    #         # TO DO: PRODUCE BRIDGES USING LONG READ ALIGNMENTS
-    #         # TO DO: APPLY THE BRIDGES TO THE GRAPH
-    #         # TO DO: SAVE THE RESULTS
-    #         # TO DO: ASSESS WHETHER THE PROCESS IS COMPLETE
-    #         finished = True  # TEMP
+            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
+                              leading_newline=False)
 
     # Perform a final clean on the graph, including overlap removal.
     graph.final_clean()

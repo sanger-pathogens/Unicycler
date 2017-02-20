@@ -1258,7 +1258,7 @@ class AssemblyGraph(object):
                 seg_nums_used_in_bridges.add(seg_num)
 
         log.log('Segments eligible for deletion:\n' +
-                ', '.join(sorted([str(x) for x in list(seg_nums_used_in_bridges)])) + '\n', 2)
+                ', '.join(str(x) for x in sorted(list(seg_nums_used_in_bridges))) + '\n', 2)
 
         single_copy_seg_nums = set(x.number for x in single_copy_segments)
         self.remove_unbridging_segments(single_copy_seg_nums)
@@ -1296,7 +1296,6 @@ class AssemblyGraph(object):
                     if seg_num in self.segments and self.dead_end_count(seg_num) > 0:
                         self.remove_segments([seg_num])
                         removed_segments.append(seg_num)
-                        # print('HAS DEAD END:', seg_num)  # TEMP
                         break
                 else:
                     break
@@ -1332,7 +1331,6 @@ class AssemblyGraph(object):
                     unsigned_path = [abs(x) for x in path]
                     self.remove_segments(unsigned_path)
                     removed_segments += unsigned_path
-                    # print('DELETION WILL NOT MAKE DEAD END:', unsigned_path)  # TEMP
                     break
             else:
                 break
@@ -1354,7 +1352,6 @@ class AssemblyGraph(object):
                     unsigned_path = [abs(x) for x in path]
                     self.remove_segments(unsigned_path)
                     removed_segments += unsigned_path
-                    # print('USED UP BUBBLE:', unsigned_path)  # TEMP
                     break
             else:
                 break
@@ -1368,12 +1365,11 @@ class AssemblyGraph(object):
             average_usedupness = weighted_average_list(component_usedupness, component_lengths)
             if average_usedupness > settings.CLEANING_USEDUPNESS_THRESHOLD:
                 self.remove_segments(component_nums)
-                # print('USED UP COMPONENT:', component_nums)  # TEMP
                 removed_segments += component_nums
 
         if removed_segments:
             removed_segments = sorted(list(set(removed_segments)))
-            log.log('\nRemoved segments used in bridges: ' +
+            log.log('Removed segments used in bridges:\n' +
                     ', '.join(str(x) for x in removed_segments), 2)
 
         # Now that clean up is finished, we no longer want to allow depths below zero.
@@ -1401,7 +1397,7 @@ class AssemblyGraph(object):
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
             log.log('Removed components with no single copy segments:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges):
@@ -1418,7 +1414,7 @@ class AssemblyGraph(object):
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
             log.log('Removed components used in bridges:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_unbridging_segments(self, single_copy_seg_nums):
@@ -1434,7 +1430,7 @@ class AssemblyGraph(object):
                 segment_nums_to_remove.append(seg_num)
         if segment_nums_to_remove:
             log.log('Removed unbridging segments:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
     def get_usedupness_score(self, seg_num, unbridged_graph):
@@ -2002,7 +1998,7 @@ class AssemblyGraph(object):
         else:
             return self.reverse_links[seg_num]
 
-    def remove_zero_length_segs(self):
+    def remove_zero_length_segs(self, suppress_log=False):
         """
         This function removes zero-length segments from the graph (segments with a length equal
         to the graph overlap), but only if they they aren't serving a purpose (such as in a
@@ -2034,7 +2030,7 @@ class AssemblyGraph(object):
                 segs_to_remove.append(seg_num)
 
         self.remove_segments(segs_to_remove)
-        if segs_to_remove:
+        if segs_to_remove and not suppress_log:
             log.log('Removed zero-length segments: ' + ', '.join(str(x) for x in segs_to_remove))
 
     def merge_small_segments(self, max_merge_size):
@@ -2083,7 +2079,7 @@ class AssemblyGraph(object):
                     break
             else:
                 break
-            self.remove_zero_length_segs()
+            self.remove_zero_length_segs(suppress_log=True)
 
         if merged_seg_nums:
             log.log('Merged small segments: ' + ', '.join(str(x) for x in merged_seg_nums))

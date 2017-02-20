@@ -17,7 +17,9 @@ import os
 import subprocess
 import statistics
 from collections import defaultdict
-from .misc import load_fasta, reverse_complement, int_to_str, float_to_str, get_percentile_sorted
+from .misc import load_fasta, reverse_complement, int_to_str, float_to_str, \
+    get_percentile_sorted, dim
+
 from . import log
 
 
@@ -160,11 +162,11 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
             change_lines[seg_num].append(line.strip())
         except ValueError:
             pass
+    log.log('', 2)
     if total_count == 0:
         log.log('No Pilon changes')
     else:
         log.log('Number of Pilon changes: ' + int_to_str(total_count))
-        log.log('', 2)
         seg_nums = sorted(graph.segments)
         polish_input_seg_nums = set(x.number for x in segments_to_polish)
         for seg_num in seg_nums:
@@ -172,6 +174,7 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
                 count = change_count[seg_num]
                 if count < 1:
                     continue
+                log.log('', 2)
                 log.log('Segment ' + str(seg_num) + ' (' +
                         int_to_str(graph.segments[seg_num].get_length()) + ' bp): ' +
                         int_to_str(count) + ' change' +
@@ -181,7 +184,7 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
                     changes = sorted(changes, key=lambda x:
                                      int(x.replace(' ', ':').replace('-', ':').split(':')[1]))
                     for change in changes:
-                        log.log('  ' + change, 2)
+                        log.log('  ' + dim(change), 2)
                 except (ValueError, IndexError):
                     pass
 
