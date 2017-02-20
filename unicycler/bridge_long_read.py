@@ -549,8 +549,7 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     # at the start.
     alignments, col_widths = get_long_read_bridge_table_parameters(graph, num_long_read_bridges,
                                                                    verbosity)
-    if verbosity > 0:
-        print_long_read_bridge_table_header(alignments, col_widths, verbosity)
+    print_long_read_bridge_table_header(alignments, col_widths, verbosity)
     completed_count = 0
 
     # Use a simple loop if we only have one thread.
@@ -559,8 +558,7 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
             output = bridge.finalise(scoring_scheme, min_alignment_length, read_lengths,
                                      estimated_genome_size, expected_linear_seqs)
             completed_count += 1
-            if verbosity > 0:
-                print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
+            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
                                                  num_long_read_bridges, min_bridge_qual, verbosity)
 
     # Use a thread pool if we have more than one thread.
@@ -579,9 +577,8 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
                              estimated_genome_size, expected_linear_seqs))
         for output in pool.imap_unordered(finalise_bridge, arg_list):
             completed_count += 1
-            if verbosity > 0:
-                print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                                 num_long_read_bridges, min_bridge_qual, verbosity)
+            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
+                                             num_long_read_bridges, min_bridge_qual, verbosity)
     return all_bridges
 
 

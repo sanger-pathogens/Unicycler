@@ -255,7 +255,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     num_alignments = len(reads_to_align)
     log.log_section_header(stdout_header)
-    if VERBOSITY == 1:
+    if VERBOSITY <= 1:
         log.log_progress_line(0, num_alignments)
     completed_count = 0
 
@@ -272,7 +272,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
                                      sam_filename, allowed_overlap, minimap_alignments[read.name],
                                      sensitivity_level, single_copy_segment_names)
             completed_count += 1
-            if VERBOSITY == 1:
+            if VERBOSITY <= 1:
                 log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
@@ -297,7 +297,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
         for output in imap_function(seqan_alignment_one_arg, arg_list):
             completed_count += 1
-            if VERBOSITY == 1:
+            if VERBOSITY <= 1:
                 log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
@@ -306,7 +306,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     # We're done with the C++ ReferenceSeqs object, so delete it now.
     delete_ref_seqs(ref_seqs_ptr)
 
-    if VERBOSITY == 1:
+    if VERBOSITY <= 1:
         log.log_progress_line(completed_count, completed_count, end_newline=True)
 
     print_alignment_summary_table(read_dict, VERBOSITY, using_contamination)
