@@ -21,7 +21,7 @@
 KSEQ_INIT(gzFile, gzread)
 
 
-char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads, int verbosity,
+char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
                          int sensitivityLevel) {
 
     int k = LEVEL_0_MINIMAP_KMER_SIZE;
@@ -37,17 +37,11 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
     assert(f);
     kseq_t *ks = kseq_init(f);
 
-    mm_verbose = verbosity;
-
-    int w = (int)(.6666667 * k + .499);  // 2/3 of k
-
     // Build the reference index.
-    if (verbosity >= 3)
-        std::cout << std::endl << "Building minimap index..." << std::endl << std::flush;
+    int w = (int)(.6666667 * k + .499);  // 2/3 of k
+    mm_verbose = 0;
     mm_idx_t * mi = mm_idx_build(referenceFasta, w, k, n_threads);
     assert(mi);
-    if (verbosity >= 3)
-        std::cout << "minimap indexing complete" << std::endl << std::endl << std::flush;
 
     std::string outputString;
 
@@ -84,9 +78,6 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
             alignmentString += "\n";
 
             outputString += alignmentString;
-            if (verbosity >= 3) {
-                std::cout << alignmentString;
-            }
         }
     }
     mm_tbuf_destroy(tbuf);

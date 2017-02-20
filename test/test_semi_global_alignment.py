@@ -16,6 +16,7 @@ import os
 import unicycler.read_ref
 import unicycler.alignment
 import unicycler.unicycler_align
+import unicycler.log
 
 
 class TestPerfectMatchAlignments(unittest.TestCase):
@@ -23,20 +24,21 @@ class TestPerfectMatchAlignments(unittest.TestCase):
     def setUp(self):
         ref_fasta = os.path.join(os.path.dirname(__file__), 'test_semi_global_alignment.fasta')
         read_fastq = os.path.join(os.path.dirname(__file__), 'test_semi_global_alignment.fastq')
-        verbosity = 0
-        refs = unicycler.read_ref.load_references(ref_fasta, verbosity)
-        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(read_fastq, verbosity)
+        refs = unicycler.read_ref.load_references(ref_fasta)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(read_fastq)
         scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         sensitivity_level = 0
         contamination_fasta = None
         threads = 1
         min_align_length = 10
         allowed_overlap = 0
+        verbosity = 0
         self.aligned_reads = unicycler.unicycler_align.\
                 semi_global_align_long_reads(refs, ref_fasta, read_dict, read_names, read_fastq,
                                              threads, scoring_scheme, [None], False,
                                              min_align_length, None, None, allowed_overlap,
                                              sensitivity_level, contamination_fasta, verbosity)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
 
     def test_read_contained_1(self):
         read = self.aligned_reads['0']
@@ -231,16 +233,16 @@ class TestContainedReadAlignments(unittest.TestCase):
     the contig
     """
     def setUp(self):
-        self.verbosity = 0
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
         temp_name = 'TEMP_' + str(os.getpid())
         self.temp_fasta = temp_name + '.fasta'
         self.temp_fastq = temp_name + '.fastq'
         all_ref_fasta = os.path.join(os.path.dirname(__file__),
                                      'test_semi_global_alignment_contained_reads.fasta')
-        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta, self.verbosity)
+        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta)
         all_read_fastq = os.path.join(os.path.dirname(__file__),
                                            'test_semi_global_alignment_contained_reads.fastq')
-        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq, self.verbosity)
+        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq)
 
         # Alignments are tests with approximate boundaries to allow for a big of wiggle room if the
         # implementation changes.
@@ -260,19 +262,19 @@ class TestContainedReadAlignments(unittest.TestCase):
             read_fastq.write('+\n')
             read_fastq.write(read.qualities + '\n')
 
-        refs = unicycler.read_ref.load_references(self.temp_fasta, self.verbosity)
-        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq,
-                                                                      self.verbosity)
+        refs = unicycler.read_ref.load_references(self.temp_fasta)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq)
         scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         contamination_fasta = None
         threads = 1
         min_align_length = 10
         allowed_overlap = 0
+        verbosity = 0
         self.aligned_reads = unicycler.unicycler_align.\
                 semi_global_align_long_reads(refs, self.temp_fasta, read_dict, read_names,
                                              self.temp_fastq, threads, scoring_scheme, [None],
                                              False, min_align_length, None, None, allowed_overlap,
-                                             sensitivity_level, contamination_fasta, self.verbosity)
+                                             sensitivity_level, contamination_fasta, verbosity)
 
     def tearDown(self):
         if os.path.isfile(self.temp_fasta):
@@ -328,16 +330,16 @@ class TestToughAlignments(unittest.TestCase):
     These test cases are made from real alignments which proved to be difficult.
     """
     def setUp(self):
-        self.verbosity = 0
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
         temp_name = 'TEMP_' + str(os.getpid())
         self.temp_fasta = temp_name + '.fasta'
         self.temp_fastq = temp_name + '.fastq'
         all_ref_fasta = os.path.join(os.path.dirname(__file__),
                                      'test_semi_global_alignment_tough.fasta')
-        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta, self.verbosity)
+        self.all_refs = unicycler.read_ref.load_references(all_ref_fasta)
         all_read_fastq = os.path.join(os.path.dirname(__file__),
                                            'test_semi_global_alignment_tough.fastq')
-        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq, self.verbosity)
+        self.all_reads, _, _ = unicycler.read_ref.load_long_reads(all_read_fastq)
 
         # Alignments are tests with approximate boundaries to allow for a big of wiggle room if the
         # implementation changes.
@@ -357,19 +359,19 @@ class TestToughAlignments(unittest.TestCase):
             read_fastq.write('+\n')
             read_fastq.write(read.qualities + '\n')
 
-        refs = unicycler.read_ref.load_references(self.temp_fasta, self.verbosity)
-        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq,
-                                                                      self.verbosity)
+        refs = unicycler.read_ref.load_references(self.temp_fasta)
+        read_dict, read_names, _ = unicycler.read_ref.load_long_reads(self.temp_fastq)
         scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         contamination_fasta = None
         threads = 1
         min_align_length = 10
         allowed_overlap = 0
+        verbosity = 0
         self.aligned_reads = unicycler.unicycler_align.\
                 semi_global_align_long_reads(refs, self.temp_fasta, read_dict, read_names,
                                              self.temp_fastq, threads, scoring_scheme, [None],
                                              False, min_align_length, None, None, allowed_overlap,
-                                             sensitivity_level, contamination_fasta, self.verbosity)
+                                             sensitivity_level, contamination_fasta, verbosity)
 
     def tearDown(self):
         if os.path.isfile(self.temp_fasta):

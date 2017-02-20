@@ -15,18 +15,19 @@ not, see <http://www.gnu.org/licenses/>.
 
 from .misc import float_to_str, print_table, get_right_arrow
 from . import settings
+from . import log
 
 
-def determine_copy_depth(graph, verbosity):
+def determine_copy_depth(graph):
     """
     Assigns a copy depth to each segment in the graph.
     """
     # Reset any existing copy depths.
     graph.copy_depths = {}
 
-    single_copy_depth = graph.get_single_copy_depth(verbosity)
+    single_copy_depth = graph.get_single_copy_depth()
 
-    # Assign single-copy status to segments within the tolerance of the single-copy depth.
+    # Assign single copy status to segments within the tolerance of the single copy depth.
     max_depth = single_copy_depth + settings.INITIAL_SINGLE_COPY_TOLERANCE
     initial_single_copy_segments = []
     for segment in sorted([x for x in graph.segments.values()],
@@ -34,19 +35,18 @@ def determine_copy_depth(graph, verbosity):
         if segment.depth <= max_depth and okay_for_initial_single_copy(graph, segment):
             graph.copy_depths[segment.number] = [segment.depth]
             initial_single_copy_segments.append(segment.number)
-    if verbosity > 1:
-        if initial_single_copy_segments:
-            print('\nInitial single copy segments:\n' +
-                  ', '.join([str(x) for x in initial_single_copy_segments]))
-        else:
-            print('Initial single copy segments: none')
-        print('')
+    if initial_single_copy_segments:
+        log.log('\nInitial single copy segments:\n' +
+                ', '.join([str(x) for x in initial_single_copy_segments]), 2)
+    else:
+        log.log('Initial single copy segments: none', 2)
+    log.log('', 2)
 
     # Propagate copy depth as possible using those initial assignments.
     copy_depth_table = [['Input', '', 'Output']]
     determine_copy_depth_part_2(graph, settings.COPY_PROPAGATION_TOLERANCE, copy_depth_table)
 
-    # Assign single-copy to the largest available segment, propagate and repeat.
+    # Assign single copy to the largest available segment, propagate and repeat.
     while True:
         assignments = assign_single_copy_depth(graph, settings.MIN_SINGLE_COPY_LENGTH,
                                                copy_depth_table)
@@ -57,9 +57,8 @@ def determine_copy_depth(graph, verbosity):
     # Now propagate with no tolerance threshold to complete the remaining segments.
     determine_copy_depth_part_2(graph, 1.0, copy_depth_table)
 
-    if verbosity > 1:
-        print_table(copy_depth_table, alignments='RLL', max_col_width=999, hide_header=True,
-                    indent=0, col_separation=1)
+    print_table(copy_depth_table, alignments='RLL', max_col_width=999, hide_header=True,
+                indent=0, col_separation=1, verbosity=2)
 
 
 def determine_copy_depth_part_2(graph, tolerance, copy_depth_table):
@@ -202,7 +201,7 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
 
 def okay_for_initial_single_copy(graph, segment):
     """
-    Returns True if the given segment's links don't preclude calling this a single-copy segment
+    Returns True if the given segment's links don't preclude calling this a single copy segment
     for the initial round of copy depth assignment.
     """
     num = segment.number

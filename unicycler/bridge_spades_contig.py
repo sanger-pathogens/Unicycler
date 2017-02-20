@@ -29,7 +29,7 @@ class SpadesContigBridge(object):
     """
     def __init__(self, graph, spades_contig_path):
 
-        # The numbers of the two single-copy segments which are being bridged.
+        # The numbers of the two single copy segments which are being bridged.
         self.start_segment = None
         self.end_segment = None
 
@@ -145,7 +145,7 @@ def create_spades_contig_bridges(graph, single_copy_segments):
     bridge_path_list = sorted(list([[int(y) for y in x.split(',')] for x in bridge_path_set]))
 
     # If multiple bridge paths start with or end with the same segment, that implies a conflict
-    # between SPADes' paths and our single-copy determination. Throw these bridges out.
+    # between SPADes' paths and our single copy determination. Throw these bridges out.
     bridge_paths_by_start = {}
     bridge_paths_by_end = {}
     for path in bridge_path_list:

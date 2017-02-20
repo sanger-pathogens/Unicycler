@@ -46,15 +46,13 @@ class TestBlastFunc(unittest.TestCase):
         with self.assertRaises(unicycler.blast_func.CannotFindStart):
             unicycler.blast_func.find_start_gene(seq, self.start_genes, self.start_gene_id,
                                                  self.start_gene_cov, self.blast_dir,
-                                                 'makeblastdb', 'tblastn', self.threads,
-                                                 self.verbosity)
+                                                 'makeblastdb', 'tblastn', self.threads)
 
     def test_random_seq_with_exact_gene_forward_strand(self):
         seq = [x for x in self.fasta if x[0] == 'random_seq_with_exact_gene_forward_strand'][0][1]
         hit = unicycler.blast_func.find_start_gene(seq, self.start_genes, self.start_gene_id,
                                                    self.start_gene_cov, self.blast_dir,
-                                                   'makeblastdb', 'tblastn', self.threads,
-                                                   self.verbosity)
+                                                   'makeblastdb', 'tblastn', self.threads)
         self.assertEqual(hit.qseqid, 'UniRef90_P66818')
         self.assertEqual(hit.start_pos, 36661)
         self.assertFalse(hit.flip)
@@ -72,8 +70,7 @@ class TestBlastFunc(unittest.TestCase):
         seq = [x for x in self.fasta if x[0] == 'random_seq_with_exact_gene_reverse_strand'][0][1]
         hit = unicycler.blast_func.find_start_gene(seq, self.start_genes, self.start_gene_id,
                                                    self.start_gene_cov, self.blast_dir,
-                                                   'makeblastdb', 'tblastn', self.threads,
-                                                   self.verbosity)
+                                                   'makeblastdb', 'tblastn', self.threads)
         self.assertEqual(hit.qseqid, 'UniRef90_P66818')
         self.assertEqual(hit.start_pos, 82415)
         self.assertTrue(hit.flip)

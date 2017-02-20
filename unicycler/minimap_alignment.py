@@ -14,8 +14,9 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
-from .misc import get_nice_header
+from .misc import get_nice_header, dim
 from collections import defaultdict
+from . import log
 
 
 class MinimapAlignment(object):
@@ -55,6 +56,7 @@ def load_minimap_alignments(minimap_alignments_str, read_dict, ref_dict):
     minimap_alignments = defaultdict(list)
     for line in line_iterator(minimap_alignments_str):
         try:
+            log.log(dim(line), 3)
             alignment = MinimapAlignment(line, read_dict, ref_dict)
             minimap_alignments[alignment.read_name].append(alignment)
         except (IndexError, ValueError):

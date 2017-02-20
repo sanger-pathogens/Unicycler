@@ -33,7 +33,7 @@ class LongReadBridge(object):
     """
     def __init__(self, graph, start, end):
 
-        # The numbers of the two single-copy segments which are being bridged.
+        # The numbers of the two single copy segments which are being bridged.
         self.start_segment = start
         self.end_segment = end
 
@@ -310,7 +310,7 @@ class LongReadBridge(object):
         expected_read_count = reduce_expected_count(expected_read_count, 30, 0.5)
 
         # The start segment and end segment should agree in depth. If they don't, that's very bad,
-        # as it implies that they aren't actually single-copy or on the same piece of DNA.
+        # as it implies that they aren't actually single copy or on the same piece of DNA.
         depth_agreement_factor = get_depth_agreement_factor(start_seg.depth, end_seg.depth)
         self.quality *= depth_agreement_factor
 
@@ -341,7 +341,7 @@ class LongReadBridge(object):
         self.quality *= align_score_factor
 
         # Bridges between long start/end segments are rewarded, as they are more likely to actually
-        # be single-copy. We apply a length factor for both the start and the end segments,
+        # be single copy. We apply a length factor for both the start and the end segments,
         # and then apply the smaller of two again. This is to punish cases where both segments
         # are not long.
         start_length_factor = score_function(start_seg.get_length(), min_alignment_length * 4)
@@ -422,17 +422,17 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
                              existing_bridges, min_scaled_score, threads, scoring_scheme,
                              min_alignment_length, expected_linear_seqs, min_bridge_qual):
     """
-    Makes bridges between single-copy segments using the alignments in the long reads.
+    Makes bridges between single copy segments using the alignments in the long reads.
     """
     single_copy_seg_num_set = set()
     for seg in single_copy_segments:
         single_copy_seg_num_set.add(seg.number)
 
-    # This dictionary will collect the read sequences which span between two single-copy segments.
+    # This dictionary will collect the read sequences which span between two single copy segments.
     # These are the most useful sequences and will be used to either create a new bridge or enhance
     # an existing bridge.
     # Key = tuple of signed segment numbers (the segments being bridged)
-    # Value = list of tuples containing the bridging sequence and the single-copy segment
+    # Value = list of tuples containing the bridging sequence and the single copy segment
     #         alignments.
     spanning_read_seqs = defaultdict(list)
 
@@ -442,7 +442,7 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
         if not alignments:
             continue
 
-        # If the code got here, then we have some alignments to single-copy segments. We grab
+        # If the code got here, then we have some alignments to single copy segments. We grab
         # neighbouring pairs of alignments, starting with the highest scoring ones and work our
         # way down. This means that we should have a pair for each neighbouring alignment, but
         # potentially also more distant pairs if the alignments are strong.
@@ -454,7 +454,7 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
             # If the alignment being added is to a reference that has already been added but in the
             # opposite direction, then we don't include it. E.g. we don't add an alignment for 10
             # if we already have an alignment for -10. This is because there's no legitimate way
-            # for a single-copy segment to appear in the same read in two different directions. The
+            # for a single copy segment to appear in the same read in two different directions. The
             # same direction is okay, as that can happen with a circular piece of DNA, but opposite
             # directions implies multi-copy.
             opposite_num = -alignment.get_signed_ref_num()
@@ -688,7 +688,7 @@ def print_long_read_bridge_table_row(alignments, col_widths, output, completed_c
 
 def get_single_copy_alignments(read, single_copy_num_set, min_scaled_score):
     """
-    Returns a list of single-copy segment alignments for the read.
+    Returns a list of single copy segment alignments for the read.
     """
     sc_alignments = []
     for alignment in read.alignments:

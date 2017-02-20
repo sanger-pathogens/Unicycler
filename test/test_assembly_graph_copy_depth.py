@@ -24,8 +24,7 @@ class TestCopyDepth(unittest.TestCase):
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25, paths_file=None,
                                                             insert_size_mean=401,
                                                             insert_size_deviation=60)
-        verbosity = 0
-        unicycler.assembly_graph_copy_depth.determine_copy_depth(self.graph, verbosity)
+        unicycler.assembly_graph_copy_depth.determine_copy_depth(self.graph)
 
 
     def test_single_copy_segments_1(self):
@@ -41,7 +40,7 @@ class TestCopyDepth(unittest.TestCase):
 
     def test_single_copy_segments_2(self):
         """
-        Tests single-copy contigs from a smaller, higher depth replicon. They should have a copy
+        Tests single copy contigs from a smaller, higher depth replicon. They should have a copy
         depth of 1, even though they are at a higher depth than the biggest replicon.
         """
         self.assertEqual(len(self.graph.copy_depths[272]), 1)

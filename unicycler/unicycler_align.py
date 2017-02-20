@@ -45,14 +45,15 @@ import math
 from multiprocessing.dummy import Pool as ThreadPool
 import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
-    print_progress_line, print_section_header, weighted_average_list, get_sequence_file_type, \
-    MyHelpFormatter, dim, magenta, colour, print_v, get_default_thread_count
+    weighted_average_list, get_sequence_file_type, MyHelpFormatter, dim, magenta, colour,\
+    get_default_thread_count
 from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
     delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
 from .alignment import Alignment, AlignmentScoringScheme
 from . import settings
 from .minimap_alignment import load_minimap_alignments
+from . import log
 
 # Used to ensure that multiple threads writing to the same SAM file don't write at the same time.
 SAM_WRITE_LOCK = threading.Lock()
@@ -78,8 +79,8 @@ def main():
     check_file_exists(args.ref)
     check_file_exists(args.reads)
 
-    references = load_references(args.ref, VERBOSITY)
-    read_dict, read_names, read_filename = load_long_reads(args.reads, VERBOSITY)
+    references = load_references(args.ref)
+    read_dict, read_names, read_filename = load_long_reads(args.reads)
     scoring_scheme = AlignmentScoringScheme(args.scores)
 
     semi_global_align_long_reads(references, args.ref, read_dict, read_names, read_filename,
@@ -196,38 +197,38 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     # If the user supplied a low score threshold, we use that. Otherwise, we'll use the median
     # score minus three times the MAD.
-    if VERBOSITY > 0 and display_low_score:
-        print_section_header('Determining low score threshold', VERBOSITY)
+    if display_low_score:
+        log.log_section_header('Determining low score threshold')
     low_score_threshold = low_score_threshold_list[0]
     if low_score_threshold is not None:
-        if VERBOSITY > 0 and display_low_score:
-            print('Using user-supplied threshold: ' + float_to_str(low_score_threshold, 2))
+        if display_low_score:
+            log.log('Using user-supplied threshold: ' + float_to_str(low_score_threshold, 2))
     else:
-        if VERBOSITY > 0 and display_low_score:
-            print('Automatically choosing a threshold using random alignment scores.\n')
+        if display_low_score:
+            log.log('Automatically choosing a threshold using random alignment scores.\n')
         std_devs_over_mean = settings.AUTO_SCORE_STDEV_ABOVE_RANDOM_ALIGNMENT_MEAN
         low_score_threshold, rand_mean, rand_std_dev = get_auto_score_threshold(scoring_scheme,
                                                                                 std_devs_over_mean)
         low_score_threshold_list[0] = low_score_threshold
-        if VERBOSITY > 0 and display_low_score:
-            print('Random alignment mean score: ' + float_to_str(rand_mean, 2))
-            print('         standard deviation: ' + float_to_str(rand_std_dev, 2, rand_mean))
-            print('        Low score threshold: ' + float_to_str(rand_mean, 2) + ' + (' +
-                  str(std_devs_over_mean) + ' x ' + float_to_str(rand_std_dev, 2) + ') = ' +
-                  float_to_str(low_score_threshold, 2))
+        if display_low_score:
+            log.log('Random alignment mean score: ' + float_to_str(rand_mean, 2))
+            log.log('         standard deviation: ' + float_to_str(rand_std_dev, 2, rand_mean))
+            log.log('        Low score threshold: ' + float_to_str(rand_mean, 2) + ' + (' +
+                    str(std_devs_over_mean) + ' x ' + float_to_str(rand_std_dev, 2) + ') = ' +
+                    float_to_str(low_score_threshold, 2))
 
     using_contamination = contamination_fasta is not None
     if using_contamination:
-        references += load_references(contamination_fasta, 0, contamination=True)
+        references += load_references(contamination_fasta, contamination=True)
 
     reference_dict = {x.name: x for x in references}
 
-    if VERBOSITY > 1:
-        print_section_header('Aligning reads with minimap', VERBOSITY)
-    minimap_alignments_str = minimap_align_reads(ref_fasta, reads_fastq, threads, VERBOSITY, 0)
+    log.log_section_header('Aligning reads with minimap', verbosity=2)
+    minimap_alignments_str = minimap_align_reads(ref_fasta, reads_fastq, threads, 0)
     minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict)
-    print_v('Done! ' + str(len(minimap_alignments)) + ' out of ' + str(len(read_dict)) +
-            ' reads aligned', VERBOSITY, 2)
+    log.log('', 3)
+    log.log('Done! ' + str(len(minimap_alignments)) + ' out of ' +
+            str(len(read_dict)) + ' reads aligned', 2)
 
     # Create the SAM file.
     if sam_filename:
@@ -253,11 +254,9 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     reads_to_align = [read_dict[x] for x in read_names]
 
     num_alignments = len(reads_to_align)
-    if VERBOSITY > 0:
-        if VERBOSITY < 3:
-            print_section_header(stdout_header, VERBOSITY, last_newline=(VERBOSITY == 1))
+    log.log_section_header(stdout_header)
     if VERBOSITY == 1:
-        print_progress_line(0, num_alignments, prefix='Read: ')
+        log.log_progress_line(0, num_alignments)
     completed_count = 0
 
     # Create a C++ ReferenceSeqs object and add each reference sequence.
@@ -274,10 +273,10 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
                                      sensitivity_level, single_copy_segment_names)
             completed_count += 1
             if VERBOSITY == 1:
-                print_progress_line(completed_count, num_alignments, prefix='Read: ')
+                log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
-                print('\n' + fraction + output, end='', flush=True)
+                log.log(fraction + output + '\n', 2, end='')
 
     # If multi-threaded, use a thread pool.
     else:
@@ -299,16 +298,16 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
         for output in imap_function(seqan_alignment_one_arg, arg_list):
             completed_count += 1
             if VERBOSITY == 1:
-                print_progress_line(completed_count, num_alignments, prefix='Read: ')
+                log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
-                print('\n' + fraction + output, end='', flush=True)
+                log.log(fraction + output + '\n', 2, end='')
 
     # We're done with the C++ ReferenceSeqs object, so delete it now.
     delete_ref_seqs(ref_seqs_ptr)
 
     if VERBOSITY == 1:
-        print('')
+        log.log_progress_line(completed_count, completed_count, end_newline=True)
 
     print_alignment_summary_table(read_dict, VERBOSITY, using_contamination)
     return read_dict
@@ -347,14 +346,11 @@ def print_alignment_summary_table(read_dict, verbosity, using_contamination):
     Outputs a summary of the reads' alignments, grouping them by fully aligned, partially aligned
     and unaligned.
     """
-    if verbosity == 0:
-        return
-
     fully_aligned, partially_aligned, unaligned = group_reads_by_fraction_aligned(read_dict)
     ref_bases_aligned = 0
     for read in read_dict.values():
         ref_bases_aligned += read.get_reference_bases_aligned()
-    print_section_header('Read alignment summary', verbosity)
+    log.log_section_header('Read alignment summary', single_newline=(verbosity>1))
     max_v = max(len(read_dict), ref_bases_aligned)
 
     if using_contamination:
@@ -363,23 +359,23 @@ def print_alignment_summary_table(read_dict, verbosity, using_contamination):
     else:
         contaminant_reads, contaminant_read_per, contaminant_bases, contaminant_base_per = \
             None, None, None, None
-    print('Total read count:       ', int_to_str(len(read_dict), max_v))
-    print('Fully aligned reads:    ', int_to_str(len(fully_aligned), max_v))
-    print('Partially aligned reads:', int_to_str(len(partially_aligned), max_v))
-    if VERBOSITY > 2 and partially_aligned:
-        print('    ' + ', '.join([x.name for x in partially_aligned]))
-    print('Unaligned reads:        ', int_to_str(len(unaligned), max_v))
-    if VERBOSITY > 2 and unaligned:
-        print('    ' + ', '.join([x.name for x in unaligned]))
+    log.log('Total read count:        ' + int_to_str(len(read_dict), max_v))
+    log.log('Fully aligned reads:     ' + int_to_str(len(fully_aligned), max_v))
+    log.log('Partially aligned reads: ' + int_to_str(len(partially_aligned), max_v))
+    if partially_aligned:
+        log.log('    ' + ', '.join([x.name for x in partially_aligned]), 3)
+    log.log('Unaligned reads:         ' + int_to_str(len(unaligned), max_v))
+    if unaligned:
+        log.log('    ' + ', '.join([x.name for x in unaligned]), 3)
 
     if using_contamination:
-        print('Contaminant reads:      ', int_to_str(contaminant_reads, max_v))
-        print('Contaminant reads:      ', float_to_str(contaminant_read_per, 1, max_v) + '%')
+        log.log('Contaminant reads:       ' + int_to_str(contaminant_reads, max_v))
+        log.log('Contaminant reads:       ' + float_to_str(contaminant_read_per, 1, max_v) + '%')
 
-    print('Total bases aligned:    ', int_to_str(ref_bases_aligned, max_v) + ' bp')
+    log.log('Total bases aligned:     ' + int_to_str(ref_bases_aligned, max_v) + ' bp')
     if using_contamination:
-        print('Contaminant bases:      ', int_to_str(contaminant_bases, max_v) + ' bp')
-        print('Contaminant bases:      ', float_to_str(contaminant_base_per, 1, max_v) + '%')
+        log.log('Contaminant bases:       ' + int_to_str(contaminant_bases, max_v) + ' bp')
+        log.log('Contaminant bases:       ' + float_to_str(contaminant_base_per, 1, max_v) + '%')
 
     identities = []
     lengths = []
@@ -387,14 +383,14 @@ def print_alignment_summary_table(read_dict, verbosity, using_contamination):
         identities += [x.percent_identity for x in read.alignments]
         lengths += [x.get_aligned_ref_length() for x in read.alignments]
     mean_identity = weighted_average_list(identities, lengths)
-    print('Mean alignment identity:', float_to_str(mean_identity, 1, max_v) + '%')
+    log.log('Mean alignment identity: ' + float_to_str(mean_identity, 1, max_v) + '%')
 
 
-def load_sam_alignments(sam_filename, read_dict, reference_dict, scoring_scheme, verbosity):
+def load_sam_alignments(sam_filename, read_dict, reference_dict, scoring_scheme):
     """
     This function returns a list of Alignment objects from the given SAM file.
     """
-    print_section_header('Loading alignments', verbosity)
+    log.log_section_header('Loading alignments')
 
     sam_lines = []
     sam_file = open(sam_filename, 'rt')
@@ -405,12 +401,10 @@ def load_sam_alignments(sam_filename, read_dict, reference_dict, scoring_scheme,
     num_alignments = sum(1 for line in open(sam_filename) if not line.startswith('@'))
     if not num_alignments:
         return []
-    if verbosity > 0:
-        print_progress_line(0, num_alignments)
+    log.log_progress_line(0, num_alignments)
 
     if not sam_lines:
-        if verbosity > 0:
-            print('No alignments to load')
+        log.log('No alignments to load')
         return []
 
     sam_alignments = []
@@ -420,19 +414,17 @@ def load_sam_alignments(sam_filename, read_dict, reference_dict, scoring_scheme,
         sam_alignments.append(Alignment(sam_line=line, read_dict=read_dict,
                                         reference_dict=reference_dict,
                                         scoring_scheme=scoring_scheme))
-        if verbosity > 0:
-            progress = 100.0 * len(sam_alignments) / num_alignments
-            progress_rounded_down = math.floor(progress / step) * step
-            if progress == 100.0 or progress_rounded_down > last_progress:
-                print_progress_line(len(sam_alignments), num_alignments)
-                last_progress = progress_rounded_down
+        progress = 100.0 * len(sam_alignments) / num_alignments
+        progress_rounded_down = math.floor(progress / step) * step
+        if progress == 100.0 or progress_rounded_down > last_progress:
+            log.log_progress_line(len(sam_alignments), num_alignments)
+            last_progress = progress_rounded_down
 
     # At this point, we should have loaded num_alignments alignments. But check to make sure and
     # fix up the progress line if any didn't load.
-    if verbosity > 0:
-        if len(sam_alignments) < num_alignments:
-            print_progress_line(len(sam_alignments), len(sam_alignments))
-        print('')
+    if len(sam_alignments) < num_alignments:
+        log.log_progress_line(len(sam_alignments), len(sam_alignments))
+    log.log('')
 
     return sam_alignments
 

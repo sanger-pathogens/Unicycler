@@ -16,11 +16,11 @@ not, see <http://www.gnu.org/licenses/>.
 import math
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
-from .misc import int_to_str, float_to_str, weighted_average_list, print_section_header, \
-    score_function, add_line_breaks_to_sequence, print_v, print_table, get_timestamp, \
-    get_right_arrow
+from .misc import int_to_str, float_to_str, weighted_average_list, score_function,\
+    add_line_breaks_to_sequence, print_table, get_timestamp, get_dim_timestamp, get_right_arrow
 from .bridge_long_read import LongReadBridge
 from . import settings
+from . import log
 
 
 class CannotTrimOverlaps(Exception):
@@ -215,18 +215,17 @@ class AssemblyGraph(object):
                 return segment.depth
         return 0.0
 
-    def get_single_copy_depth(self, verbosity=0):
+    def get_single_copy_depth(self):
         """
-        Determines the single-copy read depth for the graph. In haploid and some diploid cases,
-        this will be the median depth. But in some diploid cases, the single-copy depth may be at
+        Determines the single copy read depth for the graph. In haploid and some diploid cases,
+        this will be the median depth. But in some diploid cases, the single copy depth may be at
         about half the median (because the median depth holds the sequences shared between sister
         chromosomes). To catch these cases, we look to see whether the graph peaks more strongly
-        at half the median or double the median. In the former case, we move the single-copy
+        at half the median or double the median. In the former case, we move the single copy
         depth down to half the median.
         """
         median_depth = self.get_median_read_depth()
-        if verbosity > 1:
-            print('Median graph depth:', float_to_str(median_depth, 2))
+        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2)
         bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
                                                                     median_depth * 0.6)
         bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
@@ -239,8 +238,7 @@ class AssemblyGraph(object):
             single_copy_depth = median_depth / 2.0
         else:
             single_copy_depth = median_depth
-        if verbosity > 1:
-            print('Single-copy depth: ', float_to_str(median_depth, 2))
+        log.log('Single copy depth:  ' + float_to_str(median_depth, 2), 2)
         return single_copy_depth
 
     def get_base_count_in_depth_range(self, min_depth, max_depth):
@@ -337,11 +335,11 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, verbosity=0, leading_newline=True, min_length=1):
+    def save_to_fasta(self, filename, leading_newline=True, min_length=1):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        print_v(('\n' if leading_newline else '') + 'Saving ' + filename, verbosity, 1)
+        log.log(('\n' if leading_newline else '') + 'Saving ' + filename)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
@@ -351,23 +349,23 @@ class AssemblyGraph(object):
                     fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     @staticmethod
-    def save_specific_segments_to_fasta(filename, segments, verbosity=0):
+    def save_specific_segments_to_fasta(filename, segments):
         """
         Saves single copy segments (only forward sequences) to a FASTA file.
         """
-        print_v('\nSaving ' + filename, verbosity, 1)
+        log.log('Saving ' + filename)
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(segments, key=lambda x: x.number)
             for segment in sorted_segments:
                 fasta.write('>' + str(segment.number) + '\n')
                 fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
-    def save_to_gfa(self, filename, verbosity, save_copy_depth_info=False,
+    def save_to_gfa(self, filename, verbosity=1, save_copy_depth_info=False,
                     save_seg_type_info=False, leading_newline=True):
         """
         Saves whole graph to a GFA file.
         """
-        print_v(('\n' if leading_newline else '') + 'Saving ' + filename, verbosity, 1)
+        log.log(('\n' if leading_newline else '') + 'Saving ' + filename, verbosity)
         with open(filename, 'w') as gfa:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for segment in sorted_segments:
@@ -493,7 +491,7 @@ class AssemblyGraph(object):
         for path_to_delete in paths_to_delete:
             del self.paths[path_to_delete]
 
-    def remove_small_components(self, min_component_size, verbosity):
+    def remove_small_components(self, min_component_size):
         """
         Remove small graph components, but only if they do not contain any bridges. The idea is
         to clean up parts of the graph that were orphaned by the bridging process. But if they
@@ -510,10 +508,11 @@ class AssemblyGraph(object):
                 continue
             segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
-        if verbosity > 1 and segment_nums_to_remove:
-            print('\nRemoved small components:', ', '.join(str(x) for x in segment_nums_to_remove))
+        if segment_nums_to_remove:
+            log.log('\nRemoved small components:' +
+                    ', '.join(str(x) for x in segment_nums_to_remove), 2)
 
-    def remove_small_dead_ends(self, min_dead_end_size, verbosity):
+    def remove_small_dead_ends(self, min_dead_end_size):
         """
         Remove small segments which are graph dead-ends. This is just to tidy things up a bit
         before the final merge.
@@ -529,8 +528,8 @@ class AssemblyGraph(object):
                     break
             else:
                 break
-        if verbosity > 1 and removed_segments:
-            print('\nRemoved small dead ends: ', ', '.join(str(x) for x in removed_segments))
+        if removed_segments:
+            log.log('\nRemoved small dead ends:  ' + ', '.join(str(x) for x in removed_segments), 2)
 
     def merge_all_possible(self, single_copy_segments, bridging_mode):
         """
@@ -858,42 +857,40 @@ class AssemblyGraph(object):
             dead_ends += 1
         return potential_dead_ends - dead_ends
 
-    def clean(self, read_depth_filter, verbosity):
+    def clean(self, read_depth_filter):
         """
         This function does various graph repairs, filters and normalisations to make it a bit
         nicer.
         """
-        print_v(get_timestamp() + ' repair_multi_way_junctions', verbosity, 3)
+        log.log('Repair multi way junctions  ' + get_dim_timestamp(), 3)
         self.repair_multi_way_junctions()
-        print_v(get_timestamp() + ' filter_by_read_depth', verbosity, 3)
+        log.log('Filter by read depth        ' + get_dim_timestamp(), 3)
         self.filter_by_read_depth(read_depth_filter)
-        print_v(get_timestamp() + ' filter_homopolymer_loops', verbosity, 3)
+        log.log('Filter homopolymer loops    ' + get_dim_timestamp(), 3)
         self.filter_homopolymer_loops()
-        print_v(get_timestamp() + ' merge_all_possible', verbosity, 3)
+        log.log('Merge all possible          ' + get_dim_timestamp(), 3)
         self.merge_all_possible(None, 2)
-        print_v(get_timestamp() + ' normalise_read_depths', verbosity, 3)
+        log.log('Normalise read depths       ' + get_dim_timestamp(), 3)
         self.normalise_read_depths()
-        print_v(get_timestamp() + ' remove_zero_length_segs', verbosity, 3)
-        self.remove_zero_length_segs(0)
-        print_v(get_timestamp() + ' sort_link_order', verbosity, 3)
+        log.log('Remove zero length segments ' + get_dim_timestamp(), 3)
+        self.remove_zero_length_segs()
+        log.log('Sort link order             ' + get_dim_timestamp(), 3)
         self.sort_link_order()
-        print_v(get_timestamp() + ' clean finish', verbosity, 3)
+        log.log('Graph cleaning finished     ' + get_dim_timestamp(), 3)
 
-    def final_clean(self, verbosity):
+    def final_clean(self):
         """
         This function cleans up the final assembled graph, in preparation for saving.
         """
-        print_section_header('Finalising graph', verbosity, last_newline=(verbosity > 2))
+        log.log_section_header('Finalising graph')
         if self.overlap:
             try:
-                self.remove_all_overlaps(verbosity)
-                if verbosity > 0:
-                    print('\nSuccessfully removed all graph overlaps')
+                self.remove_all_overlaps()
+                log.log('Successfully removed all graph overlaps')
             except CannotTrimOverlaps:
-                if verbosity > 0:
-                    print('\nUnable to remove graph overlaps')
-        self.remove_zero_length_segs(verbosity)
-        self.merge_small_segments(verbosity, 5)
+                log.log('Unable to remove graph overlaps')
+        self.remove_zero_length_segs()
+        self.merge_small_segments(5)
         self.reassign_read_depths()
         self.normalise_read_depths()
         self.renumber_segments()
@@ -1076,8 +1073,13 @@ class AssemblyGraph(object):
         # first.
         sorted_bridges = sorted(bridges, key=lambda x: (x.get_type_score(), x.quality),
                                 reverse=True)
+
+        # The displayed table will only show applied bridges for verbosity 1. Higher verbosities
+        # will show all bridges and whether or not they were applied.
         bridge_application_table = [['Bridge type', 'Start ' + get_right_arrow() + ' end', 'Path',
-                                     'Quality', 'Result']]
+                                     'Quality']]
+        if verbosity > 1:
+            bridge_application_table[0].append('Result')
         table_row_colours = {}
         for bridge in sorted_bridges:
 
@@ -1095,7 +1097,7 @@ class AssemblyGraph(object):
                 # The second criterion for whether the bridge can be applied is a bit trickier. We
                 # need to check whether either the start or end segment has already been used the
                 # path of a different bridge. That alone isn't necessarily a problem, and since
-                # single-copy determination can make mistakes we want to allow for this sort of
+                # single copy determination can make mistakes we want to allow for this sort of
                 # thing. But it is a problem if the start or end segment has been used in a
                 # bridge that happens starts or ends in this bridge. That arrangement (two bridges,
                 # each of which end inside the other's path) can break up the graph if they are
@@ -1130,7 +1132,9 @@ class AssemblyGraph(object):
                     self.apply_bridge(bridge, right_bridged, left_bridged, seg_nums_used_in_bridges)
                     seg_nums_used_in_bridges = remove_dupes_preserve_order(seg_nums_used_in_bridges)
                     applied_bridges.append(bridge)
-                    bridge_application_table.append(bridge_application_table_row + ['applied'])
+                    if verbosity > 1:
+                        bridge_application_table_row.append('applied')
+                    bridge_application_table.append(bridge_application_table_row)
                 elif verbosity > 1:
                     table_row_colours[len(bridge_application_table)] = 'dim'
                     bridge_application_table.append(bridge_application_table_row + ['rejected'])
@@ -1138,10 +1142,9 @@ class AssemblyGraph(object):
                 table_row_colours[len(bridge_application_table)] = 'dim'
                 bridge_application_table.append(bridge_application_table_row + ['unused'])
 
-        if verbosity > 0:
-            print_table(bridge_application_table, alignments='LLLRR', indent=0,
-                        sub_colour={'applied': 'green', 'rejected': 'clear_red'},
-                        row_colour=table_row_colours, max_col_width=40)
+        print_table(bridge_application_table, alignments='LLLRR', indent=0,
+                    sub_colour={'applied': 'green', 'rejected': 'clear_red'},
+                    row_colour=table_row_colours, max_col_width=40)
         return set(seg_nums_used_in_bridges)
 
     def apply_bridge(self, bridge, right_bridged, left_bridged, seg_nums_used_in_bridges):
@@ -1241,13 +1244,12 @@ class AssemblyGraph(object):
             return False
         return True
 
-    def clean_up_after_bridging_1(self, single_copy_segments, seg_nums_used_in_bridges, verbosity):
+    def clean_up_after_bridging_1(self, single_copy_segments, seg_nums_used_in_bridges):
         """
         This function is run after bridge application to clean up necessary segments. This is the
         first of two such functions, and this one takes care of the simpler aspects of cleaning.
         """
-        if verbosity > 1:
-            print_section_header('Cleaning up leftover segments', verbosity, last_newline=False)
+        log.log_section_header('Cleaning up leftover segments', 2)
 
         # For the purposes of cleaning up, a graph segment which is a bridge counts as a graph
         # segment used in a bridge.
@@ -1255,18 +1257,16 @@ class AssemblyGraph(object):
             if seg.bridge is not None:
                 seg_nums_used_in_bridges.add(seg_num)
 
-        if verbosity > 1:
-            print('\nSegments eligible for deletion:',
-                  ', '.join(sorted([str(x) for x in list(seg_nums_used_in_bridges)])))
+        log.log('Segments eligible for deletion:\n' +
+                ', '.join(sorted([str(x) for x in list(seg_nums_used_in_bridges)])) + '\n', 2)
 
         single_copy_seg_nums = set(x.number for x in single_copy_segments)
-        self.remove_unbridging_segments(single_copy_seg_nums, verbosity)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums, verbosity)
-        self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges, verbosity)
+        self.remove_unbridging_segments(single_copy_seg_nums)
+        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
 
     def clean_up_after_bridging_2(self, seg_nums_used_in_bridges, min_component_size,
-                                  min_dead_end_size, verbosity, unbridged_graph,
-                                  single_copy_segments):
+                                  min_dead_end_size, unbridged_graph, single_copy_segments):
         """
         This is the second of two post-bridging cleaning functions, and it takes care of the more
         complex aspects of cleaning: deleting segments that were used in bridges but are still
@@ -1371,23 +1371,23 @@ class AssemblyGraph(object):
                 # print('USED UP COMPONENT:', component_nums)  # TEMP
                 removed_segments += component_nums
 
-        if verbosity > 1 and removed_segments:
+        if removed_segments:
             removed_segments = sorted(list(set(removed_segments)))
-            print('\nRemoved segments used in bridges:',
-                  ', '.join(str(x) for x in removed_segments))
+            log.log('\nRemoved segments used in bridges: ' +
+                    ', '.join(str(x) for x in removed_segments), 2)
 
         # Now that clean up is finished, we no longer want to allow depths below zero.
         for segment in self.segments.values():
             segment.depth = max(0.0, segment.depth)
 
         single_copy_seg_nums = set(x.number for x in single_copy_segments)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums, verbosity)
-        self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges, verbosity)
-        self.remove_unbridging_segments(single_copy_seg_nums, verbosity)
-        self.remove_small_components(min_component_size, verbosity)
-        self.remove_small_dead_ends(min_dead_end_size, verbosity)
+        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
+        self.remove_unbridging_segments(single_copy_seg_nums)
+        self.remove_small_components(min_component_size)
+        self.remove_small_dead_ends(min_dead_end_size)
 
-    def remove_components_without_single_copy_segments(self, single_copy_seg_nums, verbosity):
+    def remove_components_without_single_copy_segments(self, single_copy_seg_nums):
         """
         Deletes all graph components that contain no single copy segments.
         """
@@ -1399,12 +1399,12 @@ class AssemblyGraph(object):
                     break
             else:
                 segment_nums_to_remove += component_nums
-        if verbosity > 1 and segment_nums_to_remove:
-            print('\nRemoved components with no single-copy segments:',
-                  ', '.join(str(x) for x in segment_nums_to_remove))
+        if segment_nums_to_remove:
+            log.log('Removed components with no single copy segments:\n' +
+                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
-    def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges, verbosity):
+    def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges):
         """
         Deletes all graph components which have been entirely used in bridges.
         """
@@ -1416,14 +1416,14 @@ class AssemblyGraph(object):
                     break
             else:
                 segment_nums_to_remove += component_nums
-        if verbosity > 1 and segment_nums_to_remove:
-            print('\nRemoved components used in bridges:',
-                  ', '.join(str(x) for x in segment_nums_to_remove))
+        if segment_nums_to_remove:
+            log.log('Removed components used in bridges:\n' +
+                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
-    def remove_unbridging_segments(self, single_copy_seg_nums, verbosity):
+    def remove_unbridging_segments(self, single_copy_seg_nums):
         """
-        Deletes any multi-copy segments which cannot possibly connect two single-copy segments.
+        Deletes any multi-copy segments which cannot possibly connect two single copy segments.
         """
         segment_nums_to_remove = []
         for seg_num in self.segments:
@@ -1432,9 +1432,9 @@ class AssemblyGraph(object):
             if not (self.search(seg_num, single_copy_seg_nums) and
                     self.search(-seg_num, single_copy_seg_nums)):
                 segment_nums_to_remove.append(seg_num)
-        if verbosity > 1 and segment_nums_to_remove:
-            print('\nRemoved unbridging segments:',
-                  ', '.join(str(x) for x in segment_nums_to_remove))
+        if segment_nums_to_remove:
+            log.log('Removed unbridging segments:\n' +
+                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
         self.remove_segments(segment_nums_to_remove)
 
     def get_usedupness_score(self, seg_num, unbridged_graph):
@@ -1820,7 +1820,7 @@ class AssemblyGraph(object):
             total_seq_len += seg_len
         return total_seq_len
 
-    def remove_all_overlaps(self, verbosity):
+    def remove_all_overlaps(self):
         """
         This function removes all overlaps from the graph by shortening segments. It assumes that
         all overlaps in the graph are the same size.
@@ -1969,18 +1969,16 @@ class AssemblyGraph(object):
                 large_trim_end.add(-end_seg)
 
         # Now we finally do the segment trimming!
-        if verbosity > 2:
-            print('             Bases     Bases')
-            print('           trimmed   trimmed')
-            print(' Segment      from      from')
-            print('  number     start       end')
+        log.log('             Bases     Bases', 3)
+        log.log('           trimmed   trimmed', 3)
+        log.log(' Segment      from      from', 3)
+        log.log('  number     start       end', 3)
         for seg_num, segment in self.segments.items():
             start_trim = large_half if seg_num in large_trim_start else small_half
             end_trim = large_half if seg_num in large_trim_end else small_half
             segment.trim_from_start(start_trim)
             segment.trim_from_end(end_trim)
-            if verbosity > 2:
-                print(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10))
+            log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
 
         self.overlap = 0
 
@@ -2004,7 +2002,7 @@ class AssemblyGraph(object):
         else:
             return self.reverse_links[seg_num]
 
-    def remove_zero_length_segs(self, verbosity):
+    def remove_zero_length_segs(self):
         """
         This function removes zero-length segments from the graph (segments with a length equal
         to the graph overlap), but only if they they aren't serving a purpose (such as in a
@@ -2036,10 +2034,10 @@ class AssemblyGraph(object):
                 segs_to_remove.append(seg_num)
 
         self.remove_segments(segs_to_remove)
-        if verbosity > 0 and segs_to_remove:
-            print('Removed zero-length segments:', ', '.join(str(x) for x in segs_to_remove))
+        if segs_to_remove:
+            log.log('Removed zero-length segments: ' + ', '.join(str(x) for x in segs_to_remove))
 
-    def merge_small_segments(self, verbosity, max_merge_size):
+    def merge_small_segments(self, max_merge_size):
         """
         In some cases, small segments can be merged into neighbouring segments to simplify the
         graph somewhat. This function does just that!
@@ -2085,10 +2083,10 @@ class AssemblyGraph(object):
                     break
             else:
                 break
-            self.remove_zero_length_segs(0)
+            self.remove_zero_length_segs()
 
-        if verbosity > 0 and merged_seg_nums:
-            print('Merged small segments:', ', '.join(str(x) for x in merged_seg_nums))
+        if merged_seg_nums:
+            log.log('Merged small segments: ' + ', '.join(str(x) for x in merged_seg_nums))
 
     def starts_with_dead_end(self, signed_seg_num):
         """
@@ -2134,7 +2132,7 @@ class AssemblyGraph(object):
             return False
 
         # If the code got here, then the bridging mode is level 1 (normal). If the segment has
-        # become single-copy, then it's okay to merge.
+        # become single copy, then it's okay to merge.
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
 
 

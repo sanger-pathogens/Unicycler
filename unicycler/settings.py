@@ -40,7 +40,7 @@ MIN_SCALED_SCORE_PERCENTILE = 5.0
 # deviation of such random alignments. The threshold is then set to a certain number of standard
 # deviations above the mean (this setting). This should ensure that any alignment which passes
 # the threshold is at least a little bit better than a random sequence alignment.
-AUTO_SCORE_STDEV_ABOVE_RANDOM_ALIGNMENT_MEAN = 5
+AUTO_SCORE_STDEV_ABOVE_RANDOM_ALIGNMENT_MEAN = 7
 
 # When Unicycler is searching for paths connecting two graph segments which matches a read
 # consensus sequence, it will only consider paths which have a length similar to the expected
@@ -68,14 +68,14 @@ PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.99
 # These settings are used for Unicycler's copy number determination - the process by which it
 # tries to figure out the depth of constituent components of each segment.
 #   * INITIAL_SINGLE_COPY_TOLERANCE controls how much excess depth is acceptable for the first
-#     single-copy assignment pass.
+#     single copy assignment pass.
 #   * COPY_PROPAGATION_TOLERANCE controls how much discrepancy is allowed when propagating copy
 #     depths from one segment to the next.
-#   * MIN_SINGLE_COPY_LENGTH is how short of a segment can be called single-copy when adding
+#   * MIN_SINGLE_COPY_LENGTH is how short of a segment can be called single copy when adding
 #     additional single copy segments.
 #   * MIN_HALF_MEDIAN_FOR_DIPLOID is used when determining whether a graph should be considered
 #     diploid or not for copy depths. At least this fraction of the bases must be near in depth to
-#     half of the graph's median value in order for the single-copy depth to be shifted down to
+#     half of the graph's median value in order for the single copy depth to be shifted down to
 #     0.5.
 #   * MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS caps the number of possible ways to redistribute a
 #     segment's copy depths to its neighbours. If there are more possibilities than this,

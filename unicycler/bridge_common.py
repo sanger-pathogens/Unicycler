@@ -2,7 +2,7 @@
 Copyright 2017 Ryan Wick (rrwick@gmail.com)
 https://github.com/rrwick/Unicycler
 
-Bridges are links between two single-copy segments in an assembly graph. Bridges can come from
+Bridges are links between two single copy segments in an assembly graph. Bridges can come from
 multiple sources, each described in a separate module. This module has a few functions that are
 common to multiple bridge types.
 

@@ -28,13 +28,13 @@ import argparse
 import random
 import shutil
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
-    reverse_complement, print_progress_line, print_section_header, MyHelpFormatter, \
-    get_default_thread_count
+    reverse_complement, MyHelpFormatter, get_default_thread_count
 from .read_ref import load_references, load_long_reads
 from .alignment import AlignmentScoringScheme
 from .cpp_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
 from .unicycler_align import semi_global_align_long_reads, add_aligning_arguments, \
     fix_up_arguments, load_sam_alignments
+from . import log
 
 VERBOSITY = 0  # Controls how much the script prints to the screen
 CONSOLE_WIDTH = 40  # The width of many things printed to stdout
@@ -53,9 +53,9 @@ def main():
     check_file_exists(args.ref)
     check_file_exists(args.reads)
 
-    references = load_references(args.ref, VERBOSITY)
+    references = load_references(args.ref)
     reference_dict = {x.name: x for x in references}
-    read_dict, read_names, read_filename = load_long_reads(args.reads, VERBOSITY)
+    read_dict, read_names, read_filename = load_long_reads(args.reads)
 
     if must_perform_alignment:
         scoring_scheme = AlignmentScoringScheme(args.scores)
@@ -68,7 +68,7 @@ def main():
                                      False, args.min_len, args.sam,
                                      full_command, 0, 3, args.contamination, VERBOSITY)
 
-    alignments = load_sam_alignments(args.sam, read_dict, reference_dict, scoring_scheme, VERBOSITY)
+    alignments = load_sam_alignments(args.sam, read_dict, reference_dict, scoring_scheme)
 
     count_depth_and_errors_per_base(references, reference_dict, alignments)
     high_error_rate, very_high_error_rate, random_seq_error_rate, mean_error_rate = \
@@ -250,9 +250,8 @@ def count_depth_and_errors_per_base(references, reference_dict, alignments):
     Counts up the depth and errors for each base of each reference and stores the counts in the
     Reference objects.
     """
-    print_section_header('Counting depth and errors', VERBOSITY)
-    if VERBOSITY > 0:
-        print_progress_line(0, len(alignments))
+    log.log_section_header('Counting depth and errors')
+    log.log_progress_line(0, len(alignments))
 
     for ref in references:
         ref_length = ref.get_length()
@@ -320,16 +319,13 @@ def count_depth_and_errors_per_base(references, reference_dict, alignments):
             ref.insertion_counts[j] += 1
         for j in deletion_positions:
             ref.deletion_counts[j] += 1
-        if VERBOSITY > 0:
-            print_progress_line(i + 1, len(alignments))
+        log.log_progress_line(i + 1, len(alignments))
 
     finished_bases = 0
-    base_sum = 0
-    if VERBOSITY > 0:
-        print('')
-        base_sum = sum([x.get_length() for x in references])
-        print_section_header('Totalling depth and errors', VERBOSITY)
-        print_progress_line(finished_bases, base_sum)
+    log.log('')
+    base_sum = sum([x.get_length() for x in references])
+    log.log_section_header('Totalling depth and errors')
+    log.log_progress_line(finished_bases, base_sum)
 
     for ref in references:
         ref_length = ref.get_length()
@@ -339,13 +335,11 @@ def count_depth_and_errors_per_base(references, reference_dict, alignments):
                               ref.deletion_counts[i]
                 ref.error_rates[i] = error_count / ref.depths[i]
                 finished_bases += 1
-            if VERBOSITY > 0:
-                if finished_bases % 10 == 0:
-                    print_progress_line(finished_bases, base_sum)
+            if finished_bases % 10 == 0:
+                log.log_progress_line(finished_bases, base_sum)
 
-    if VERBOSITY > 0:
-        print_progress_line(base_sum, base_sum, end_newline=True)
-        print('')
+    log.log_progress_line(base_sum, base_sum, end_newline=True)
+    log.log('')
 
 
 def count_depth_and_errors_per_window(references, er_window_size, depth_window_size,
@@ -470,7 +464,7 @@ def determine_thresholds(scoring_scheme, references, alignments, threads, depth_
     This function sets thresholds for error rate and depth. Error rate thresholds are set once for
     all references, while depth thresholds are per-reference.
     """
-    print_section_header('Setting error and depth thresholds', VERBOSITY)
+    log.log_section_header('Setting error and depth thresholds')
 
     # Find the mean of all error rates.
     all_error_rates = []
@@ -649,7 +643,7 @@ def produce_window_tables(references, window_tables_prefix):
     """
     Write tables of depth and error rates per reference window.
     """
-    print_section_header('Saving window tables', VERBOSITY)
+    log.log_section_header('Saving window tables')
 
     for ref in references:
         window_table_filename = add_ref_name_to_output_prefix(ref, window_tables_prefix, '.txt')
@@ -676,7 +670,7 @@ def produce_base_tables(references, base_tables_prefix):
     """
     Write tables of depth and error counts per reference base.
     """
-    print_section_header('Saving base tables', VERBOSITY)
+    log.log_section_header('Saving base tables')
     for ref in references:
         base_table_filename = add_ref_name_to_output_prefix(ref, base_tables_prefix, '.txt')
         table = open(base_table_filename, 'w')
@@ -702,7 +696,7 @@ def produce_html_report(references, html_filename, high_error_rate, very_high_er
     """
     Write html files containing plots of results.
     """
-    print_section_header('Saving html plots', VERBOSITY)
+    log.log_section_header('Saving html plots')
     # noinspection PyPackageRequirements
     import plotly.offline as py
     # noinspection PyPackageRequirements

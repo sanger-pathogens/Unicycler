@@ -17,6 +17,7 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import subprocess
 from .misc import load_fasta
+from . import log
 
 
 class CannotFindStart(Exception):
@@ -24,7 +25,7 @@ class CannotFindStart(Exception):
 
 
 def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_threshold, blast_dir,
-                    makeblastdb_path, tblastn_path, threads, verbosity):
+                    makeblastdb_path, tblastn_path, threads):
     """
     This function uses tblastn to look for start genes in the sequence. It returns the first gene
     (using the order in the file) which meets the identity and coverage thresholds, as well as
@@ -56,7 +57,7 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     _, err = process.communicate()
     if err:
-        print('\nmakeblastdb encountered an error:\n' + err.decode())
+        log.log('\nmakeblastdb encountered an error:\n' + err.decode())
         raise CannotFindStart
 
     # Run the tblastn search.
@@ -66,8 +67,8 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     blast_out, blast_err = process.communicate()
     process.wait()
-    if blast_err and verbosity > 1:
-        print('\nBLAST encountered an error:\n' + blast_err.decode())
+    if blast_err:
+        log.log('\nBLAST encountered an error:\n' + blast_err.decode())
 
     # Find the best hit in the results.
     best_hit, best_bitscore = None, 0

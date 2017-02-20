@@ -26,6 +26,7 @@ import textwrap
 import datetime
 import multiprocessing
 from . import settings
+from . import log
 
 
 def float_to_str(num, decimals, max_num=0):
@@ -89,11 +90,11 @@ def check_file_exists(filename):
         quit_with_error('could not find ' + filename)
 
 
-def quit_with_error(message):  # type: (str) -> None
+def quit_with_error(message):
     """
     Displays the given message and ends the program's execution.
     """
-    print('Error:', message, file=sys.stderr)
+    log.log('Error: ' + message, 0, stderr=True)
     sys.exit(1)
 
 
@@ -206,26 +207,6 @@ def get_pilon_jar_path(pilon_path):
         if pilon_jars:
             return os.path.join(directory, sorted(pilon_jars)[-1])  # return the latest version
     return None
-
-
-def print_progress_line(completed, total, base_pairs=None, prefix=None, end_newline=False):
-    """
-    Prints a progress line to the screen using a carriage return to overwrite the previous progress
-    line.
-    """
-    progress_str = ''
-    if prefix:
-        progress_str += prefix
-    progress_str += int_to_str(completed) + ' / ' + int_to_str(total)
-    if total > 0:
-        percent = 100.0 * completed / total
-    else:
-        percent = 0.0
-    progress_str += ' (' + '%.1f' % percent + '%)'
-    if base_pairs is not None:
-        progress_str += ' - ' + int_to_str(base_pairs) + ' bp'
-    end_char = '\n' if end_newline else ''
-    print('\r' + progress_str, end=end_char, flush=True)
 
 
 def get_nice_header(header):
@@ -347,15 +328,6 @@ def weighted_average_list(nums, weights):
         return 0.0
     else:
         return sum(num * (weights[i] / w_sum) for i, num in enumerate(nums))
-
-
-def print_section_header(message, verbosity, last_newline=True):
-    """
-    Prints a header for stdout, unless verbosity is zero, in which case it does nothing.
-    """
-    if verbosity > 0:
-        print('\n')
-        print(bold_yellow_underline(message), end=('\n' if last_newline else ''), flush=True)
 
 
 def round_to_nearest_odd(num):
@@ -598,7 +570,7 @@ class MyHelpFormatter(argparse.HelpFormatter):
 def print_table(table, alignments='', max_col_width=30, col_separation=3, indent=2,
                 row_colour=None, sub_colour=None, row_extra_text=None, leading_newline=False,
                 subsequent_indent='', return_str=False, header_format='underline',
-                hide_header=False, fixed_col_widths=None, left_align_header=True):
+                hide_header=False, fixed_col_widths=None, left_align_header=True, verbosity=1):
     """
     Args:
         table: a list of lists of strings (one row is one list, all rows should be the same length)
@@ -616,9 +588,6 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
         hide_header: if True, the header is not printed
         fixed_col_widths: a list to specify exact column widths (automatic if not used)
         left_align_header: if False, the header will follow the column alignments
-
-    Returns:
-        nothing (just prints the table)
     """
     column_count = len(table[0])
     table = [x[:column_count] for x in table]
@@ -630,8 +599,12 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
     if row_extra_text is None:
         row_extra_text = {}
     if leading_newline:
-        print('')
-    alignments += 'L' * (column_count - len(alignments))  # Fill out with L, if incomplete
+        log.log('', verbosity)
+
+    # Ensure the alignments string is the same length as the column count
+    alignments += 'L' * (column_count - len(alignments))
+    alignments = alignments[:column_count]
+
     if fixed_col_widths is not None:
         col_widths = fixed_col_widths
     else:
@@ -676,7 +649,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
             if return_str:
                 full_table_str += indenter + row_str + '\n'
             else:
-                print(indenter + row_str, flush=True)
+                log.log(indenter + row_str, verbosity)
     if return_str:
         return full_table_str
 
@@ -798,12 +771,6 @@ def convert_fastq_to_fasta(fastq, fasta):
                 fasta.write('>' + name + '\n')
                 fasta.write(sequence + '\n')
 
-
-def print_v(text, verbosity, min_verbosity):
-    if verbosity >= min_verbosity:
-        print(text, flush=True)
-
-
 def get_ascii_art():
     ascii_art = (bold_red("       __\n") +
                  bold_red("       \ \___\n") +
@@ -828,6 +795,10 @@ def get_ascii_art():
 
 def get_timestamp():
     return '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+
+
+def get_dim_timestamp():
+    return dim('(' + get_timestamp() + ')')
 
 
 def get_left_arrow():

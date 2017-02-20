@@ -90,12 +90,12 @@ def check_one_graph_overlap(out_dir, k_size, output_line):
     edge_count = sum(len(x) for x in graph.forward_links.values()) // 2
 
     start_time = datetime.datetime.now()
-    graph.remove_all_overlaps(0)
+    graph.remove_all_overlaps()
     end_time = datetime.datetime.now()
     milliseconds = (end_time - start_time).total_seconds() * 1000
 
     assert graph.overlap == 0
-    graph.save_to_gfa(graph_file + '.gfa', 0)
+    graph.save_to_gfa(graph_file + '.gfa')
     print('\t'.join(output_line + [str(seg_count), str(edge_count), str(k_size),
                                    str(milliseconds)]))
 

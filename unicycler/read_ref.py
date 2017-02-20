@@ -17,18 +17,19 @@ import random
 import gzip
 import os
 import math
-from .misc import quit_with_error, print_progress_line, get_nice_header, get_compression_type, \
-    print_section_header, get_sequence_file_type, strip_read_extensions, print_table, float_to_str
+from .misc import quit_with_error, get_nice_header, get_compression_type, get_sequence_file_type,\
+    strip_read_extensions, print_table, float_to_str
 from . import settings
+from . import log
 
 
-def load_references(fasta_filename, verbosity, contamination=False):
+def load_references(fasta_filename, contamination=False, section_header='Loading references'):
     """
     This function loads in sequences from a FASTA file and returns a list of Reference objects.
     """
     references = []
     total_bases = 0
-    print_section_header('Loading references', verbosity)
+    log.log_section_header(section_header)
     try:
         if get_sequence_file_type(fasta_filename) != 'FASTA':
             quit_with_error(fasta_filename + ' is not in FASTA format')
@@ -40,12 +41,11 @@ def load_references(fasta_filename, verbosity, contamination=False):
     else:  # plain text
         open_func = open
 
-    if verbosity > 0:
-        with open_func(fasta_filename, 'rt') as fasta:
-            num_refs = sum(1 for line in fasta if line.startswith('>'))
-        if not num_refs:
-            quit_with_error('There are no references sequences in ' + fasta_filename)
-        print_progress_line(0, num_refs)
+    with open_func(fasta_filename, 'rt') as fasta:
+        num_refs = sum(1 for line in fasta if line.startswith('>'))
+    if not num_refs:
+        quit_with_error('There are no references sequences in ' + fasta_filename)
+    log.log_progress_line(0, num_refs)
 
     fasta_file = open_func(fasta_filename, 'rt')
     name = ''
@@ -62,12 +62,11 @@ def load_references(fasta_filename, verbosity, contamination=False):
                     name = 'CONTAMINATION_' + name
                 references.append(Reference(name, sequence))
                 total_bases += len(sequence)
-                if verbosity > 0:
-                    progress = 100.0 * len(references) / num_refs
-                    progress_rounded_down = math.floor(progress / step) * step
-                    if progress == 100.0 or progress_rounded_down > last_progress:
-                        print_progress_line(len(references), num_refs, total_bases)
-                        last_progress = progress_rounded_down
+                progress = 100.0 * len(references) / num_refs
+                progress_rounded_down = math.floor(progress / step) * step
+                if progress == 100.0 or progress_rounded_down > last_progress:
+                    log.log_progress_line(len(references), num_refs, total_bases)
+                    last_progress = progress_rounded_down
                 sequence = ''
             name = get_nice_header(line[1:])
         else:
@@ -78,16 +77,14 @@ def load_references(fasta_filename, verbosity, contamination=False):
             name = 'CONTAMINATION_' + name
         references.append(Reference(name, sequence))
         total_bases += len(sequence)
-        if verbosity > 0:
-            print_progress_line(len(references), num_refs, total_bases)
+        log.log_progress_line(len(references), num_refs, total_bases)
 
-    if verbosity > 0:
-        print_progress_line(len(references), len(references), total_bases, end_newline=True)
+    log.log_progress_line(len(references), len(references), total_bases, end_newline=True)
 
     return references
 
 
-def load_long_reads(filename, verbosity):
+def load_long_reads(filename):
     """
     This function loads in long reads from a FASTQ file and returns a dictionary where key = read
     name and value = Read object. It also returns a list of read names, in the order they are in
@@ -104,7 +101,7 @@ def load_long_reads(filename, verbosity):
     else:  # plain text
         open_func = open
 
-    print_section_header('Loading reads', verbosity)
+    log.log_section_header('Loading reads')
 
     read_dict = {}
     read_names = []
@@ -121,8 +118,7 @@ def load_long_reads(filename, verbosity):
             num_reads = sum(1 for line in fasta if line.startswith('>'))
     if not num_reads:
         quit_with_error('There are no read sequences in ' + filename)
-    if verbosity > 0:
-        print_progress_line(0, num_reads)
+    log.log_progress_line(0, num_reads)
 
     if file_type == 'FASTQ':
         with open_func(filename, 'rt') as fastq:
@@ -143,12 +139,11 @@ def load_long_reads(filename, verbosity):
                 read_dict[name] = Read(name, sequence, qualities)
                 read_names.append(name)
                 total_bases += len(sequence)
-                if verbosity > 0:
-                    progress = 100.0 * len(read_dict) / num_reads
-                    progress_rounded_down = math.floor(progress / step) * step
-                    if progress == 100.0 or progress_rounded_down > last_progress:
-                        print_progress_line(len(read_dict), num_reads, total_bases)
-                        last_progress = progress_rounded_down
+                progress = 100.0 * len(read_dict) / num_reads
+                progress_rounded_down = math.floor(progress / step) * step
+                if progress == 100.0 or progress_rounded_down > last_progress:
+                    log.log_progress_line(len(read_dict), num_reads, total_bases)
+                    last_progress = progress_rounded_down
 
     else:  # file_type == 'FASTA'
         with open_func(filename, 'rt') as fasta:
@@ -164,12 +159,11 @@ def load_long_reads(filename, verbosity):
                         read_dict[name] = Read(name, sequence, None)
                         read_names.append(name)
                         total_bases += len(sequence)
-                        if verbosity > 0:
-                            progress = 100.0 * len(read_dict) / num_reads
-                            progress_rounded_down = math.floor(progress / step) * step
-                            if progress == 100.0 or progress_rounded_down > last_progress:
-                                print_progress_line(len(read_dict), num_reads, total_bases)
-                                last_progress = progress_rounded_down
+                        progress = 100.0 * len(read_dict) / num_reads
+                        progress_rounded_down = math.floor(progress / step) * step
+                        if progress == 100.0 or progress_rounded_down > last_progress:
+                            log.log_progress_line(len(read_dict), num_reads, total_bases)
+                            last_progress = progress_rounded_down
                         sequence = ''
                     name = get_nice_header(line[1:])
                 else:
@@ -178,20 +172,17 @@ def load_long_reads(filename, verbosity):
                 read_dict[name] = Read(name, sequence, None)
                 read_names.append(name)
                 total_bases += len(sequence)
-                if verbosity > 0:
-                    print_progress_line(len(read_dict), num_reads, total_bases)
+                log.log_progress_line(len(read_dict), num_reads, total_bases)
 
-    if verbosity > 0:
-        print_progress_line(len(read_dict), len(read_dict), total_bases, end_newline=True)
+    log.log_progress_line(len(read_dict), len(read_dict), total_bases, end_newline=True)
 
     # If there were duplicate read names, then we save the reads back out to file with their fixed
     # names.
     if duplicate_read_names_found:
         no_dup_filename = os.path.abspath(strip_read_extensions(filename) +
                                           '_no_duplicates.fastq.gz')
-        if verbosity > 0:
-            print('\nDuplicate read names found. Saving duplicate-free file:')
-            print(no_dup_filename, flush=True)
+        log.log('\nDuplicate read names found. Saving duplicate-free file:')
+        log.log(no_dup_filename)
         with gzip.open(no_dup_filename, 'wb') as f:
             for read_name in read_names:
                 read = read_dict[read_name]

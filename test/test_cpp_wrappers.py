@@ -133,7 +133,7 @@ class TestMultipleSequenceAlignment(unittest.TestCase):
 
     def setUp(self):
         test_fastq = os.path.join(os.path.dirname(__file__), 'test_cpp_wrappers.fastq')
-        self.read_dict, self.read_names, _ = unicycler.read_ref.load_long_reads(test_fastq, 0)
+        self.read_dict, self.read_names, _ = unicycler.read_ref.load_long_reads(test_fastq)
         self.scoring_scheme = unicycler.alignment.AlignmentScoringScheme('3,-6,-5,-2')
         self.seqs = [self.read_dict[name].sequence for name in self.read_names]
         self.quals = [self.read_dict[name].qualities for name in self.read_names]

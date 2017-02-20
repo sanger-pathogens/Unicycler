@@ -217,23 +217,23 @@ A raw SPAdes graph can also contain some 'junk' sequences due to sequencer artef
 
 ### 3. Multiplicity
 
-In order to scaffold the graph, Unicycler must distinguish between single-copy contigs and repeats. It does this with a greedy algorithm that uses both read depth and graph connectivity:
+In order to scaffold the graph, Unicycler must distinguish between single copy contigs and repeats. It does this with a greedy algorithm that uses both read depth and graph connectivity:
 
 <p align="center"><img src="misc/multiplicity.png" alt="Multiplicity assignment" width="700"></p>
 
-This process does _not_ assume that all single-copy contigs have the same read depth, which allows it to identify single-copy contigs from plasmids as well as the chromosome.
+This process does _not_ assume that all single copy contigs have the same read depth, which allows it to identify single copy contigs from plasmids as well as the chromosome.
 
 
 ### 4. Short read bridging
 
-At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single-copy contigs using the information in the SPAdes `contigs.paths` file. These are applied to the graph to make the `spades_bridges_applied.gfa` output – the most resolved graph Unicycler can make using only the Illumina reads.
+At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single copy contigs using the information in the SPAdes `contigs.paths` file. These are applied to the graph to make the `spades_bridges_applied.gfa` output – the most resolved graph Unicycler can make using only the Illumina reads.
 
 <p align="center"><img src="misc/short_read_bridging.png" alt="Short read bridging" width="600"></p>
 
 
 ### 5. Long read bridging
 
-Long reads are the most useful source of information for resolving the assembly graph, so Unicycler semi-globally aligns them to the contigs (see [Unicycler align](#unicycler-align) for more information). For each pair of single-copy contigs which are linked by read alignments, Unicycler uses the read consensus sequence to find a connecting path and creates a bridge.
+Long reads are the most useful source of information for resolving the assembly graph, so Unicycler semi-globally aligns them to the contigs (see [Unicycler align](#unicycler-align) for more information). For each pair of single copy contigs which are linked by read alignments, Unicycler uses the read consensus sequence to find a connecting path and creates a bridge.
 
 <p align="center"><img src="misc/long_read_bridging.png" alt="Long read bridging"></p>
 
@@ -311,7 +311,7 @@ Input:
 
 Output:
   -o OUT, --out OUT                     Output directory (required)
-  --verbosity VERBOSITY                 Level of stdout information (default: 1)
+  --verbosity VERBOSITY                 Level of stdout and log file information (default: 1)
                                           0 = no stdout, 1 = basic progress indicators, 2 = extra info, 3 = debugging info
   --min_fasta_length MIN_FASTA_LENGTH   Exclude contigs from the FASTA file which are shorter than this length (default: 1)
   --keep_temp KEEP_TEMP                 Level of file retention (default: 0)
@@ -382,7 +382,7 @@ Long read alignment:
 
 # Output files
 
-Depending on the input files and the value used for `--keep_temp`, Unicycler may only produce some of these. Also, all outputs except for `assembly.gfa` and `assembly.fasta` will be prefixed with a number so they are in chronological order.
+Depending on the input files and the value used for `--keep_temp`, Unicycler may only produce some of these. Also, all outputs except for `assembly.gfa`, `assembly.fasta` and `unicycler.log` will be prefixed with a number so they are in chronological order.
 
 File                           | Description
 ------------------------------ | ---------------------------------------------------------------------------
@@ -396,8 +396,9 @@ merged.gfa                     | contigs merged together where possible
 final_clean.gfa                | more redundant contigs removed
 rotated.gfa                    | circular replicons rotated and/or flipped to a start position
 polished.gfa                   | after a round of Pilon polishing
-__assembly.gfa__               | __the final assembly in graph format__
-__assembly.fasta__             | __the final assembly in FASTA format__ (same contigs and names as in assembly.gfa)
+__assembly.gfa__               | __final assembly in graph format__
+__assembly.fasta__             | __final assembly in FASTA format__ (same contigs and names as in assembly.gfa)
+__unicycler.log__              | __Unicycler log file__ (same info as stdout, control detail using `--verbosity`)
 
 
 
@@ -414,7 +415,7 @@ Using a lot of threads (with the `--threads` option) can make Unicycler run fast
 
 ### Necessary read length
 
-The length of a long read is very important, typically more than its accuracy, because longer reads are more likely to align to multiple single-copy contigs, allowing Unicycler to build bridges.
+The length of a long read is very important, typically more than its accuracy, because longer reads are more likely to align to multiple single copy contigs, allowing Unicycler to build bridges.
 
 Consider a sequence with a 2 kb repeat:
 <p align="center"><img src="misc/read_length.png" alt="Long read length"></p>

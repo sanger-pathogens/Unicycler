@@ -26,8 +26,8 @@ from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read import create_long_read_bridges
 from .bridge_spades_contig import create_spades_contig_bridges
 from .bridge_loop_unroll import create_loop_unrolling_bridges
-from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, print_v, bold, \
-    print_section_header, check_files_and_programs, MyHelpFormatter, print_table, get_ascii_art, \
+from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bold, \
+    check_files_and_programs, MyHelpFormatter, print_table, get_ascii_art, \
     get_default_thread_count
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
@@ -35,6 +35,7 @@ from .unicycler_align import add_aligning_arguments, fix_up_arguments, Alignment
     semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
     print_alignment_summary_table
 from .pilon_func import polish_with_pilon, CannotPolish
+from . import log
 from . import settings
 from .version import __version__
 
@@ -48,11 +49,10 @@ def main():
 
     full_command = ' '.join(sys.argv)
     args = get_arguments()
-    verbosity = args.verbosity
+    out_dir_message = make_output_directory(args.out, args.verbosity)
 
     check_files_and_programs(args)
-    print_intro_message(args, verbosity, full_command)
-    make_output_directory(args.out, verbosity)
+    print_intro_message(args, full_command, out_dir_message)
 
     file_num = 1
     unbridged_graph_filename = os.path.join(args.out,
@@ -60,22 +60,20 @@ def main():
 
     # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
     if os.path.isfile(unbridged_graph_filename):
-        if verbosity > 0:
-            print('')
-            print('Unbridged graph already exists. Will use this graph instead of running SPAdes:')
-            print('  ' + unbridged_graph_filename)
+        log.log('\nUnbridged graph already exists. Will use this graph instead of running SPAdes:')
+        log.log('  ' + unbridged_graph_filename)
         unbridged_graph = AssemblyGraph(unbridged_graph_filename, None)
     else:
         unbridged_graph = get_best_spades_graph(args.short1, args.short2, args.unpaired,
-                                                args.out, settings.READ_DEPTH_FILTER, verbosity,
-                                                args.spades_path, args.threads, args.keep_temp,
-                                                args.kmer_count, args.min_kmer_frac,
+                                                args.out, settings.READ_DEPTH_FILTER,
+                                                args.verbosity, args.spades_path, args.threads,
+                                                args.keep_temp, args.kmer_count, args.min_kmer_frac,
                                                 args.max_kmer_frac, args.no_correct,
                                                 args.expected_linear_seqs)
 
-    # Determine copy number and get single-copy segments.
-    single_copy_segments = get_single_copy_segments(unbridged_graph, verbosity, 0)
-    unbridged_graph.save_to_gfa(unbridged_graph_filename, verbosity, save_copy_depth_info=True,
+    # Determine copy number and get single copy segments.
+    single_copy_segments = get_single_copy_segments(unbridged_graph, 0)
+    unbridged_graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True,
                                 leading_newline=False)
 
     # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
@@ -84,37 +82,34 @@ def main():
         bridges = []
         graph = copy.deepcopy(unbridged_graph)
     else:
-        print_section_header('Bridging graph with SPAdes contigs', verbosity)
+        log.log_section_header('Bridging graph with SPAdes contigs')
         bridges = create_spades_contig_bridges(unbridged_graph, single_copy_segments)
         bridges += create_loop_unrolling_bridges(unbridged_graph)
         graph = copy.deepcopy(unbridged_graph)
         if not bridges:
-            print_v('none found', verbosity, 1)
+            log.log('none found', 1)
         else:
-            seg_nums_used_in_bridges = graph.apply_bridges(bridges, verbosity, args.min_bridge_qual,
-                                                           unbridged_graph)
+            seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
+                                                           args.min_bridge_qual, unbridged_graph)
             file_num += 1
             spades_bridged_graph_unmerged = os.path.join(args.out, str(file_num).zfill(3) +
                                                          '_spades_bridges_applied.gfa')
-            graph.save_to_gfa(spades_bridged_graph_unmerged, verbosity, save_seg_type_info=True,
+            graph.save_to_gfa(spades_bridged_graph_unmerged, save_seg_type_info=True,
                               save_copy_depth_info=True)
 
             # Clean up unnecessary segments after bridging.
-            graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges,
-                                            verbosity)
+            graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
             graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                            args.min_dead_end_size, verbosity, unbridged_graph,
+                                            args.min_dead_end_size, unbridged_graph,
                                             single_copy_segments)
             if args.keep_temp > 1:
                 file_num += 1
-                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) +
-                                               '_cleaned.gfa'), verbosity,
+                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
                                   save_seg_type_info=True, save_copy_depth_info=True)
             graph.merge_all_possible(single_copy_segments, args.mode)
             if args.keep_temp > 1:
                 file_num += 1
-                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
-                                  verbosity)
+                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'))
 
     # Prepare for long read alignment.
     alignment_dir = os.path.join(args.out, 'read_alignment_temp')
@@ -128,27 +123,26 @@ def main():
     if args.long:
         if not os.path.exists(alignment_dir):
             os.makedirs(alignment_dir)
-        unbridged_graph.save_to_fasta(graph_fasta)
+        unbridged_graph.save_to_fasta(graph_fasta, leading_newline=False)
         unbridged_graph.save_specific_segments_to_fasta(single_copy_segments_fasta,
                                                         single_copy_segments)
 
     # If all long reads are available now, then we do the entire process in one pass.
     if args.long:
-        references = load_references(graph_fasta, 0)
+        references = load_references(graph_fasta, section_header='Loading single copy segments')
         reference_dict = {x.name: x for x in references}
-        read_dict, read_names, long_read_filename = load_long_reads(args.long, verbosity)
+        read_dict, read_names, long_read_filename = load_long_reads(args.long)
 
         # Load existing alignments if available.
         if os.path.isfile(alignments_sam) and sam_references_match(alignments_sam, unbridged_graph):
-            if verbosity > 0:
-                print('\nSAM file already exists. Will use these alignments instead of conducting '
-                      'a new alignment:')
-                print('  ' + alignments_sam)
+            log.log('\nSAM file already exists. Will use these alignments instead of conducting '
+                  'a new alignment:')
+            log.log('  ' + alignments_sam)
             alignments = load_sam_alignments(alignments_sam, read_dict, reference_dict,
-                                             scoring_scheme, verbosity)
+                                             scoring_scheme)
             for alignment in alignments:
                 read_dict[alignment.read.name].alignments.append(alignment)
-            print_alignment_summary_table(read_dict, verbosity, False)
+            print_alignment_summary_table(read_dict, args.verbosity, False)
 
         # Conduct the alignment if an existing SAM is not available.
         else:
@@ -164,7 +158,7 @@ def main():
                                          long_read_filename, args.threads, scoring_scheme,
                                          low_score_threshold, False, min_alignment_length,
                                          alignments_1_in_progress, full_command, allowed_overlap,
-                                         0, args.contamination, verbosity,
+                                         0, args.contamination, args.verbosity,
                                          stdout_header='Aligning reads (first pass)',
                                          single_copy_segment_names=single_copy_segment_names)
             shutil.move(alignments_1_in_progress, alignments_1_sam)
@@ -180,7 +174,7 @@ def main():
                                              args.threads, scoring_scheme, low_score_threshold,
                                              False, min_alignment_length, alignments_2_in_progress,
                                              full_command, allowed_overlap, 3,
-                                             args.contamination, verbosity,
+                                             args.contamination, args.verbosity,
                                              stdout_header='Aligning reads (second pass)',
                                              display_low_score=False,
                                              single_copy_segment_names=single_copy_segment_names)
@@ -233,8 +227,7 @@ def main():
                     filtered_read_dict[read_name] = read_dict[read_name]
             read_names = filtered_read_names
             read_dict = filtered_read_dict
-            if verbosity > 1:
-                print('\nDiscarded', contaminant_read_count, 'reads as contamination')
+            log.log('\nDiscarded', contaminant_read_count, 'reads as contamination', 2)
 
         # Use the long reads which aligned entirely within contigs (which are most likely correct)
         # to determine a minimum score.
@@ -244,44 +237,41 @@ def main():
             contained_scores += [x.scaled_score for x in read.alignments]
         min_scaled_score = get_percentile(contained_scores, settings.MIN_SCALED_SCORE_PERCENTILE)
 
-        if verbosity > 1:
-            print('Setting the minimum scaled score to the ' +
-                  float_to_str(settings.MIN_SCALED_SCORE_PERCENTILE, 1) +
-                  'th percentile of full read alignments:', float_to_str(min_scaled_score, 2))
+        log.log('Setting the minimum scaled score to the ' +
+                float_to_str(settings.MIN_SCALED_SCORE_PERCENTILE, 1) +
+                'th percentile of full read alignments: ' + float_to_str(min_scaled_score, 2), 2)
 
         # Do the long read bridging - this is the good part!
-        print_section_header('Building long read bridges', verbosity)
+        log.log_section_header('Building long read bridges')
         expected_linear_seqs = args.expected_linear_seqs > 0
         bridges = create_long_read_bridges(unbridged_graph, read_dict, read_names,
-                                           single_copy_segments, verbosity, bridges,
+                                           single_copy_segments, args.verbosity, bridges,
                                            min_scaled_score, args.threads, scoring_scheme,
                                            min_alignment_length, expected_linear_seqs,
                                            args.min_bridge_qual)
         graph = copy.deepcopy(unbridged_graph)
-        print_section_header('Bridging graph with long reads', verbosity)
-        seg_nums_used_in_bridges = graph.apply_bridges(bridges, verbosity, args.min_bridge_qual,
-                                                       unbridged_graph)
+        log.log_section_header('Bridging graph with long reads')
+        seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
+                                                       args.min_bridge_qual, unbridged_graph)
         file_num += 1
         read_bridged_graph_unmerged = os.path.join(args.out, str(file_num).zfill(3) +
                                                    '_long_read_bridges_applied.gfa')
-        graph.save_to_gfa(read_bridged_graph_unmerged, verbosity, save_seg_type_info=True,
+        graph.save_to_gfa(read_bridged_graph_unmerged, save_seg_type_info=True,
                           save_copy_depth_info=True)
 
         # Clean up unnecessary segments after bridging.
-        graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges, verbosity)
+        graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
         graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                        args.min_dead_end_size, verbosity, unbridged_graph,
+                                        args.min_dead_end_size, unbridged_graph,
                                         single_copy_segments)
         if args.keep_temp > 1:
             file_num += 1
-            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) +
-                                           '_cleaned.gfa'), verbosity,
+            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
                               save_seg_type_info=True, save_copy_depth_info=True)
         graph.merge_all_possible(single_copy_segments, args.mode)
         if args.keep_temp > 1:
             file_num += 1
-            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
-                              verbosity)
+            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'))
 
     # # If we are getting long reads incrementally, then we do the process iteratively.
     # elif args.long_dir:
@@ -296,18 +286,17 @@ def main():
     #         finished = True  # TEMP
 
     # Perform a final clean on the graph, including overlap removal.
-    graph.final_clean(verbosity)
-    print_section_header('Bridged assembly graph', verbosity)
-    if verbosity > 0:
-        graph.print_component_table()
+    graph.final_clean()
+    log.log_section_header('Bridged assembly graph')
+    graph.print_component_table()
     file_num += 1
     cleaned_graph = os.path.join(args.out, str(file_num).zfill(3) + '_final_clean.gfa')
-    graph.save_to_gfa(cleaned_graph, verbosity)
+    graph.save_to_gfa(cleaned_graph)
 
     # Rotate completed replicons in the graph to a standard starting gene.
     completed_replicons = graph.completed_circular_replicons()
     if not args.no_rotate and len(completed_replicons) > 0:
-        print_section_header('Rotating completed replicons', verbosity)
+        log.log_section_header('Rotating completed replicons')
 
         rotation_result_table = [['Replicon', 'Length', 'Depth', 'Starting gene', 'Position',
                                   'Strand', 'Identity', 'Coverage']]
@@ -328,7 +317,7 @@ def main():
             try:
                 blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
                                             args.start_gene_cov, blast_dir, args.makeblastdb_path,
-                                            args.tblastn_path, args.threads, verbosity)
+                                            args.tblastn_path, args.threads)
             except CannotFindStart:
                 rotation_result_row += ['none found', '', '', '', '']
             else:
@@ -340,43 +329,40 @@ def main():
                 rotation_count += 1
             rotation_result_table.append(rotation_result_row)
 
-        if verbosity > 0:
-            print_table(rotation_result_table, alignments='LRRLRLRR', indent=0,
-                        sub_colour={'none found': 'red'})
+        print_table(rotation_result_table, alignments='LRRLRLRR', indent=0,
+                    sub_colour={'none found': 'red'})
         if rotation_count:
             file_num += 1
             rotated_graph = os.path.join(args.out, str(file_num).zfill(3) + '_rotated.gfa')
-            graph.save_to_gfa(rotated_graph, verbosity)
+            graph.save_to_gfa(rotated_graph)
         if args.keep_temp < 2 and os.path.exists(blast_dir):
             shutil.rmtree(blast_dir)
 
     # Polish the final assembly!
     if not args.no_pilon:
-        print_section_header('Polishing assembly with Pilon', verbosity)
+        log.log_section_header('Polishing assembly with Pilon')
         polish_dir = os.path.join(args.out, 'polish_temp')
         if not os.path.exists(polish_dir):
             os.makedirs(polish_dir)
         try:
             polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
                               args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
-                              verbosity, args.short1, args.short2, args.threads)
+                              args.short1, args.short2, args.threads)
         except CannotPolish as e:
-            if verbosity > 0:
-                print('Unable to polish assembly using Pilon: ', end='')
-                print(e.message)
+            log.log('Unable to polish assembly using Pilon: ' + e.message)
         else:
             file_num += 1
             polished_graph = os.path.join(args.out, str(file_num).zfill(3) + '_polished.gfa')
-            graph.save_to_gfa(polished_graph, verbosity)
+            graph.save_to_gfa(polished_graph)
         if args.keep_temp < 2 and os.path.exists(polish_dir):
             shutil.rmtree(polish_dir)
 
     # Save the final state as both a GFA and FASTA file.
-    if verbosity > 0:
-        print_section_header('Complete', verbosity)
-    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'), verbosity, leading_newline=False)
-    graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), verbosity, leading_newline=False,
+    log.log_section_header('Complete')
+    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'), leading_newline=False)
+    graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), leading_newline=False,
                         min_length=args.min_fasta_length)
+    log.log('')
 
 
 def get_arguments():
@@ -426,7 +412,7 @@ def get_arguments():
     output_group.add_argument('-o', '--out', required=True,
                               help='Output directory (required)')
     output_group.add_argument('--verbosity', type=int, required=False, default=1,
-                              help='R|Level of stdout information (default: 1)\n  '
+                              help='R|Level of stdout and log file information (default: 1)\n  '
                                    '0 = no stdout, 1 = basic progress indicators, '
                                    '2 = extra info, 3 = debugging info')
     output_group.add_argument('--min_fasta_length', type=int, required=False, default=1,
@@ -571,6 +557,9 @@ def get_arguments():
     if args.keep_temp < 0 or args.keep_temp > 2:
         quit_with_error('--keep_temp must be between 0 and 2 (inclusive)')
 
+    if args.verbosity < 0 or args.verbosity > 3:
+        quit_with_error('--verbosity must be between 0 and 3 (inclusive)')
+
     # Set up bridging mode related stuff.
     user_set_bridge_qual = args.min_bridge_qual is not None
     if args.mode == 'conservative':
@@ -594,8 +583,9 @@ def get_arguments():
         args.unpaired = os.path.abspath(args.unpaired)
     if args.long:
         args.long = os.path.abspath(args.long)
-    # if args.long_dir:
-    #     args.long_dir = os.path.abspath(args.long_dir)
+
+    # Create an initial logger which doesn't have an output file.
+    log.logger = log.Log(None, args.verbosity)
 
     return args
 
@@ -604,37 +594,36 @@ def make_output_directory(out_dir, verbosity):
     """
     Creates the output directory, if it doesn't already exist.
     """
-    print_v('', verbosity, 1)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-        print_v('Making output directory:', verbosity, 1)
-        print_v('  ' + out_dir, verbosity, 1)
-    elif os.listdir(out_dir) and verbosity > 1:
-        print_v('The output directory already exists and files may be reused and/or overwritten:',
-                verbosity, 1)
-        print_v('  ' + out_dir, verbosity, 1)
+        message = 'Making output directory:'
+    elif os.listdir(out_dir):
+        message = 'The output directory already exists and files may be reused or overwritten:'
     else:  # directory exists but is empty
-        print_v('The output directory already exists:', verbosity, 1)
-        print_v('  ' + out_dir, verbosity, 1)
+        message = 'The output directory already exists:'
+    message += '\n  ' + out_dir
+
+    # Now that the output directory exists, we can make our logger store all output in a log file.
+    log.logger = log.Log(os.path.join(out_dir, 'unicycler.log'), stdout_verbosity_level=verbosity)
+
+    # The message is returned so it can be logged in the 'Starting Unicycler' section.
+    return message
 
 
-def get_single_copy_segments(graph, verbosity, min_single_copy_length):
+def get_single_copy_segments(graph, min_single_copy_length):
     """
-    Returns a list of the graph segments determined to be single-copy.
+    Returns a list of the graph segments determined to be single copy.
     """
-    print_section_header('Finding single-copy segments', verbosity)
-    determine_copy_depth(graph, verbosity)
+    log.log_section_header('Finding single copy segments')
+    determine_copy_depth(graph)
     single_copy_segments = [x for x in graph.get_single_copy_segments()
                             if x.get_length() >= min_single_copy_length]
-
-    if verbosity > 1:
-        print('')
-    if verbosity > 0:
-        total_single_copy_length = sum([x.get_length() for x in single_copy_segments])
-        print(int_to_str(len(single_copy_segments)),
-              'single copy segments (' + int_to_str(total_single_copy_length) + ' bp) out of',
-              int_to_str(len(graph.segments)),
-              'total segments (' + int_to_str(graph.get_total_length()) + ' bp)', flush=True)
+    log.log('', 2)
+    total_single_copy_length = sum([x.get_length() for x in single_copy_segments])
+    log.log(int_to_str(len(single_copy_segments)) +
+          ' single copy segments (' + int_to_str(total_single_copy_length) + ' bp) out of ' +
+          int_to_str(len(graph.segments)) +
+          ' total segments (' + int_to_str(graph.get_total_length()) + ' bp)')
 
     return single_copy_segments
 
@@ -666,33 +655,31 @@ def sam_references_match(sam_filename, assembly_graph):
     return ref_numbers_in_sam == seg_numbers_in_graph
 
 
-def print_intro_message(args, verbosity, full_command):
+def print_intro_message(args, full_command, out_dir_message):
     """
     Prints a message at the start of the program's execution.
     """
-    if verbosity == 0:
-        return
-
-    print_section_header('Starting Unicycler', verbosity)
-    print('Command: ' + bold(full_command))
-    if verbosity > 1:
-        print('')
-        if args.mode == 0:
-            print('Bridging mode: conservative')
-            if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:
-                print('  using default conservative bridge quality cutoff: ', end='')
-            else:
-                print('  using user-specified bridge quality cutoff: ', end='')
-        elif args.mode == 1:
-            print('Bridging mode: normal')
-            if args.min_bridge_qual == settings.NORMAL_MIN_BRIDGE_QUAL:
-                print('  using default normal bridge quality cutoff: ', end='')
-            else:
-                print('  using user-specified bridge quality cutoff: ', end='')
-        else:  # args.mode == 2
-            print('Bridging mode: bold')
-            if args.min_bridge_qual == settings.BOLD_MIN_BRIDGE_QUAL:
-                print('  using default bold bridge quality cutoff: ', end='')
-            else:
-                print('  using user-specified bridge quality cutoff: ', end='')
-        print(float_to_str(args.min_bridge_qual, 2))
+    log.log_section_header('Starting Unicycler', single_newline=True)
+    log.log('Command: ' + bold(full_command))
+    log.log('')
+    log.log(out_dir_message)
+    log.log('', 2)
+    if args.mode == 0:
+        log.log('Bridging mode: conservative', 2)
+        if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:
+            log.log('  using default conservative bridge quality cutoff: ', 2, end='')
+        else:
+            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+    elif args.mode == 1:
+        log.log('Bridging mode: normal', 2)
+        if args.min_bridge_qual == settings.NORMAL_MIN_BRIDGE_QUAL:
+            log.log('  using default normal bridge quality cutoff: ', 2, end='')
+        else:
+            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+    else:  # args.mode == 2
+        log.log('Bridging mode: bold', 2)
+        if args.min_bridge_qual == settings.BOLD_MIN_BRIDGE_QUAL:
+            log.log('  using default bold bridge quality cutoff: ', 2, end='')
+        else:
+            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+    log.log(float_to_str(args.min_bridge_qual, 2), 2)
