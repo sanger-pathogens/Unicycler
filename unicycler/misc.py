@@ -809,21 +809,24 @@ def spades_path_and_version(spades_path):
         version = out.split('v')[-1]
 
     # Make sure SPAdes is 3.6.2+
-    major_version = int(version.split('.')[0])
-    if major_version < 3:
-        status = 'too old'
-    else:
-        minor_version = int(version.split('.')[1])
-        if minor_version < 6:
+    try:
+        major_version = int(version.split('.')[0])
+        if major_version < 3:
             status = 'too old'
-        elif minor_version > 6:
-            status = 'good'
-        else:  # minor_version == 6
-            patch_version = int(version.split('.')[2])
-            if patch_version < 2:
+        else:
+            minor_version = int(version.split('.')[1])
+            if minor_version < 6:
                 status = 'too old'
-            else:
+            elif minor_version > 6:
                 status = 'good'
+            else:  # minor_version == 6
+                patch_version = int(version.split('.')[2])
+                if patch_version < 2:
+                    status = 'too old'
+                else:
+                    status = 'good'
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
 
     return spades_path, version, status
 
@@ -837,6 +840,10 @@ def makeblastdb_path_and_version(makeblastdb_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('makeblastdb: ')[-1].split()[0]
+    try:
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
     return makeblastdb_path, version, 'good'
 
 
@@ -849,6 +856,10 @@ def tblastn_path_and_version(tblastn_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('tblastn: ')[-1].split()[0]
+    try:
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
     return tblastn_path, version, 'good'
 
 
@@ -861,6 +872,10 @@ def bowtie2_build_path_and_version(bowtie2_build_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split(' version ')[-1].split()[0]
+    try:
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
     return bowtie2_build_path, version, 'good'
 
 
@@ -873,6 +888,10 @@ def bowtie2_path_and_version(bowtie2_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split(' version ')[-1].split()[0]
+    try:
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
     return bowtie2_path, version, 'good'
 
 
@@ -887,11 +906,14 @@ def samtools_path_and_version(samtools_path):
     version = out.decode().split('Version: ')[-1].split('-')[0].split()[0]
 
     # Make sure Samtools is 1.0+
-    major_version = int(version.split('.')[0])
-    if major_version < 1:
-        status = 'too old'
-    else:
-        status = 'good'
+    try:
+        major_version = int(version.split('.')[0])
+        if major_version < 1:
+            status = 'too old'
+        else:
+            status = 'good'
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
 
     return samtools_path, version, status
 
@@ -907,15 +929,18 @@ def java_path_and_version(java_path):
     version = out.decode().split('java version ')[-1].split()[0].replace('"', '')
 
     # Make sure Java is 1.7+
-    major_version = int(version.split('.')[0])
-    if major_version < 1:
-        status = 'too old'
-    else:
-        minor_version = int(version.split('.')[1])
-        if minor_version < 7:
+    try:
+        major_version = int(version.split('.')[0])
+        if major_version < 1:
             status = 'too old'
         else:
-            status = 'good'
+            minor_version = int(version.split('.')[1])
+            if minor_version < 7:
+                status = 'too old'
+            else:
+                status = 'good'
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
 
     return java_path, version, status
 
@@ -931,4 +956,8 @@ def pilon_path_and_version(pilon_path, java_path, args):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('Pilon version ')[-1].split()[0]
+    try:
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
     return os.path.abspath(pilon_path), version, 'good'
