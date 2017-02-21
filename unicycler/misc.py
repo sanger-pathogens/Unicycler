@@ -124,8 +124,8 @@ def find_pilon(pilon_path, java_path, args):
             return 'not found'
 
     # If pilon_path is the default and exists, then that's great!
-    elif args.pilon_path == 'pilon' and shutil.which(pilon_path) is not None:
-        args.pilon_path = shutil.which(pilon_path)
+    elif args.pilon_path == 'pilon' and shutil.which(args.pilon_path) is not None:
+        args.pilon_path = shutil.which(args.pilon_path)
 
     # If the user didn't specify a path and 'pilon' doesn't work, then we need to look for a
     # Pilon jar file.
@@ -947,7 +947,9 @@ def java_path_and_version(java_path):
 
 def pilon_path_and_version(pilon_path, java_path, args):
     status = find_pilon(pilon_path, java_path, args)
-    if status != 'good':
+    if status == 'good':
+        pilon_path = args.pilon_path
+    else:
         return '', '', status
     if pilon_path.endswith('.jar'):
         command = [java_path, '-jar', pilon_path, '--version']
