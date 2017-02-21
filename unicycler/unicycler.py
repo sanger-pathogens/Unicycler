@@ -556,6 +556,9 @@ def get_arguments():
     if args.verbosity < 0 or args.verbosity > 3:
         quit_with_error('--verbosity must be between 0 and 3 (inclusive)')
 
+    if args.threads <= 0:
+        quit_with_error('--threads must be at least 1')
+
     # Set up bridging mode related stuff.
     user_set_bridge_qual = args.min_bridge_qual is not None
     if args.mode == 'conservative':
@@ -657,6 +660,8 @@ def print_intro_message(args, full_command, out_dir_message):
     """
     log.log_section_header('Starting Unicycler', single_newline=True)
     log.log('Command: ' + bold(full_command))
+    log.log('')
+    log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
     log.log('')
     log.log(out_dir_message)
     log.log('', 2)
