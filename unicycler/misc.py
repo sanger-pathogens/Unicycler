@@ -64,7 +64,7 @@ def int_to_str(num, max_num=0):
     return num_str.rjust(len(max_str))
 
 
-def check_files_and_programs(args):
+def check_input_files(args):
     """
     Checks to make sure all files in the list are present and either program, as needed.
     """
@@ -74,12 +74,6 @@ def check_files_and_programs(args):
         check_file_exists(args.unpaired)
     if args.long:
         check_file_exists(args.long)
-    check_spades(args.spades_path)
-    if not args.no_rotate:
-        check_blast(args.makeblastdb_path, args.tblastn_path, args.start_genes)
-    if not args.no_pilon:
-        check_pilon(args.pilon_path, args.java_path, args.samtools_path, args.bowtie2_path,
-                    args.bowtie2_build_path, args)
 
 
 def check_file_exists(filename):
@@ -114,66 +108,33 @@ def check_spades(spades_path):
                         '"spades.py" location, not "spades")')
 
 
-def check_blast(makeblastdb_path, tblastn_path, gene_db_path):
-    """
-    Makes sure the BLAST executables are available.
-    """
-    if shutil.which(makeblastdb_path) is None:
-        quit_with_error('could not find makeblastdb - either specify its location using '
-                        '--makeblastdb_path or use --no_rotate to remove BLAST dependency')
-    if shutil.which(tblastn_path) is None:
-        quit_with_error('could not find tblastn - either specify its location using '
-                        '--tblastn_path or use --no_rotate to remove BLAST dependency')
-    if not os.path.isfile(gene_db_path):
-        quit_with_error('could not find file: ' + gene_db_path +
-                        '\neither specify a different start gene database using --start_genes '
-                        'or use --no_rotate')
-
-
-def check_pilon(pilon_path, java_path, samtools_path, bowtie2_path, bowtie2_build_path, args):
+def find_pilon(pilon_path, java_path, args):
     """
     Makes sure the Pilon executable is available. Unlike the other tools, Pilon's target name may
     change based on the version (e.g. pilon-1.18.jar, pilon-1.19.jar, etc.). This function will
     therefore set args.pilon_path to the first matching jar file it finds.
     """
-    if shutil.which(samtools_path) is None:
-        quit_with_error('could not find samtools - either specify its location using '
-                        '--samtools_path or use --no_pilon to remove Samtools dependency')
-    if shutil.which(bowtie2_path) is None:
-        quit_with_error('could not find bowtie2 - either specify its location using '
-                        '--bowtie2_path or use --no_pilon to remove Bowtie2 dependency')
-    if shutil.which(bowtie2_build_path) is None:
-        quit_with_error('could not find bowtie2-build - either specify its location using '
-                        '--bowtie2_build_path or use --no_pilon to remove Bowtie2 dependency')
-
-    # If the user specified a Pilon path other than the default, then it must work.
+    # If the user specified a Pilon path other than the default, then it must exist.
     if args.pilon_path != 'pilon' and args.pilon_path is not None:
+        args.pilon_path = os.path.abspath(args.pilon_path)
         if args.pilon_path.endswith('.jar'):
             if not os.path.isfile(args.pilon_path):
-                quit_with_error('could not find ' + args.pilon_path + ' - either specify a '
-                                'different location with --pilon_path or use --no_pilon to '
-                                'remove Pilon dependency')
+                return 'not found'
         elif shutil.which(args.pilon_path) is None:
-            quit_with_error('could not find ' + args.pilon_path + ' - either specify a different '
-                            'location with --pilon_path or use --no_pilon to remove Pilon '
-                            'dependency')
+            return 'not found'
 
-    # If pilon_path is the default and a working executable, then that's great!
+    # If pilon_path is the default and exists, then that's great!
     elif args.pilon_path == 'pilon' and shutil.which(pilon_path) is not None:
         args.pilon_path = shutil.which(pilon_path)
 
     # If the user didn't specify a path and 'pilon' doesn't work, then we need to look for a
     # Pilon jar file.
     else:
-        if shutil.which(java_path) is None:
-            quit_with_error('could not find java - either specify its location using '
-                            '--java_path or use --no_pilon to remove Java dependency')
         found_pilon_path = get_pilon_jar_path(pilon_path)
         if found_pilon_path:
             args.pilon_path = found_pilon_path
         else:
-            quit_with_error('could not find pilon or pilon*.jar - either specify its location '
-                            'using --pilon_path or use --no_pilon to remove Pilon dependency')
+            return 'not found'
 
     # Now that we've found Pilon, run the help command to make sure it works.
     if args.pilon_path.endswith('.jar'):
@@ -185,9 +146,9 @@ def check_pilon(pilon_path, java_path, samtools_path, bowtie2_path, bowtie2_buil
         if 'pilon' not in pilon_help_out.lower():
             raise OSError
     except (FileNotFoundError, OSError, subprocess.CalledProcessError):
-        quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
-                        'fix it, specify a different location using --pilon_path or use '
-                        '--no_pilon to remove Pilon dependency')
+        return 'bad'
+
+    return 'good'
 
 
 def get_pilon_jar_path(pilon_path):
@@ -827,3 +788,147 @@ def get_right_arrow():
 
 def get_default_thread_count():
     return min(multiprocessing.cpu_count(), settings.MAX_AUTO_THREAD_COUNT)
+
+
+def spades_path_and_version(spades_path):
+    spades_path = shutil.which(spades_path)
+    if spades_path is None:
+        return '', '', 'not found'
+
+    command = [spades_path, '-v']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    out = out.decode()
+
+    if not out or 'Verification of expression' in out:
+        return spades_path, '', 'bad'
+
+    if '-v not recognized' in out:
+        version = out.split('SPAdes genome assembler v.')[-1].split()[0]
+    else:
+        version = out.split('v')[-1]
+
+    # Make sure SPAdes is 3.6.2+
+    major_version = int(version.split('.')[0])
+    if major_version < 3:
+        status = 'too old'
+    else:
+        minor_version = int(version.split('.')[1])
+        if minor_version < 6:
+            status = 'too old'
+        elif minor_version > 6:
+            status = 'good'
+        else:  # minor_version == 6
+            patch_version = int(version.split('.')[2])
+            if patch_version < 2:
+                status = 'too old'
+            else:
+                status = 'good'
+
+    return spades_path, version, status
+
+
+def makeblastdb_path_and_version(makeblastdb_path):
+    makeblastdb_path = shutil.which(makeblastdb_path)
+    if makeblastdb_path is None:
+        return '', '', 'not found'
+
+    command = [makeblastdb_path, '-version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split('makeblastdb: ')[-1].split()[0]
+    return makeblastdb_path, version, 'good'
+
+
+def tblastn_path_and_version(tblastn_path):
+    tblastn_path = shutil.which(tblastn_path)
+    if tblastn_path is None:
+        return '', '', 'not found'
+
+    command = [tblastn_path, '-version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split('tblastn: ')[-1].split()[0]
+    return tblastn_path, version, 'good'
+
+
+def bowtie2_build_path_and_version(bowtie2_build_path):
+    bowtie2_build_path = shutil.which(bowtie2_build_path)
+    if bowtie2_build_path is None:
+        return '', '', 'not found'
+
+    command = [bowtie2_build_path, '--version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split(' version ')[-1].split()[0]
+    return bowtie2_build_path, version, 'good'
+
+
+def bowtie2_path_and_version(bowtie2_path):
+    bowtie2_path = shutil.which(bowtie2_path)
+    if bowtie2_path is None:
+        return '', '', 'not found'
+
+    command = [bowtie2_path, '--version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split(' version ')[-1].split()[0]
+    return bowtie2_path, version, 'good'
+
+
+def samtools_path_and_version(samtools_path):
+    samtools_path = shutil.which(samtools_path)
+    if samtools_path is None:
+        return '', '', 'not found'
+
+    command = [samtools_path]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split('Version: ')[-1].split('-')[0].split()[0]
+
+    # Make sure Samtools is 1.0+
+    major_version = int(version.split('.')[0])
+    if major_version < 1:
+        status = 'too old'
+    else:
+        status = 'good'
+
+    return samtools_path, version, status
+
+
+def java_path_and_version(java_path):
+    java_path = shutil.which(java_path)
+    if java_path is None:
+        return '', '', 'not found'
+
+    command = [java_path, '-version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split('java version ')[-1].split()[0].replace('"', '')
+
+    # Make sure Java is 1.7+
+    major_version = int(version.split('.')[0])
+    if major_version < 1:
+        status = 'too old'
+    else:
+        minor_version = int(version.split('.')[1])
+        if minor_version < 7:
+            status = 'too old'
+        else:
+            status = 'good'
+
+    return java_path, version, status
+
+
+def pilon_path_and_version(pilon_path, java_path, args):
+    status = find_pilon(pilon_path, java_path, args)
+    if status != 'good':
+        return '', '', status
+    if pilon_path.endswith('.jar'):
+        command = [java_path, '-jar', pilon_path, '--version']
+    else:
+        command = [pilon_path, '--version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    version = out.decode().split('Pilon version ')[-1].split()[0]
+    return os.path.abspath(pilon_path), version, 'good'

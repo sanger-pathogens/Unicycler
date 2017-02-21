@@ -27,8 +27,10 @@ from .bridge_long_read import create_long_read_bridges
 from .bridge_spades_contig import create_spades_contig_bridges
 from .bridge_loop_unroll import create_loop_unrolling_bridges
 from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bold, \
-    check_files_and_programs, MyHelpFormatter, print_table, get_ascii_art, \
-    get_default_thread_count
+    check_input_files, MyHelpFormatter, print_table, get_ascii_art, \
+    get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
+    tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
+    samtools_path_and_version, java_path_and_version, pilon_path_and_version
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -51,8 +53,9 @@ def main():
     args = get_arguments()
     out_dir_message = make_output_directory(args.out, args.verbosity)
 
-    check_files_and_programs(args)
+    check_input_files(args)
     print_intro_message(args, full_command, out_dir_message)
+    print_program_table(args)
 
     file_num = 1
     unbridged_graph_filename = os.path.join(args.out,
@@ -676,3 +679,125 @@ def print_intro_message(args, full_command, out_dir_message):
         else:
             log.log('  using user-specified bridge quality cutoff: ', 2, end='')
     log.log(float_to_str(args.min_bridge_qual, 2), 2)
+
+
+def print_program_table(args):
+    log.log('\nDependencies:')
+    if args.verbosity <= 1:
+        program_table = [['Program', 'Version', 'Status']]
+    else:
+        program_table = [['Program', 'Version', 'Status', 'Path']]
+
+    spades_path, spades_version, spades_status = spades_path_and_version(args.spades_path)
+    spades_row = ['spades.py', spades_version, spades_status]
+    if args.verbosity > 1:
+        spades_row.append(spades_path)
+    program_table.append(spades_row)
+
+    # Rotation dependencies
+    if args.no_rotate:
+        makeblastdb_path, makeblastdb_version, makeblastdb_status = '', '', 'not used'
+        tblastn_path, tblastn_version, tblastn_status = '', '', 'not used'
+    else:
+        makeblastdb_path, makeblastdb_version, makeblastdb_status = \
+            makeblastdb_path_and_version(args.makeblastdb_path)
+        tblastn_path, tblastn_version, tblastn_status = tblastn_path_and_version(args.tblastn_path)
+    makeblastdb_row = ['makeblastdb', makeblastdb_version, makeblastdb_status]
+    tblastn_row = ['tblastn', tblastn_version, tblastn_status]
+    if args.verbosity > 1:
+        makeblastdb_row.append(makeblastdb_path)
+        tblastn_row.append(tblastn_path)
+    program_table.append(makeblastdb_row)
+    program_table.append(tblastn_row)
+
+    # Polishing dependencies
+    if args.no_pilon:
+        bowtie2_build_path, bowtie2_build_version, bowtie2_build_status = '', '', 'not used'
+        bowtie2_path, bowtie2_version, bowtie2_status = '', '', 'not used'
+        samtools_path, samtools_version, samtools_status = '', '', 'not used'
+        java_path, java_version, java_status = '', '', 'not used'
+        pilon_path, pilon_version, pilon_status = '', '', 'not used'
+    else:
+        bowtie2_build_path, bowtie2_build_version, bowtie2_build_status = \
+            bowtie2_build_path_and_version(args.bowtie2_build_path)
+        bowtie2_path, bowtie2_version, bowtie2_status = bowtie2_path_and_version(args.bowtie2_path)
+        samtools_path, samtools_version, samtools_status = \
+            samtools_path_and_version(args.samtools_path)
+        java_path, java_version, java_status = java_path_and_version(args.java_path)
+        pilon_path, pilon_version, pilon_status = \
+            pilon_path_and_version(args.pilon_path, args.java_path, args)
+    bowtie2_build_row = ['bowtie2-build', bowtie2_build_version, bowtie2_build_status]
+    bowtie2_row = ['bowtie2', bowtie2_version, bowtie2_status]
+    samtools_row = ['samtools', samtools_version, samtools_status]
+    java_row = ['java', java_version, java_status]
+    pilon_row = ['pilon', pilon_version, pilon_status]
+    if args.verbosity > 1:
+        bowtie2_build_row.append(bowtie2_build_path)
+        bowtie2_row.append(bowtie2_path)
+        samtools_row.append(samtools_path)
+        java_row.append(java_path)
+        pilon_row.append(pilon_path)
+    program_table.append(bowtie2_build_row)
+    program_table.append(bowtie2_row)
+    program_table.append(samtools_row)
+    program_table.append(java_row)
+    program_table.append(pilon_row)
+
+    row_colours = {}
+    for i, row in enumerate(program_table):
+        if 'not used' in row:
+            row_colours[i] = 'dim'
+        elif 'too old' in row or 'not found' in row or 'bad' in row:
+            row_colours[i] = 'red'
+
+    print_table(program_table, alignments='LLLL', row_colour=row_colours, max_col_width=60,
+                sub_colour={'good': 'green'})
+
+    quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status,
+                               bowtie2_build_status, bowtie2_status, samtools_status, java_status,
+                               pilon_status, args)
+
+def quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status,
+                               bowtie2_build_status, bowtie2_status, samtools_status, java_status,
+                               pilon_status, args):
+    if all(x == 'good' for x in [spades_status, makeblastdb_status, tblastn_status,
+                                 bowtie2_build_status, bowtie2_status, samtools_status,
+                                 java_status, pilon_status]):
+        return
+
+    log.log('')
+    if spades_status == 'not found':
+        quit_with_error('could not find SPAdes at ' + args.spades_path)
+    if spades_status == 'too old':
+        quit_with_error('Unicycler requires SPAdes v3.6.2 or higher')
+    if spades_status == 'bad':
+        quit_with_error('SPAdes was found but does not produce output (make sure to use '
+                        '"spades.py" location, not "spades")')
+    if makeblastdb_status == 'not found':
+        quit_with_error('could not find makeblastdb - either specify its location using '
+                        '--makeblastdb_path or use --no_rotate to remove BLAST dependency')
+    if tblastn_status == 'not found':
+        quit_with_error('could not find tblastn - either specify its location using '
+                        '--tblastn_path or use --no_rotate to remove BLAST dependency')
+    if bowtie2_build_status == 'not found':
+        quit_with_error('could not find bowtie2-build - either specify its location using '
+                        '--bowtie2_build_path or use --no_pilon to remove Bowtie2 dependency')
+    if bowtie2_status == 'not found':
+        quit_with_error('could not find bowtie2 - either specify its location using '
+                        '--bowtie2_path or use --no_pilon to remove Bowtie2 dependency')
+    if samtools_status == 'not found':
+        quit_with_error('could not find samtools - either specify its location using '
+                        '--samtools_path or use --no_pilon to remove Samtools dependency')
+    if java_status == 'not found':
+        quit_with_error('could not find java - either specify its location using --java_path or '
+                        'use --no_pilon to remove Java dependency')
+    if pilon_status == 'not found':
+        quit_with_error('could not find pilon or pilon*.jar - either specify its location '
+                            'using --pilon_path or use --no_pilon to remove Pilon dependency')
+    if pilon_status == 'bad':
+        quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
+                        'fix it, specify a different location using --pilon_path or use '
+                        '--no_pilon to remove Pilon dependency')
+
+    # Code should never get here!
+    quit_with_error('Unspecified error with Unicycler dependencies')
