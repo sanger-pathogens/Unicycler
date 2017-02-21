@@ -15,7 +15,8 @@ not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import os
-from . import misc
+import datetime
+import re
 
 
 class Log(object):
@@ -59,7 +60,7 @@ def log(text, verbosity=1, stderr=False, end='\n', print_to_screen=True, write_t
 
     # The text is written to file without ANSI formatting.
     if logger.log_file and verbosity <= logger.log_file_verbosity_level and write_to_log_file:
-        logger.log_file.write(misc.remove_formatting(text))
+        logger.log_file.write(remove_formatting(text))
         logger.log_file.write('\n')
 
 
@@ -68,12 +69,12 @@ def log_section_header(message, verbosity=1, single_newline=False):
     Logs a section header. Also underlines the header using a row of dashes to the log file
     (because log files don't have ANSI formatting).
     """
-    time = misc.get_timestamp()
+    time = get_timestamp()
     if single_newline:
         log('', verbosity)
     else:
         log('\n', verbosity)
-    log(misc.bold_yellow_underline(message) + ' ' + misc.dim('(' + time + ')'), verbosity)
+    log(bold_yellow_underline(message) + ' ' + dim('(' + time + ')'), verbosity)
     log('-' * (len(message) + 3 + len(time)), verbosity, print_to_screen=False)
 
 
@@ -83,16 +84,48 @@ def log_progress_line(completed, total, base_pairs=None, end_newline=False):
     final progress line will be written to the log file.
     """
     progress_str = ''
-    progress_str += misc.int_to_str(completed) + ' / ' + misc.int_to_str(total)
+    progress_str += int_to_str(completed) + ' / ' + int_to_str(total)
     if total > 0:
         percent = 100.0 * completed / total
     else:
         percent = 0.0
     progress_str += ' (' + '%.1f' % percent + '%)'
     if base_pairs is not None:
-        progress_str += ' - ' + misc.int_to_str(base_pairs) + ' bp'
+        progress_str += ' - ' + int_to_str(base_pairs) + ' bp'
 
     end_char = '\n' if end_newline else ''
     log('\r' + progress_str, end=end_char, write_to_log_file=False)
     if end_newline:
         log(progress_str, print_to_screen=False)
+
+
+def int_to_str(num, max_num=0):
+    if num is None:
+        num_str = 'n/a'
+    else:
+        num_str = '{:,}'.format(num)
+    max_str = '{:,}'.format(int(max_num))
+    return num_str.rjust(len(max_str))
+
+
+def get_timestamp():
+    return '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+
+
+END_FORMATTING = '\033[0m'
+BOLD = '\033[1m'
+UNDERLINE = '\033[4m'
+YELLOW = '\033[93m'
+DIM = '\033[2m'
+
+
+def bold_yellow_underline(text):
+    return YELLOW + BOLD + UNDERLINE + text + END_FORMATTING
+
+
+def dim(text):
+    return DIM + text + END_FORMATTING
+
+
+def remove_formatting(text):
+    return re.sub('\033.*?m', '', text)
