@@ -66,7 +66,7 @@ def main():
         semi_global_align_long_reads(references, args.ref, read_dict, read_names, read_filename,
                                      args.threads, scoring_scheme, [args.low_score],
                                      False, args.min_len, args.sam,
-                                     full_command, 0, 3, args.contamination, VERBOSITY)
+                                     full_command, 0, 0, args.contamination, VERBOSITY)
 
     alignments = load_sam_alignments(args.sam, read_dict, reference_dict, scoring_scheme)
 
@@ -150,6 +150,7 @@ def get_arguments():
 
     global VERBOSITY
     VERBOSITY = args.verbosity
+    log.logger = log.Log(log_filename=None, stdout_verbosity_level=VERBOSITY)
 
     if args.depth_p_val > 0.1 or args.depth_p_val <= 0.0:
         quit_with_error('--depth_p_val must be greater than 0.0 and less than or equal to 0.1')

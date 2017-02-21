@@ -130,6 +130,7 @@ def get_arguments():
 
     global VERBOSITY
     VERBOSITY = args.verbosity
+    log.logger = log.Log(log_filename=None, stdout_verbosity_level=VERBOSITY)
 
     fix_up_arguments(args)
 
