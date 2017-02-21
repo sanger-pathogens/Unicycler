@@ -11,8 +11,6 @@ Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Ill
 * [Installation](#installation)
     * [Install from source](#install-from-source)
     * [Build and run without installation](#build-and-run-without-installation)
-    * [Install via conda](#install-via-conda)
-    * [Install via Docker](#install-via-docker)
 * [Quick usage](#quick-usage)
 * [How it works](#how-it-works)
     * [Assembly graphs](#assembly-graphs)
@@ -126,18 +124,6 @@ cd Unicycler
 make
 ```
 Now instead of running `unicycler`, you instead use `path/to/unicycler-runner.py`.
-
-
-### Install via conda
-```bash
-conda install unicycler -c bioconda -c conda-forge
-```
-
-
-### Install via Docker
-```bash
-docker run quay.io/biocontainers/unicycler:0.3.0b--py35_0 unicycler -h
-```
 
 
 
