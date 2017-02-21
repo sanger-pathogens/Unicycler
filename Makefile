@@ -9,16 +9,68 @@
 #   make CXXFLAGS="-Werror -g3" (build with particular compiler flags)
 
 
+# Determine the platform
+ifeq ($(shell uname), Darwin)
+  PLATFORM = Mac
+else
+  PLATFORM = Linux
+endif
+$(info Platform: $(PLATFORM))
+
+
+# Determine the compiler and version
+COMPILER_HELP := $(shell $(CXX) --help | head -n 1)
+ifneq (,$(findstring clang,$(COMPILER_HELP)))
+    COMPILER = clang
+else ifneq (,$(findstring g++,$(COMPILER_HELP)))
+    COMPILER = g++
+else ifneq (,$(findstring Intel,$(COMPILER_HELP)))
+    COMPILER = icpc
+else
+    COMPILER = unknown
+endif
+COMPILER_VERSION := $(shell $(CXX) -dumpversion)
+COMPILER_VERSION_NUMBER := $(shell $(CXX) -dumpversion | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' -e 's/^[0-9]\{3,4\}$$/&00/')
+$(info Compiler: $(COMPILER) $(COMPILER_VERSION))
+
+
+# Clang versions earlier than 3.4 won't work with Seqan.
+ifeq ($(COMPILER),clang)
+  CLANG_340_OR_MORE := $(shell expr $(COMPILER_VERSION_NUMBER) \>= 30400)
+  ifeq ($(CLANG_340_OR_MORE),0)
+    $(error Unicycler requires Clang 3.4 or greater)
+  endif
+endif
+
+
+# GCC versions earlier than 4.9.1 won't work with Seqan.
+ifeq ($(COMPILER),g++)
+  GCC_491_OR_MORE := $(shell expr $(COMPILER_VERSION_NUMBER) \>= 40901)
+  ifeq ($(GCC_491_OR_MORE),0)
+    $(error Unicycler requires GCC version 4.9.1 or greater)
+  endif
+endif
+
+
 # CXXFLAGS can be overridden by the user.
 CXXFLAGS    ?= -Wall -Wextra -pedantic -march=native
+
 
 # These flags are required for the build to work.
 FLAGS        = -std=c++14 -Iunicycler/include -fPIC
 LDFLAGS      = -shared -lz
 
+
+# Platform-specific stuff (for Seqan)
+ifeq ($(PLATFORM), Linux)
+  FLAGS     += -lrt -lpthread
+endif
+
+
 # Different debug/optimisation levels for debug/release builds.
 DEBUGFLAGS   = -DSEQAN_ENABLE_DEBUG=1 -g
-RELEASEFLAGS = -O3 -D NDEBUG
+RELEASEFLAGS = -O3 -DNDEBUG
+
 
 TARGET       = unicycler/cpp_functions.so
 SHELL        = /bin/sh
@@ -26,21 +78,24 @@ SOURCES      = $(shell find unicycler -name "*.cpp")
 HEADERS      = $(shell find unicycler -name "*.h")
 OBJECTS      = $(SOURCES:.cpp=.o)
 
+
 # Linux needs '-soname' while Mac needs '-install_name'
-PLATFORM     = $(shell uname)
-ifeq ($(PLATFORM), Darwin)
-SONAME       = -install_name
-else
-SONAME       = -soname
+ifeq ($(PLATFORM), Mac)
+  SONAME       = -install_name
+else  # Linux
+  SONAME       = -soname
 endif
+
 
 .PHONY: release
 release: FLAGS+=$(RELEASEFLAGS)
 release: $(TARGET)
 
+
 .PHONY: debug
 debug: FLAGS+=$(DEBUGFLAGS)
 debug: $(TARGET)
+
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(FLAGS) $(CXXFLAGS) $(LDFLAGS) -Wl,$(SONAME),$(TARGET) -o $(TARGET) $(OBJECTS)
