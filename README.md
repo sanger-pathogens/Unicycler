@@ -79,7 +79,10 @@ Reasons to __not__ use Unicycler:
 * Linux or macOS
 * [Python](https://www.python.org/) 3.4 or later
 * C++ compiler
-    * Recent versions of [GCC](https://gcc.gnu.org/), [Clang](http://clang.llvm.org/) and [ICC](https://software.intel.com/en-us/c-compilers) should all work (C++14 support is required).
+    * C++14 support is required, so you'll need a relatively recent version:
+    * [GCC](https://gcc.gnu.org/) 4.9.1 or later
+    * [Clang](http://clang.llvm.org/) 3.5 or later
+    * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I haven't figured out the minimum required version number)
 * [SPAdes](http://bioinf.spbau.ru/spades) 3.6.2 or later
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
 

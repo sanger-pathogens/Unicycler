@@ -29,16 +29,20 @@ else ifneq (,$(findstring Intel,$(COMPILER_HELP)))
 else
     COMPILER = unknown
 endif
-COMPILER_VERSION := $(shell $(CXX) -dumpversion)
-COMPILER_VERSION_NUMBER := $(shell $(CXX) -dumpversion | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' -e 's/^[0-9]\{3,4\}$$/&00/')
+ifeq ($(COMPILER),clang)
+  COMPILER_VERSION := $(shell $(CXX) --version | grep version | grep -o -m 1 "[0-9]\+\.[0-9]\+\.*[0-9]*" | head -n 1)
+else
+  COMPILER_VERSION := $(shell $(CXX) -dumpversion)
+endif
+COMPILER_VERSION_NUMBER := $(shell echo $(COMPILER_VERSION) | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' -e 's/^[0-9]\{3,4\}$$/&00/')
 $(info Compiler: $(COMPILER) $(COMPILER_VERSION))
 
 
-# Clang versions earlier than 3.4 won't work with Seqan.
+# Clang versions earlier than 3.5 won't work with Seqan.
 ifeq ($(COMPILER),clang)
-  CLANG_340_OR_MORE := $(shell expr $(COMPILER_VERSION_NUMBER) \>= 30400)
+  CLANG_340_OR_MORE := $(shell expr $(COMPILER_VERSION_NUMBER) \>= 30500)
   ifeq ($(CLANG_340_OR_MORE),0)
-    $(error Unicycler requires Clang 3.4 or greater)
+    $(error Unicycler requires Clang 3.5 or greater)
   endif
 endif
 
