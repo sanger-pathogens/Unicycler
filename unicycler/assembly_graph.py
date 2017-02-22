@@ -509,8 +509,8 @@ class AssemblyGraph(object):
             segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
         if segment_nums_to_remove:
-            log.log('\nRemoved small components:' +
-                    ', '.join(str(x) for x in segment_nums_to_remove), 2)
+            log.log('Removed small components:\n' +
+                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
 
     def remove_small_dead_ends(self, min_dead_end_size):
         """
