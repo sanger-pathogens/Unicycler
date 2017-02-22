@@ -753,9 +753,9 @@ def check_dependencies(args):
 def quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
                                pilon_status, args):
-    if all(x == 'good' for x in [spades_status, makeblastdb_status, tblastn_status,
-                                 bowtie2_build_status, bowtie2_status, samtools_status,
-                                 java_status, pilon_status]):
+    if all(x == 'good' or x == 'not used'
+           for x in [spades_status, makeblastdb_status, tblastn_status, bowtie2_build_status,
+                     bowtie2_status, samtools_status, java_status, pilon_status]):
         return
 
     log.log('')
