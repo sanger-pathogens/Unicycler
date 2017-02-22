@@ -97,11 +97,10 @@ class TestUnicyclerOptions(unittest.TestCase):
                                                  'bacterial genomes')[1]
         verbosity_default = int(get_default_from_help('--verbosity', help_text))
         min_fasta_length_default = int(get_default_from_help('--min_fasta_length', help_text))
-        keep_temp_default = int(get_default_from_help('--keep_temp', help_text))
+        keep_default = int(get_default_from_help('--keep', help_text))
         threads_default = int(get_default_from_help('--threads', help_text))
         # mode_default = get_default_from_help('--mode', help)
-        expected_linear_seqs_default = int(get_default_from_help('--expected_linear_seqs',
-                                                                 help_text))
+        expected_linear_seqs_default = int(get_default_from_help('--linear_seqs', help_text))
         spades_path_default = get_default_from_help('--spades_path', help_text)
         min_kmer_frac_default = float(get_default_from_help('--min_kmer_frac', help_text))
         max_kmer_frac_default = float(get_default_from_help('--max_kmer_frac', help_text))
@@ -126,7 +125,7 @@ class TestUnicyclerOptions(unittest.TestCase):
             args = unicycler.unicycler.get_arguments()
         self.assertEqual(args.verbosity, verbosity_default)
         self.assertEqual(args.min_fasta_length, min_fasta_length_default)
-        self.assertEqual(args.keep_temp, keep_temp_default)
+        self.assertEqual(args.keep, keep_default)
         self.assertEqual(args.threads, threads_default)
         self.assertEqual(args.expected_linear_seqs, expected_linear_seqs_default)
         self.assertEqual(args.spades_path, spades_path_default)

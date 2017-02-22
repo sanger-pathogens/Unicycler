@@ -56,10 +56,10 @@ class TestBasicHelpText(unittest.TestCase):
         self.assertTrue('--out' in self.stdout)
         self.assertTrue('--verbosity' in self.stdout)
         self.assertTrue('--min_fasta_length' in self.stdout)
-        self.assertTrue('--keep_temp' in self.stdout)
+        self.assertTrue('--keep' in self.stdout)
         self.assertTrue('--threads' in self.stdout)
         self.assertTrue('--mode' in self.stdout)
-        self.assertTrue('--expected_linear_seqs' in self.stdout)
+        self.assertTrue('--linear_seqs' in self.stdout)
 
     def test_extended_options(self):
         self.assertFalse('--spades_path' in self.stdout)
@@ -113,10 +113,10 @@ class TestExtendedHelpText(unittest.TestCase):
         self.assertTrue('--out' in self.stdout)
         self.assertTrue('--verbosity' in self.stdout)
         self.assertTrue('--min_fasta_length' in self.stdout)
-        self.assertTrue('--keep_temp' in self.stdout)
+        self.assertTrue('--keep' in self.stdout)
         self.assertTrue('--threads' in self.stdout)
         self.assertTrue('--mode' in self.stdout)
-        self.assertTrue('--expected_linear_seqs' in self.stdout)
+        self.assertTrue('--linear_seqs' in self.stdout)
 
     def test_extended_options(self):
         self.assertTrue('--spades_path' in self.stdout)

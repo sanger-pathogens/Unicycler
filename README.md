@@ -212,7 +212,7 @@ This process does _not_ assume that all single copy contigs have the same read d
 
 ### 4. Short read bridging
 
-At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single copy contigs using the information in the SPAdes `contigs.paths` file. These are applied to the graph to make the `spades_bridges_applied.gfa` output – the most resolved graph Unicycler can make using only the Illumina reads.
+At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single copy contigs using the information in the SPAdes `contigs.paths` file. These are applied to the graph to make the `short_read_bridges_applied.gfa` output – the most resolved graph Unicycler can make using only the Illumina reads.
 
 <p align="center"><img src="misc/short_read_bridging.png" alt="Short read bridging" width="600"></p>
 
@@ -266,8 +266,9 @@ In the above example, the conservative assembly is incomplete because some bridg
 Run `unicycler --help` to view the program's most commonly used options:
 
 ```
-usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s UNPAIRED] [-l LONG] -o OUT [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep_temp KEEP_TEMP] [-t THREADS]
-                           [--mode {conservative,normal,bold}] [--expected_linear_seqs EXPECTED_LINEAR_SEQS]
+usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s UNPAIRED] [-l LONG] -o OUT
+                           [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep KEEP] [-t THREADS]
+                           [--mode {conservative,normal,bold}] [--linear_seqs LINEAR_SEQS]
 
        __
        \ \___
@@ -285,32 +286,37 @@ usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s
 Unicycler: a hybrid assembly pipeline for bacterial genomes
 
 Help:
-  -h, --help                            Show this help message and exit
-  --help_all                            Show a help message with all program options
-  --version                             Show Unicycler's version number
+  -h, --help                           Show this help message and exit
+  --help_all                           Show a help message with all program options
+  --version                            Show Unicycler's version number
 
 Input:
-  -1 SHORT1, --short1 SHORT1            FASTQ file of first short reads in each pair (required)
-  -2 SHORT2, --short2 SHORT2            FASTQ file of second short reads in each pair (required)
-  -s UNPAIRED, --unpaired UNPAIRED      FASTQ file of unpaired short reads (optional)
-  -l LONG, --long LONG                  FASTQ or FASTA file of long reads (optional)
+  -1 SHORT1, --short1 SHORT1           FASTQ file of first short reads in each pair (required)
+  -2 SHORT2, --short2 SHORT2           FASTQ file of second short reads in each pair (required)
+  -s UNPAIRED, --unpaired UNPAIRED     FASTQ file of unpaired short reads (optional)
+  -l LONG, --long LONG                 FASTQ or FASTA file of long reads (optional)
 
 Output:
-  -o OUT, --out OUT                     Output directory (required)
-  --verbosity VERBOSITY                 Level of stdout and log file information (default: 1)
-                                          0 = no stdout, 1 = basic progress indicators, 2 = extra info, 3 = debugging info
-  --min_fasta_length MIN_FASTA_LENGTH   Exclude contigs from the FASTA file which are shorter than this length (default: 1)
-  --keep_temp KEEP_TEMP                 Level of file retention (default: 0)
-                                          0 = only keep files at main checkpoints, 1 = keep some temp files including SAM, 2 = keep all temp files
+  -o OUT, --out OUT                    Output directory (required)
+  --verbosity VERBOSITY                Level of stdout and log file information (default: 1)
+                                         0 = no stdout, 1 = basic progress indicators, 2 = extra info,
+                                         3 = debugging info
+  --min_fasta_length MIN_FASTA_LENGTH  Exclude contigs from the FASTA file which are shorter than this length
+                                       (default: 1)
+  --keep KEEP                          Level of file retention (default: 1)
+                                         0 = only keep final files: assembly (FASTA, GFA and log),
+                                         1 = also save graphs at main checkpoints,
+                                         2 = also keep SAM (enables fast rerun in different mode),
+                                         3 = keep all temp files and save all graphs (for debugging)
 
 Other:
-  -t THREADS, --threads THREADS         Number of threads used (default: 8)
-  --mode {conservative,normal,bold}     Bridging mode (default: normal)
-                                          conservative = smaller contigs, lowest misassembly rate
-                                          normal = moderate contig size and misassembly rate
-                                          bold = longest contigs, higher misassembly rate
-  --expected_linear_seqs EXPECTED_LINEAR_SEQS
-                                        The expected number of linear (i.e. non-circular) sequences in the underlying sequence (default: 0)
+  -t THREADS, --threads THREADS        Number of threads used (default: 8)
+  --mode {conservative,normal,bold}    Bridging mode (default: normal)
+                                         conservative = smaller contigs, lowest misassembly rate
+                                         normal = moderate contig size and misassembly rate
+                                         bold = longest contigs, higher misassembly rate
+  --linear_seqs LINEAR_SEQS            The expected number of linear (i.e. non-circular) sequences in the
+                                       underlying sequence (default: 0)
 ```
 
 ### Advanced options
@@ -320,71 +326,90 @@ Run `unicycler --help_all` to see a complete list of the program's options. Thes
 SPAdes assembly:
   These options control the short read SPAdes assembly at the beginning of the Unicycler pipeline.
 
-  --spades_path SPADES_PATH             Path to the SPAdes executable (default: spades.py)
-  --no_correct                          Skip SPAdes error correction step (default: conduct SPAdes error correction)
-  --min_kmer_frac MIN_KMER_FRAC         Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read length (default: 0.2)
-  --max_kmer_frac MAX_KMER_FRAC         Highest k-mer size for SPAdes assembly, expressed as a fraction of the read length (default: 0.95)
-  --kmer_count KMER_COUNT               Number of k-mer steps to use in SPAdes assembly (default: 10)
+  --spades_path SPADES_PATH            Path to the SPAdes executable (default: spades.py)
+  --no_correct                         Skip SPAdes error correction step (default: conduct SPAdes error correction)
+  --min_kmer_frac MIN_KMER_FRAC        Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read
+                                       length (default: 0.2)
+  --max_kmer_frac MAX_KMER_FRAC        Highest k-mer size for SPAdes assembly, expressed as a fraction of the read
+                                       length (default: 0.95)
+  --kmer_count KMER_COUNT              Number of k-mer steps to use in SPAdes assembly (default: 10)
 
 Assembly rotation:
   These options control the rotation of completed circular sequence near the end of the Unicycler pipeline.
 
-  --no_rotate                           Do not rotate completed replicons to start at a standard gene (default: completed replicons are rotated)
-  --start_genes START_GENES             FASTA file of genes for start point of rotated replicons (default: start_genes.fasta)
-  --start_gene_id START_GENE_ID         The minimum required BLAST percent identity for a start gene search (default: 90.0)
-  --start_gene_cov START_GENE_COV       The minimum required BLAST percent coverage for a start gene search (default: 95.0)
-  --makeblastdb_path MAKEBLASTDB_PATH   Path to the makeblastdb executable (default: makeblastdb)
-  --tblastn_path TBLASTN_PATH           Path to the tblastn executable (default: tblastn)
+  --no_rotate                          Do not rotate completed replicons to start at a standard gene (default:
+                                       completed replicons are rotated)
+  --start_genes START_GENES            FASTA file of genes for start point of rotated replicons (default:
+                                       start_genes.fasta)
+  --start_gene_id START_GENE_ID        The minimum required BLAST percent identity for a start gene search
+                                       (default: 90.0)
+  --start_gene_cov START_GENE_COV      The minimum required BLAST percent coverage for a start gene search
+                                       (default: 95.0)
+  --makeblastdb_path MAKEBLASTDB_PATH  Path to the makeblastdb executable (default: makeblastdb)
+  --tblastn_path TBLASTN_PATH          Path to the tblastn executable (default: tblastn)
 
 Pilon polishing:
   These options control the final assembly polish using Pilon at the end of the Unicycler pipeline.
 
-  --no_pilon                            Do not use Pilon to polish the final assembly (default: Pilon is used)
-  --bowtie2_path BOWTIE2_PATH           Path to the bowtie2 executable (default: bowtie2)
+  --no_pilon                           Do not use Pilon to polish the final assembly (default: Pilon is used)
+  --bowtie2_path BOWTIE2_PATH          Path to the bowtie2 executable (default: bowtie2)
   --bowtie2_build_path BOWTIE2_BUILD_PATH
-                                        Path to the bowtie2_build executable (default: bowtie2-build)
-  --samtools_path SAMTOOLS_PATH         Path to the samtools executable (default: samtools)
-  --pilon_path PILON_PATH               Path to a Pilon executable or the Pilon Java archive file (default: pilon)
-  --java_path JAVA_PATH                 Path to the java executable (default: java)
-  --min_polish_size MIN_POLISH_SIZE     Contigs shorter than this value (bp) will not be polished using Pilon (default: 10000)
+                                       Path to the bowtie2_build executable (default: bowtie2-build)
+  --samtools_path SAMTOOLS_PATH        Path to the samtools executable (default: samtools)
+  --pilon_path PILON_PATH              Path to a Pilon executable or the Pilon Java archive file (default: pilon)
+  --java_path JAVA_PATH                Path to the java executable (default: java)
+  --min_polish_size MIN_POLISH_SIZE    Contigs shorter than this value (bp) will not be polished using Pilon
+                                       (default: 10000)
 
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.
 
   --min_component_size MIN_COMPONENT_SIZE
-                                        Unbridged graph components smaller than this size (bp) will be removed from the final graph (default: 1000)
+                                       Unbridged graph components smaller than this size (bp) will be removed from
+                                       the final graph (default: 1000)
   --min_dead_end_size MIN_DEAD_END_SIZE
-                                        Graph dead ends smaller than this size (bp) will be removed from the final graph (default: 1000)
+                                       Graph dead ends smaller than this size (bp) will be removed from the final
+                                       graph (default: 1000)
 
 Long read alignment:
   These options control the alignment of long reads to the assembly graph.
 
-  --contamination CONTAMINATION         FASTA file of known contamination in long reads
-  --scores SCORES                       Comma-delimited string of alignment scores: match, mismatch, gap open, gap extend (default: 3,-6,-5,-2)
-  --low_score LOW_SCORE                 Score threshold - alignments below this are considered poor (default: set threshold automatically)
+  --contamination CONTAMINATION        FASTA file of known contamination in long reads
+  --scores SCORES                      Comma-delimited string of alignment scores: match, mismatch, gap open, gap
+                                       extend (default: 3,-6,-5,-2)
+  --low_score LOW_SCORE                Score threshold - alignments below this are considered poor (default: set
+                                       threshold automatically)
 ```
 
 
 
 # Output files
 
-Depending on the input files and the value used for `--keep_temp`, Unicycler may only produce some of these. Also, all outputs except for `assembly.gfa`, `assembly.fasta` and `unicycler.log` will be prefixed with a number so they are in chronological order.
+Unicycler's most important output files are `assembly.gfa`, `assembly.fasta` and `unicycler.log`. These are produced by every Unicycler run. Which other files are saved to its output directory depends on the value of `--keep`:
+* `--keep 0` retains only the important files. Use this setting to save drive space.
+* `--keep 1` (the default) also saves some intermediate graphs.
+* `--keep 2` also retains the SAM file of long read alignments to the graph. This ensures that if you rerun Unicycler with the same output directory (for example changing the mode to conservative or bold) it will run faster because it does not have to repeat the alignment step.
+* `--keep 3` retains all files and saves many intermediate graphs. This is for debugging purposes and uses a lot of space. Most users should probably avoid this setting.
 
-File                           | Description
------------------------------- | ---------------------------------------------------------------------------
-unbridged_graph.gfa            | short read assembly graph before any bridges have been applied
-spades_bridges_applied.gfa     | SPAdes bridges applied, before any cleaning or merging
-cleaned.gfa                    | redundant contigs removed from the graph
-merged.gfa                     | contigs merged together where possible
-long_read_bridges_applied.gfa  | Long read bridges applied, before any cleaning or merging
-cleaned.gfa                    | redundant contigs removed from the graph
-merged.gfa                     | contigs merged together where possible
-final_clean.gfa                | more redundant contigs removed
-rotated.gfa                    | circular replicons rotated and/or flipped to a start position
-polished.gfa                   | after a round of Pilon polishing
-__assembly.gfa__               | __final assembly in graph format__
-__assembly.fasta__             | __final assembly in FASTA format__ (same contigs and names as in assembly.gfa)
-__unicycler.log__              | __Unicycler log file__ (same info as stdout, control detail using `--verbosity`)
+All files and directories are described in the table below. Intermediate output files (everything except for `assembly.gfa`, `assembly.fasta` and `unicycler.log`) will be prefixed with a number so they are in chronological order.
+
+File                           | Description                                                                                       | `--keep` level
+------------------------------ | ------------------------------------------------------------------------------------------------- | --------------
+spades_assembly/               | directory containing all SPAdes files and each k-mer graph                                        | 3
+unbridged_graph.gfa            | short read assembly graph before any bridges have been applied                                    | 1
+short_read_bridges_applied.gfa | SPAdes contig bridges applied, before any cleaning or merging                                     | 1
+cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
+merged.gfa                     | contigs merged together where possible                                                            | 3
+long_read_bridges_applied.gfa  | long read bridges applied, before any cleaning or merging                                         | 1
+read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 2
+cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
+merged.gfa                     | contigs merged together where possible                                                            | 3
+final_clean.gfa                | more redundant contigs removed                                                                    | 1
+rotated.gfa                    | circular replicons rotated and/or flipped to a start position                                     | 1
+polished.gfa                   | after a round of Pilon polishing                                                                  | 1
+__assembly.gfa__               | final assembly in [GFA v1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) graph format | 0
+__assembly.fasta__             | final assembly in FASTA format (same contigs as in assembly.gfa)                                  | 0
+__unicycler.log__              | Unicycler log file (same info as stdout)                                                          | 0
 
 
 
@@ -396,7 +421,7 @@ Unicycler is thorough and accurate, but not particularly fast. In particular, th
 
 Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads, you can make Unicycler run faster by subsampling for only the longest reads.
 
-Using a lot of threads (with the `--threads` option) can make Unicycler run faster too. It will only use up to 8 threads by default, but if you're running it on a big machine with lots of CPU and RAM, then feel free to use more!
+Using a lot of threads (with the `--threads` option) can make Unicycler run faster too. It will only use up to 8 threads by default, but if you're running it on a big machine with lots of CPU and RAM, feel free to use more!
 
 
 ### Necessary read length
@@ -437,7 +462,7 @@ __A__ is an very good Illumina read graph – the contigs are long and there are
 
 __B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler.
 
-__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. While you can still use Unicycler to resolve this assembly with long reads, the risk of small errors and misassemblies is considerably higher.
+__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. While you can still use Unicycler to resolve this assembly with long reads, the risk of small errors and misassemblies is considerably higher. If you have sufficient long reads, I would instead recommend assembling the long reads with [Canu](https://github.com/marbl/canu) and the polishing the resulting assembly using the Illumina reads and [Pilon](https://github.com/broadinstitute/pilon/wiki).
 
 
 ### Very short contigs

@@ -25,14 +25,14 @@ from . import log
 
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
-                          spades_path, threads, keep_temp, kmer_count, min_k_frac, max_k_frac,
+                          spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac,
                           no_spades_correct, expected_linear_seqs):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best.
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
     graphs have the same dead-end count (e.g. zero!) then the highest kmer is used.
     """
-    spades_dir = os.path.join(out_dir, 'spades_assembly_temp')
+    spades_dir = os.path.join(out_dir, 'spades_assembly')
     if not os.path.exists(spades_dir):
         os.makedirs(spades_dir)
 
@@ -86,9 +86,8 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
             continue
 
         assembly_graph.clean(read_depth_filter)
-        clean_graph_filename = os.path.join(spades_dir, 'k' + str(kmer) + '_assembly_graph.gfa')
-        assembly_graph.save_to_gfa(os.path.join(spades_dir, clean_graph_filename), 2,
-                                   leading_newline=False)
+        clean_graph_filename = os.path.join(spades_dir, ('k%03d' % kmer) + '_assembly_graph.gfa')
+        assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
 
         segment_count = len(assembly_graph.segments)
         dead_ends = assembly_graph.total_dead_end_count()
@@ -142,14 +141,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
                                    insert_size_deviation=insert_size_deviation)
     assembly_graph.clean(read_depth_filter)
     clean_graph_filename = os.path.join(spades_dir, 'k' + str(best_kmer) + '_assembly_graph.gfa')
-    assembly_graph.save_to_gfa(os.path.join(spades_dir, clean_graph_filename), 2,
-                               leading_newline=False)
-
-    # Clean up SPAdes files.
-    if keep_temp < 2 and os.path.isdir(assem_dir):
-        shutil.rmtree(assem_dir)
-    if keep_temp < 1 and os.path.isdir(spades_dir):
-        shutil.rmtree(spades_dir)
+    assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
 
     if best_score == 0.0:
         quit_with_error('none of the SPAdes assemblies produced assembled sequence')
@@ -160,6 +152,11 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     print_table(spades_results_table, alignments='RRRRRRRR', indent=0,
                 row_colour={best_kmer_row: 'green'},
                 row_extra_text={best_kmer_row: ' ' + get_left_arrow() + 'best'})
+
+    # Clean up.
+    if keep < 3 and os.path.isdir(spades_dir):
+        log.log('\nDeleting ' + spades_dir + '/')
+        shutil.rmtree(spades_dir)
 
     return assembly_graph
 
@@ -294,7 +291,7 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
             if os.path.isfile(graph_file):
                 parent_dir = os.path.dirname(out_dir)
                 copied_graph_file = os.path.join(parent_dir,
-                                                 'k' + ('%03d' % kmer) + '_assembly_graph.fastg')
+                                                 ('k%03d' % kmer) + '_assembly_graph.fastg')
                 shutil.copyfile(graph_file, copied_graph_file)
                 graph_files.append(copied_graph_file)
             else:

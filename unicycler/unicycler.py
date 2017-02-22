@@ -21,6 +21,7 @@ import sys
 import shutil
 import copy
 import random
+import itertools
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read import create_long_read_bridges
@@ -55,29 +56,29 @@ def main():
 
     check_input_files(args)
     print_intro_message(args, full_command, out_dir_message)
-    print_program_table(args)
+    check_dependencies(args)
 
-    file_num = 1
-    unbridged_graph_filename = os.path.join(args.out,
-                                            str(file_num).zfill(3) + '_unbridged_graph.gfa')
+    # Files are numbered in chronological order
+    counter = itertools.count(start=1)
+    unbridged_graph_filename = gfa_path(args.out, next(counter), 'unbridged_graph')
 
     # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
     if os.path.isfile(unbridged_graph_filename):
-        log.log('\nUnbridged graph already exists. Will use this graph instead of running SPAdes:')
-        log.log('  ' + unbridged_graph_filename)
+        log.log('\nUnbridged graph already exists. Will use this graph instead of running '
+                'SPAdes:\n  ' + unbridged_graph_filename)
         unbridged_graph = AssemblyGraph(unbridged_graph_filename, None)
     else:
         unbridged_graph = get_best_spades_graph(args.short1, args.short2, args.unpaired,
                                                 args.out, settings.READ_DEPTH_FILTER,
                                                 args.verbosity, args.spades_path, args.threads,
-                                                args.keep_temp, args.kmer_count, args.min_kmer_frac,
+                                                args.keep, args.kmer_count, args.min_kmer_frac,
                                                 args.max_kmer_frac, args.no_correct,
-                                                args.expected_linear_seqs)
+                                                args.linear_seqs)
 
     # Determine copy number and get single copy segments.
     single_copy_segments = get_single_copy_segments(unbridged_graph, 0)
-    unbridged_graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True,
-                                leading_newline=False)
+    if args.keep > 0:
+        unbridged_graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True)
 
     # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
     # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
@@ -94,30 +95,24 @@ def main():
         else:
             seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
                                                            args.min_bridge_qual, unbridged_graph)
-            file_num += 1
-            spades_bridged_graph_unmerged = os.path.join(args.out, str(file_num).zfill(3) +
-                                                         '_spades_bridges_applied.gfa')
-            graph.save_to_gfa(spades_bridged_graph_unmerged, save_seg_type_info=True,
-                              save_copy_depth_info=True)
+            log.log('')
+            if args.keep > 0:
+                graph.save_to_gfa(gfa_path(args.out, next(counter), 'short_read_bridges_applied'),
+                                  save_seg_type_info=True, save_copy_depth_info=True)
 
-            # Clean up unnecessary segments after bridging.
             graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
             graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
                                             args.min_dead_end_size, unbridged_graph,
                                             single_copy_segments)
-            if args.keep_temp > 1:
-                file_num += 1
-                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
-                                  save_seg_type_info=True, save_copy_depth_info=True,
-                                  leading_newline=False)
+            if args.keep > 2:
+                graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
+                                  save_seg_type_info=True, save_copy_depth_info=True)
             graph.merge_all_possible(single_copy_segments, args.mode)
-            if args.keep_temp > 1:
-                file_num += 1
-                graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
-                                  leading_newline=False)
+            if args.keep > 2:
+                graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
     # Prepare for long read alignment.
-    alignment_dir = os.path.join(args.out, 'read_alignment_temp')
+    alignment_dir = os.path.join(args.out, 'read_alignment')
     graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
     single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
     single_copy_segment_names = set(str(x.number) for x in single_copy_segments)
@@ -128,7 +123,7 @@ def main():
     if args.long:
         if not os.path.exists(alignment_dir):
             os.makedirs(alignment_dir)
-        unbridged_graph.save_to_fasta(graph_fasta, leading_newline=False)
+        unbridged_graph.save_to_fasta(graph_fasta)
         unbridged_graph.save_specific_segments_to_fasta(single_copy_segments_fasta,
                                                         single_copy_segments)
 
@@ -207,16 +202,16 @@ def main():
             # final SAM.
             else:
                 shutil.move(alignments_1_sam, alignments_sam)
-
-            if args.keep_temp < 1:
+            if args.keep < 2:
                 shutil.rmtree(alignment_dir)
-            if args.keep_temp < 2 and os.path.isfile(alignments_1_sam):
+                log.log('\nDeleting ' + alignment_dir + '/')
+            if args.keep < 3 and os.path.isfile(alignments_1_sam):
                 os.remove(alignments_1_sam)
-            if args.keep_temp < 2 and os.path.isfile(alignments_2_sam):
+            if args.keep < 3 and os.path.isfile(alignments_2_sam):
                 os.remove(alignments_2_sam)
-            if args.keep_temp < 2 and os.path.isfile(graph_fasta):
+            if args.keep < 3 and os.path.isfile(graph_fasta):
                 os.remove(graph_fasta)
-            if args.keep_temp < 2 and os.path.isfile(single_copy_segments_fasta):
+            if args.keep < 3 and os.path.isfile(single_copy_segments_fasta):
                 os.remove(single_copy_segments_fasta)
 
         # Discard any reads that mostly align to known contamination.
@@ -248,7 +243,7 @@ def main():
 
         # Do the long read bridging - this is the good part!
         log.log_section_header('Building long read bridges')
-        expected_linear_seqs = args.expected_linear_seqs > 0
+        expected_linear_seqs = args.linear_seqs > 0
         bridges = create_long_read_bridges(unbridged_graph, read_dict, read_names,
                                            single_copy_segments, args.verbosity, bridges,
                                            min_scaled_score, args.threads, scoring_scheme,
@@ -258,36 +253,28 @@ def main():
         log.log_section_header('Bridging graph with long reads')
         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
                                                        args.min_bridge_qual, unbridged_graph)
-        file_num += 1
-        read_bridged_graph_unmerged = os.path.join(args.out, str(file_num).zfill(3) +
-                                                   '_long_read_bridges_applied.gfa')
-        graph.save_to_gfa(read_bridged_graph_unmerged, save_seg_type_info=True,
-                          save_copy_depth_info=True)
+        if args.keep > 0:
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'long_read_bridges_applied'),
+                              save_seg_type_info=True, save_copy_depth_info=True, newline=True)
 
-        # Clean up unnecessary segments after bridging.
         graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
         graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
                                         args.min_dead_end_size, unbridged_graph,
                                         single_copy_segments)
-        if args.keep_temp > 1:
-            file_num += 1
+        if args.keep > 2:
             log.log('', 2)
-            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_cleaned.gfa'),
-                              save_seg_type_info=True, save_copy_depth_info=True,
-                              leading_newline=False)
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
+                              save_seg_type_info=True, save_copy_depth_info=True)
         graph.merge_all_possible(single_copy_segments, args.mode)
-        if args.keep_temp > 1:
-            file_num += 1
-            graph.save_to_gfa(os.path.join(args.out, str(file_num).zfill(3) + '_merged.gfa'),
-                              leading_newline=False)
+        if args.keep > 2:
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
     # Perform a final clean on the graph, including overlap removal.
     graph.final_clean()
     log.log_section_header('Bridged assembly graph')
     graph.print_component_table()
-    file_num += 1
-    cleaned_graph = os.path.join(args.out, str(file_num).zfill(3) + '_final_clean.gfa')
-    graph.save_to_gfa(cleaned_graph)
+    if args.keep > 0:
+        graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'), newline=True)
 
     # Rotate completed replicons in the graph to a standard starting gene.
     completed_replicons = graph.completed_circular_replicons()
@@ -296,7 +283,7 @@ def main():
 
         rotation_result_table = [['Replicon', 'Length', 'Depth', 'Starting gene', 'Position',
                                   'Strand', 'Identity', 'Coverage']]
-        blast_dir = os.path.join(args.out, 'blast_temp')
+        blast_dir = os.path.join(args.out, 'blast')
         if not os.path.exists(blast_dir):
             os.makedirs(blast_dir)
         completed_replicons = sorted(completed_replicons, reverse=True,
@@ -327,17 +314,15 @@ def main():
 
         print_table(rotation_result_table, alignments='LRRLRLRR', indent=0,
                     sub_colour={'none found': 'red'})
-        if rotation_count:
-            file_num += 1
-            rotated_graph = os.path.join(args.out, str(file_num).zfill(3) + '_rotated.gfa')
-            graph.save_to_gfa(rotated_graph)
-        if args.keep_temp < 2 and os.path.exists(blast_dir):
+        if rotation_count and args.keep > 0:
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
+        if args.keep < 3 and os.path.exists(blast_dir):
             shutil.rmtree(blast_dir)
 
     # Polish the final assembly!
     if not args.no_pilon:
         log.log_section_header('Polishing assembly with Pilon')
-        polish_dir = os.path.join(args.out, 'polish_temp')
+        polish_dir = os.path.join(args.out, 'pilon_polish')
         if not os.path.exists(polish_dir):
             os.makedirs(polish_dir)
         try:
@@ -347,17 +332,15 @@ def main():
         except CannotPolish as e:
             log.log('Unable to polish assembly using Pilon: ' + e.message)
         else:
-            file_num += 1
-            polished_graph = os.path.join(args.out, str(file_num).zfill(3) + '_polished.gfa')
-            graph.save_to_gfa(polished_graph)
-        if args.keep_temp < 2 and os.path.exists(polish_dir):
+            if args.keep > 0:
+                graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
+        if args.keep < 3 and os.path.exists(polish_dir):
             shutil.rmtree(polish_dir)
 
     # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Complete')
-    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'), leading_newline=False)
-    graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), leading_newline=False,
-                        min_length=args.min_fasta_length)
+    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'))
+    graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), min_length=args.min_fasta_length)
     log.log('')
 
 
@@ -414,11 +397,12 @@ def get_arguments():
     output_group.add_argument('--min_fasta_length', type=int, required=False, default=1,
                               help='Exclude contigs from the FASTA file which are shorter than '
                                    'this length (default: 1)')
-    output_group.add_argument('--keep_temp', type=int, default=0,
-                              help='R|Level of file retention (default: 0)\n  '
-                                   '0 = only keep files at main checkpoints, '
-                                   '1 = keep some temp files including SAM, '
-                                   '2 = keep all temp files')
+    output_group.add_argument('--keep', type=int, default=1,
+                              help='R|Level of file retention (default: 1)\n  '
+                                   '0 = only keep final files: assembly (FASTA, GFA and log), '
+                                   '1 = also save graphs at main checkpoints, '
+                                   '2 = also keep SAM (enables fast rerun in different mode), '
+                                   '3 = keep all temp files and save all graphs (for debugging)')
 
     other_group = parser.add_argument_group('Other')
     other_group.add_argument('-t', '--threads', type=int, required=False,
@@ -438,7 +422,7 @@ def get_arguments():
                                   '  bold mode default: ' +
                                   str(settings.BOLD_MIN_BRIDGE_QUAL)
                                   if show_all_args else argparse.SUPPRESS)
-    other_group.add_argument('--expected_linear_seqs', type=int, required=False, default=0,
+    other_group.add_argument('--linear_seqs', type=int, required=False, default=0,
                              help='The expected number of linear (i.e. non-circular) sequences in '
                                   'the underlying sequence')
 
@@ -550,8 +534,8 @@ def get_arguments():
     args = parser.parse_args()
     fix_up_arguments(args)
 
-    if args.keep_temp < 0 or args.keep_temp > 2:
-        quit_with_error('--keep_temp must be between 0 and 2 (inclusive)')
+    if args.keep < 0 or args.keep > 3:
+        quit_with_error('--keep must be between 0 and 3 (inclusive)')
 
     if args.verbosity < 0 or args.verbosity > 3:
         quit_with_error('--verbosity must be between 0 and 3 (inclusive)')
@@ -686,7 +670,11 @@ def print_intro_message(args, full_command, out_dir_message):
     log.log(float_to_str(args.min_bridge_qual, 2), 2)
 
 
-def print_program_table(args):
+def check_dependencies(args):
+    """
+    This function prints a table of Unicycler's dependencies and checks their version number.
+    It will end the program with an error message if there are any problems.
+    """
     log.log('\nDependencies:')
     if args.verbosity <= 1:
         program_table = [['Program', 'Version', 'Status']]
@@ -806,3 +794,7 @@ def quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status
 
     # Code should never get here!
     quit_with_error('Unspecified error with Unicycler dependencies')
+
+
+def gfa_path(out_dir, file_num, name):
+    return os.path.join(out_dir, str(file_num).zfill(3) + '_' + name + '.gfa')

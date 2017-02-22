@@ -549,6 +549,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
         hide_header: if True, the header is not printed
         fixed_col_widths: a list to specify exact column widths (automatic if not used)
         left_align_header: if False, the header will follow the column alignments
+        verbosity: the table will only be logged if the logger verbosity is >= this value
     """
     column_count = len(table[0])
     table = [x[:column_count] for x in table]

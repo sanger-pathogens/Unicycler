@@ -17,7 +17,7 @@ import math
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
 from .misc import int_to_str, float_to_str, weighted_average_list, score_function,\
-    add_line_breaks_to_sequence, print_table, get_timestamp, get_dim_timestamp, get_right_arrow
+    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow
 from .bridge_long_read import LongReadBridge
 from . import settings
 from . import log
@@ -335,11 +335,11 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, leading_newline=True, min_length=1):
+    def save_to_fasta(self, filename, newline=False, min_length=1):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        log.log(('\n' if leading_newline else '') + 'Saving ' + filename)
+        log.log(('\n' if newline else '') + 'Saving ' + filename)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
@@ -361,11 +361,11 @@ class AssemblyGraph(object):
                 fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     def save_to_gfa(self, filename, verbosity=1, save_copy_depth_info=False,
-                    save_seg_type_info=False, leading_newline=True):
+                    save_seg_type_info=False, newline=False):
         """
         Saves whole graph to a GFA file.
         """
-        log.log(('\n' if leading_newline else '') + 'Saving ' + filename, verbosity)
+        log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         with open(filename, 'w') as gfa:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for segment in sorted_segments:
