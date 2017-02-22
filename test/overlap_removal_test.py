@@ -17,26 +17,38 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import subprocess
 import shutil
-import unicycler.assembly_graph
-import unicycler.misc
 import random
 import datetime
-import fake_reads
+import sys
+
+sys.path.insert(0, os.getcwd())
+import unicycler.assembly_graph
+import unicycler.misc
+import unicycler.log
+import test.fake_reads
 
 
 def main():
+    unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
     random.seed(0)
     print('\t'.join(['Sequence length', 'Repeat count', 'Segment count', 'Edge count',
                      'Overlap/kmer', 'Time (ms)']))
-    while True:
-        test_overlap_removal()
+    try:
+        while True:
+            test_overlap_removal()
+
+    # The user exits this script with Ctrl-C
+    except KeyboardInterrupt:
+        temp_dir = 'TEST_TEMP_' + str(os.getpid())
+        if os.path.isdir(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
 def test_overlap_removal():
     random_seq_length = random.randint(8, 20) ** 4
     repeat_count = random.randint(1, random_seq_length // 10)
     random_seq = make_repeaty_sequence(random_seq_length, repeat_count)
-    out_dir = fake_reads.make_fake_reads(random_seq)
+    out_dir = test.fake_reads.make_fake_reads(random_seq)
 
     output_line = [str(random_seq_length), str(repeat_count)]
 

@@ -17,21 +17,31 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import subprocess
 import shutil
+import random
+import datetime
+import sys
+
+sys.path.insert(0, os.getcwd())
 import unicycler.unicycler
 import unicycler.assembly_graph
 import unicycler.misc
-import random
-import datetime
-import fake_reads
+import test.fake_reads
 
 
 def main():
     random.seed(0)
     print('\t'.join(['Test type', 'Seq length', 'Time (ms)', 'Command']))
-    while True:
-        test_circular_no_repeat()
-        test_circular_one_repeat()
-        test_stdout_size()
+    try:
+        while True:
+            test_circular_no_repeat()
+            test_circular_one_repeat()
+            test_stdout_size()
+
+    # The user exits this script with Ctrl-C
+    except KeyboardInterrupt:
+        temp_dir = 'TEST_TEMP_' + str(os.getpid())
+        if os.path.isdir(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
 def run_unicycler(out_dir, option_code, verbosity=None):
@@ -88,7 +98,7 @@ def sequence_matches_any_rotation(seq_1, seq_2):
 def test_circular_no_repeat():
     random_seq_length = random.randint(8, 20) ** 4
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)
-    out_dir = fake_reads.make_fake_reads(random_seq)
+    out_dir = test.fake_reads.make_fake_reads(random_seq)
     option_code = random.randint(0, 4)
     stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
     assert bool(stderr) is False
@@ -114,7 +124,7 @@ def test_circular_one_repeat():
     seq_1 = unicycler.misc.get_random_sequence(non_repeat_length_1)
     seq_2 = unicycler.misc.get_random_sequence(non_repeat_length_2)
     random_seq = seq_1 + repeat + seq_2 + repeat
-    out_dir = fake_reads.make_fake_reads(random_seq)
+    out_dir = test.fake_reads.make_fake_reads(random_seq)
     option_code = random.randint(0, 4)
     stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
     assert bool(stderr) is False
@@ -160,7 +170,7 @@ def test_stdout_size():
     for verbosity in range(4):
         random_seq_length = random.randint(1000, 5000)
         random_seq = unicycler.misc.get_random_sequence(random_seq_length)
-        out_dir = fake_reads.make_fake_reads(random_seq)
+        out_dir = test.fake_reads.make_fake_reads(random_seq)
         stdout, stderr, cmd_string, ms = run_unicycler(out_dir, 0, verbosity)
         assert bool(stderr) is False
         stdout_sizes.append(len(stdout))
