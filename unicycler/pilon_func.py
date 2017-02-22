@@ -40,8 +40,11 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     if not segments_to_polish:
         raise CannotPolish('no segments are long enough to polish')
 
-    polish_input_filename = os.path.join(polish_dir, 'polish.fasta')
-    polish_fasta = open(polish_input_filename, 'w')
+    # To avoid issues with paths that contain spaces, we will move into the temporary directory
+    # to run these commands.
+    os.chdir(polish_dir)
+
+    polish_fasta = open('polish_input.fasta', 'w')
     for segment in segments_to_polish:
         polish_fasta.write('>' + str(segment.number) + '\n')
         polish_fasta.write(segment.forward_sequence)
@@ -49,7 +52,7 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     polish_fasta.close()
 
     # Prepare the FASTA for Bowtie2 alignment.
-    bowtie2_build_command = [bowtie2_build_path, polish_input_filename, polish_input_filename]
+    bowtie2_build_command = [bowtie2_build_path, 'polish_input.fasta', 'polish_input.fasta']
     try:
         subprocess.check_output(bowtie2_build_command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
@@ -61,7 +64,7 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     raw_sam_filename = os.path.join(polish_dir, 'alignments_raw.sam')
     bowtie2_command = [bowtie2_path, '--end-to-end', '--very-sensitive', '--threads', str(threads),
                        '--no-discordant', '--no-mixed', '--no-unal', '-I', '0', '-X', '2000',
-                       '-x', polish_input_filename, '-1', short_1, '-2', short_2,
+                       '-x', 'polish_input.fasta', '-1', short_1, '-2', short_2,
                        '-S', raw_sam_filename]
     log.log('Aligning short reads to assembly using Bowtie2')
     log.log('  ' + ' '.join(bowtie2_command), 2)
@@ -133,7 +136,7 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
         pilon_command = [java_path, '-jar', pilon_path]
     else:
         pilon_command = [pilon_path]
-    pilon_command += ['--genome', polish_input_filename, '--frags', bam_filename,
+    pilon_command += ['--genome', 'polish_input.fasta', '--frags', bam_filename,
                       '--fix', 'bases', '--changes', '--outdir', polish_dir]
     log.log('', 2)
     log.log('Running Pilon')

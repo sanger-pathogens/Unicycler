@@ -22,7 +22,8 @@ from .misc import quit_with_error
 SO_FILE = 'cpp_functions.so'
 SO_FILE_FULL = os.path.join(os.path.dirname(os.path.realpath(__file__)), SO_FILE)
 if not os.path.isfile(SO_FILE_FULL):
-    quit_with_error('could not find ' + SO_FILE + ' - please reinstall')
+    quit_with_error('could not find ' + SO_FILE + '\n' +
+                    "Please reinstall Unicycler or run make from Unicycler's source directory")
 C_LIB = CDLL(SO_FILE_FULL)
 
 # This is the big semi-global C++ Seqan alignment function at the heart of the aligner.

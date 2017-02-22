@@ -50,7 +50,7 @@ def main():
     # Fix the random seed so the program produces the same output every time it's run.
     random.seed(0)
 
-    full_command = ' '.join(sys.argv)
+    full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
     out_dir_message = make_output_directory(args.out, args.verbosity)
 
@@ -281,7 +281,7 @@ def main():
     if not args.no_rotate and len(completed_replicons) > 0:
         log.log_section_header('Rotating completed replicons')
 
-        rotation_result_table = [['Replicon', 'Length', 'Depth', 'Starting gene', 'Position',
+        rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
                                   'Strand', 'Identity', 'Coverage']]
         blast_dir = os.path.join(args.out, 'blast')
         if not os.path.exists(blast_dir):
@@ -289,13 +289,14 @@ def main():
         completed_replicons = sorted(completed_replicons, reverse=True,
                                      key=lambda x: graph.segments[x].get_length())
         rotation_count = 0
-        for i, completed_replicon in enumerate(completed_replicons):
+        for completed_replicon in completed_replicons:
             segment = graph.segments[completed_replicon]
             sequence = segment.forward_sequence
             if graph.overlap > 0:
                 sequence = sequence[:-graph.overlap]
             depth = segment.depth
-            rotation_result_row = [str(i+1), int_to_str(len(sequence)),
+            log.log('Segment ' + str(segment.number) + ':', 2)
+            rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
                                    float_to_str(depth, 2) + 'x']
             try:
                 blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
@@ -312,7 +313,8 @@ def main():
                 rotation_count += 1
             rotation_result_table.append(rotation_result_row)
 
-        print_table(rotation_result_table, alignments='LRRLRLRR', indent=0,
+        log.log('', 2)
+        print_table(rotation_result_table, alignments='RRRLRLRR', indent=0,
                     sub_colour={'none found': 'red'})
         if rotation_count and args.keep > 0:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
@@ -325,6 +327,7 @@ def main():
         polish_dir = os.path.join(args.out, 'pilon_polish')
         if not os.path.exists(polish_dir):
             os.makedirs(polish_dir)
+        starting_dir = os.getcwd()
         try:
             polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
                               args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
@@ -334,6 +337,7 @@ def main():
         else:
             if args.keep > 0:
                 graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
+        os.chdir(starting_dir)
         if args.keep < 3 and os.path.exists(polish_dir):
             shutil.rmtree(polish_dir)
 

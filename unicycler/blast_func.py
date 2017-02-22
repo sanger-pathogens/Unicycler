@@ -44,8 +44,16 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
     dup_length = min(seq_len, longest_query)
     sequence = sequence + sequence[:dup_length]
 
+    # BLAST has serious issues with paths that contain spaces. This page explains some of it:
+    #   https://www.ncbi.nlm.nih.gov/books/NBK279669/
+    # But I couldn't make it all work for makeblastdb (spaces made it require -out, and it never
+    # accepted spaces in the -out path, no matter how I used quotes). So we will just move into the
+    # temporary directory to run the BLAST commands.
+    starting_dir = os.getcwd()
+    os.chdir(blast_dir)
+
     # Create a FASTA file of the replicon sequence.
-    replicon_fasta_filename = os.path.join(blast_dir, 'replicon.fasta')
+    replicon_fasta_filename = 'replicon.fasta'
     replicon_fasta = open(replicon_fasta_filename, 'w')
     replicon_fasta.write('>replicon\n')
     replicon_fasta.write(sequence)
@@ -54,16 +62,19 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
 
     # Build the BLAST database.
     command = [makeblastdb_path, '-dbtype', 'nucl', '-in', replicon_fasta_filename]
+    log.log('  ' + ' '.join(command), 2)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     _, err = process.communicate()
     if err:
         log.log('\nmakeblastdb encountered an error:\n' + err.decode())
+        os.chdir(starting_dir)
         raise CannotFindStart
 
     # Run the tblastn search.
     command = [tblastn_path, '-db', replicon_fasta_filename, '-query', start_genes_fasta, '-outfmt',
                '6 qseqid sstart send pident qlen qseq qstart bitscore', '-num_threads',
-               str(threads)]
+               str(min(threads, 4))]
+    log.log('  ' + ' '.join(command), 2)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     blast_out, blast_err = process.communicate()
     process.wait()
@@ -78,6 +89,8 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
                 hit.qstart == 0 and hit.bitscore > best_bitscore:
             best_hit = hit
             best_bitscore = hit.bitscore
+
+    os.chdir(starting_dir)
 
     if best_bitscore:
         return best_hit
