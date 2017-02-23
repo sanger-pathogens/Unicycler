@@ -27,12 +27,18 @@ import unicycler.misc
 import unicycler.log
 import test.fake_reads
 
+col_widths = [10, 12, 13, 10, 12, 9]
+
 
 def main():
-    unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
     random.seed(0)
-    print('\t'.join(['Sequence length', 'Repeat count', 'Segment count', 'Edge count',
-                     'Overlap/kmer', 'Time (ms)']))
+
+    print()
+    unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+    header_row = ['Seq length', 'Repeat count', 'Segment count', 'Edge count', 'Overlap/kmer',
+                  'Time (ms)']
+    unicycler.misc.print_table([header_row], col_separation=3, header_format='underline', indent=0,
+                               alignments='RRRRRR', fixed_col_widths=col_widths, verbosity=0)
     try:
         while True:
             test_overlap_removal()
@@ -108,8 +114,10 @@ def check_one_graph_overlap(out_dir, k_size, output_line):
 
     assert graph.overlap == 0
     graph.save_to_gfa(graph_file + '.gfa')
-    print('\t'.join(output_line + [str(seg_count), str(edge_count), str(k_size),
-                                   str(milliseconds)]))
+    table_row = output_line + [str(seg_count), str(edge_count), str(k_size), '%.1f' % milliseconds]
+    unicycler.misc.print_table([table_row], col_separation=3, header_format='normal', indent=0,
+                               alignments='RRRRRR', fixed_col_widths=col_widths, verbosity=0,
+                               left_align_header=False)
 
 
 if __name__ == '__main__':

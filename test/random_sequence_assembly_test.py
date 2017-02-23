@@ -27,10 +27,15 @@ import unicycler.assembly_graph
 import unicycler.misc
 import test.fake_reads
 
+col_widths = [22, 10, 9, 80]
+
 
 def main():
     random.seed(0)
-    print('\t'.join(['Test type', 'Seq length', 'Time (ms)', 'Command']))
+    print()
+    header_row = ['Test type', 'Seq length', 'Time (ms)', 'Command']
+    unicycler.misc.print_table([header_row], col_separation=2, header_format='underline', indent=0,
+                               alignments='LRRL', fixed_col_widths=col_widths)
     try:
         while True:
             test_circular_no_repeat()
@@ -112,7 +117,10 @@ def test_circular_no_repeat():
     assert graph.segments[1].depth > 0.9
     assert graph.segments[1].depth < 1.1
 
-    print('\t'.join(['circular_no_repeat', str(random_seq_length), str(ms), cmd_string]))
+    table_row = ['circular_no_repeat', str(random_seq_length), '%.1f' % ms, cmd_string]
+    unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
+                               alignments='LRRL', fixed_col_widths=col_widths,
+                               left_align_header=False)
     shutil.rmtree(out_dir)
 
 
@@ -161,7 +169,10 @@ def test_circular_one_repeat():
     assert len(assembled_seq) == random_seq_length
     assert sequence_matches_any_rotation(random_seq, assembled_seq)
 
-    print('\t'.join(['circular_one_repeat', str(random_seq_length), str(ms), cmd_string]))
+    table_row = ['circular_one_repeat', str(random_seq_length), '%.1f' % ms, cmd_string]
+    unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
+                               alignments='LRRL', fixed_col_widths=col_widths,
+                               left_align_header=False)
     shutil.rmtree(out_dir)
 
 
@@ -175,7 +186,10 @@ def test_stdout_size():
         assert bool(stderr) is False
         stdout_sizes.append(len(stdout))
         shutil.rmtree(out_dir)
-        print('\t'.join(['stdout_size', str(random_seq_length), str(ms), cmd_string]))
+        table_row = ['stdout_size', str(random_seq_length), '%.1f' % ms, cmd_string]
+        unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
+                                   alignments='LRRL', fixed_col_widths=col_widths,
+                                   left_align_header=False)
     assert stdout_sizes[0] == 0
     assert stdout_sizes[1] > 0
     assert stdout_sizes[2] >= stdout_sizes[1]
