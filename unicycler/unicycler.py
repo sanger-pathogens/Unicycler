@@ -79,6 +79,8 @@ def main():
     single_copy_segments = get_single_copy_segments(unbridged_graph, 0)
     if args.keep > 0:
         unbridged_graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True)
+        single_copy_seg_reads = os.path.join(args.out, '001_single_copy_segments.fastq')
+        unbridged_graph.save_single_copy_segs_as_reads(single_copy_seg_reads, qual=40)
 
     # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
     # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).

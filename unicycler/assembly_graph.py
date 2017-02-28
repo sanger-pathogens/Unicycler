@@ -399,6 +399,20 @@ class AssemblyGraph(object):
                 gfa.write(str(self.insert_size_deviation))
                 gfa.write('\n')
 
+    def save_single_copy_segs_as_reads(self, filename, qual=40):
+        qual_char = chr(qual + 33)
+        with open(filename, 'w') as fastq:
+            sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
+            for seg in sorted_segments:
+                if seg.number in self.copy_depths and len(self.copy_depths[seg.number]) == 1:
+                    fastq.write('@')
+                    fastq.write(str(seg.number))
+                    fastq.write('\n')
+                    fastq.write(seg.forward_sequence)
+                    fastq.write('\n+\n')
+                    fastq.write(qual_char * seg.get_length())
+                    fastq.write('\n')
+
     def get_all_gfa_link_lines(self):
         """
         Returns a string of the link component of the GFA file for this graph.
