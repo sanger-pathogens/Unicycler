@@ -1152,7 +1152,7 @@ def apply_variants(in_fasta, variants, out_fasta):
 def print_command(command, verbosity):
     if verbosity > 1:
         command = [os.path.basename(command[0])] + command[1:]  # Remove path from program name
-        print(bold(get_timestamp()) + '   ' + ' '.join(command), flush=True)
+        print(dim(get_timestamp()) + '   ' + ' '.join(command), flush=True)
 
 
 def print_round_header(text, verbosity):
