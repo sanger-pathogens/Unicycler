@@ -82,6 +82,10 @@ def main():
         single_copy_seg_reads = os.path.join(args.out, '001_single_copy_segments.fastq')
         unbridged_graph.save_single_copy_segs_as_reads(single_copy_seg_reads, qual=40)
 
+    # SHORT READ BRIDGING?
+    # * If I'm ever going to bridge with the short reads, here is the time to do it! I won't use
+    #   SPAdes contigs paths, though (don't trust them).
+
     # ALIGN LONG READS TO THE SINGLE COPY CONTIGS USING MINIMAP
 
     # LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
@@ -105,7 +109,9 @@ def main():
 
     # EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     # * Take all single copy contigs over a certain length and get reads which overlap two or more.
-    #   * logic is currently in get_overlapping_reads.py.
+    #   * Some logic is currently in get_overlapping_reads.py.
+    #   * While I'm at it, I should throw out reads which look like chimeras based on incompatible
+    #     mapping.
     # * Create a file of "long reads" which contains:
     #   * real long reads as found (and possibly split) by the above step
     #   * single copy contigs in FASTQ form (with a high quality, 'I' or something)
@@ -159,6 +165,16 @@ def main():
     # * May be necessary because the miniasm assembly will fail in cases of short alignments.
     # * A minimap-based (as opposed to unicycler_align-based) approach would be nice, for speed.
 
+    # POLISH THE ASSEMBLY ITERATIVELY USING PILON.
+    # * Reads are mapped individually, taking all equally good mapping locations.
+	# * Then classify read pairs as:
+	#     1) Uniquely mapping: only one concordant mapping position. This could mean that read A
+    #        has many possible positions but read B only has one and only one of read A's positions
+    #        is concordant with read B.
+	#     2) Non-unique: the pair has multiple equally good positions to map to.
+	# * Polish using only the uniquely mapping pairs. This should allow us to work our way from
+    #   single copy segments into repeat regions without mixing up small variations in the repeat
+    #   zones.
 
 
 
