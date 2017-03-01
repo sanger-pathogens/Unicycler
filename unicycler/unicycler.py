@@ -82,272 +82,385 @@ def main():
         single_copy_seg_reads = os.path.join(args.out, '001_single_copy_segments.fastq')
         unbridged_graph.save_single_copy_segs_as_reads(single_copy_seg_reads, qual=40)
 
-    # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
-    # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
-    if args.mode == 0:
-        bridges = []
-        graph = copy.deepcopy(unbridged_graph)
-    else:
-        log.log_section_header('Bridging graph with SPAdes contigs')
-        bridges = create_spades_contig_bridges(unbridged_graph, single_copy_segments)
-        bridges += create_loop_unrolling_bridges(unbridged_graph)
-        graph = copy.deepcopy(unbridged_graph)
-        if not bridges:
-            log.log('none found', 1)
-        else:
-            seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
-                                                           args.min_bridge_qual, unbridged_graph)
-            log.log('')
-            if args.keep > 0:
-                graph.save_to_gfa(gfa_path(args.out, next(counter), 'short_read_bridges_applied'),
-                                  save_seg_type_info=True, save_copy_depth_info=True)
+    # ALIGN LONG READS TO THE SINGLE COPY CONTIGS USING MINIMAP
 
-            graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
-            graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                            args.min_dead_end_size, unbridged_graph,
-                                            single_copy_segments)
-            if args.keep > 2:
-                graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
-                                  save_seg_type_info=True, save_copy_depth_info=True)
-            graph.merge_all_possible(single_copy_segments, args.mode)
-            if args.keep > 2:
-                graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
+    # LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
+    # READS.
+    # * For example, a two-way merge and split.
+    # * Places in the graph where there are X ways in, X ways out, and each way in to way out has
+    #   one and only one path.
+    # * First, find these locations.
+    # * Second, determine all possible paths. For a 2-2 junction, this will be 4 paths. For a 3-3
+    #   junction, this will be 9 paths, etc.
+    # * Evaluate each path using the minimap alignments and sort the paths from best to worst.
+    # * If the top X paths (where X is the in and out degree) are complete and not conflicting
+    #   (they use each in path once and each out path once), then we can apply the bridges!
 
-    # Prepare for long read alignment.
-    alignment_dir = os.path.join(args.out, 'read_alignment')
-    graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
-    single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
-    single_copy_segment_names = set(str(x.number) for x in single_copy_segments)
-    alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
-    scoring_scheme = AlignmentScoringScheme(args.scores)
-    min_alignment_length = unbridged_graph.overlap * \
-        settings.MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP
-    if args.long:
-        if not os.path.exists(alignment_dir):
-            os.makedirs(alignment_dir)
-        unbridged_graph.save_to_fasta(graph_fasta)
-        unbridged_graph.save_specific_segments_to_fasta(single_copy_segments_fasta,
-                                                        single_copy_segments)
+    # APPLY SIMPLE MINIMAP BRIDGES
 
-    # If all long reads are available now, then we do the entire process in one pass.
-    if args.long:
-        references = load_references(graph_fasta, section_header='Loading single copy segments')
-        reference_dict = {x.name: x for x in references}
-        read_dict, read_names, long_read_filename = load_long_reads(args.long)
+    # RE-RUN COPY NUMBER DETERMINATION? MAY NOT BE NECESSARY, AS I DON'T KNOW IF THE ABOVE STEPS
+    # CAN CHANGE ANYTHING RELEVANT.
 
-        # Load existing alignments if available.
-        if os.path.isfile(alignments_sam) and sam_references_match(alignments_sam, unbridged_graph):
-            log.log('\nSAM file already exists. Will use these alignments instead of conducting '
-                  'a new alignment:')
-            log.log('  ' + alignments_sam)
-            alignments = load_sam_alignments(alignments_sam, read_dict, reference_dict,
-                                             scoring_scheme)
-            for alignment in alignments:
-                read_dict[alignment.read.name].alignments.append(alignment)
-            print_alignment_summary_table(read_dict, args.verbosity, False)
+    # ALIGN LONG READS TO THE SINGLE COPY CONTIGS USING MINIMAP.
 
-        # Conduct the alignment if an existing SAM is not available.
-        else:
-            alignments_1_sam = os.path.join(alignment_dir, 'long_read_alignments_pass_1.sam')
-            alignments_1_in_progress = alignments_1_sam + '.incomplete'
-            alignments_2_sam = os.path.join(alignment_dir, 'long_read_alignments_pass_2.sam')
-            alignments_2_in_progress = alignments_2_sam + '.incomplete'
+    # EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
+    # * Take all single copy contigs over a certain length and get reads which overlap two or more.
+    #   * logic is currently in get_overlapping_reads.py.
+    # * Create a file of "long reads" which contains:
+    #   * real long reads as found (and possibly split) by the above step
+    #   * single copy contigs in FASTQ form (with a high quality, 'I' or something)
 
-            allowed_overlap = int(round(unbridged_graph.overlap *
-                                        settings.ALLOWED_ALIGNMENT_OVERLAP))
-            low_score_threshold = [args.low_score]
-            semi_global_align_long_reads(references, graph_fasta, read_dict, read_names,
-                                         long_read_filename, args.threads, scoring_scheme,
-                                         low_score_threshold, False, min_alignment_length,
-                                         alignments_1_in_progress, full_command, allowed_overlap,
-                                         0, args.contamination, args.verbosity,
-                                         stdout_header='Aligning reads (first pass)',
-                                         single_copy_segment_names=single_copy_segment_names)
-            shutil.move(alignments_1_in_progress, alignments_1_sam)
+    # ASSEMBLE LONG READS USING MINIASM.
+    # * The min_ovlp setting should either be 1 or dynamically determined based on depth.
+    # * Final target: the string graph.
 
-            # Some reads are aligned again with a more sensitive mode: those with multiple
-            # alignments or unaligned parts.
-            retry_read_names = [x.name for x in read_dict.values() if
-                                (x.get_fraction_aligned() < settings.MIN_READ_FRACTION_ALIGNED or
-                                 len(x.alignments) > 1) and x.get_length() >= min_alignment_length]
-            if retry_read_names:
-                semi_global_align_long_reads(references, single_copy_segments_fasta, read_dict,
-                                             retry_read_names, long_read_filename,
-                                             args.threads, scoring_scheme, low_score_threshold,
-                                             False, min_alignment_length, alignments_2_in_progress,
-                                             full_command, allowed_overlap, 3,
-                                             args.contamination, args.verbosity,
-                                             stdout_header='Aligning reads (second pass)',
-                                             display_low_score=False,
-                                             single_copy_segment_names=single_copy_segment_names)
-                shutil.move(alignments_2_in_progress, alignments_2_sam)
+    # REMOVE OVERLAPS FROM MINIASM STRING GRAPH.
+    # * Selectively remove overlaps from lower quality sequences first.
+    # * Keep as much contig sequence as possible.
+    # * Process idea:
+    #   * Find the lowest quality read, based on average qscore and remove as much as possible
+    #     (could be all of the read if its neighbours overlap).
+    #   * Repeat until there are no more overlaps.
+    # * Merge the assembly together (keeping single copy contigs separate).
 
-                # Now we have to put together a final SAM file. If a read is in the second pass,
-                # then we use the alignments from that SAM. Otherwise we take the alignments from
-                # the first SAM.
-                retry_read_names = set(retry_read_names)
-                with open(alignments_sam, 'wt') as alignments_file:
-                    with open(alignments_1_sam, 'rt') as alignments_1:
-                        for line in alignments_1:
-                            if line.startswith('@'):
-                                alignments_file.write(line)
-                            else:
-                                read_name = line.split('\t', 1)[0]
-                                if read_name not in retry_read_names:
-                                    alignments_file.write(line)
-                    with open(alignments_2_sam, 'rt') as alignments_2:
-                        for line in alignments_2:
-                            if not line.startswith('@'):
-                                alignments_file.write(line)
+    # EXTRACT ALL CONTIG-CONTIG BRIDGE SEQUENCES.
+    # * Any two single copy contigs connected by an unbranching path that contains no other contigs.
 
-            # If there are no low fraction reads, we can just rename the first pass SAM to the
-            # final SAM.
-            else:
-                shutil.move(alignments_1_sam, alignments_sam)
-            if args.keep < 2:
-                shutil.rmtree(alignment_dir)
-                log.log('\nDeleting ' + alignment_dir + '/')
-            if args.keep < 3 and os.path.isfile(alignments_1_sam):
-                os.remove(alignments_1_sam)
-            if args.keep < 3 and os.path.isfile(alignments_2_sam):
-                os.remove(alignments_2_sam)
-            if args.keep < 3 and os.path.isfile(graph_fasta):
-                os.remove(graph_fasta)
-            if args.keep < 3 and os.path.isfile(single_copy_segments_fasta):
-                os.remove(single_copy_segments_fasta)
+    # POLISH EACH BRIDGE SEQUENCE.
+    # * For this we use the set of long reads which overlap the two single copy contigs on the
+    #   correct side. It is not necessary for reads to overlap both contigs, as this will give us
+    #   better coverage in the intervening repeat region.
+    # * Include the single copy contigs as 'reads'.
+    #   * Specifically, use the slightly trimmed single copy contigs in the miniasm string graph
+    #     (in case the entire contig has a bogus end).
+    #   * The high qscores here should ensure that no changes are made in these regions. Include
+    #     extra copies if necessary.
 
-        # Discard any reads that mostly align to known contamination.
-        if args.contamination:
-            filtered_read_names = []
-            filtered_read_dict = {}
-            contaminant_read_count = 0
-            for read_name in read_names:
-                if read_dict[read_name].mostly_aligns_to_contamination():
-                    contaminant_read_count += 1
-                else:
-                    filtered_read_names.append(read_name)
-                    filtered_read_dict[read_name] = read_dict[read_name]
-            read_names = filtered_read_names
-            read_dict = filtered_read_dict
-            log.log('\nDiscarded', contaminant_read_count, 'reads as contamination', 2)
+    # MAKE EACH BRIDGE SEGMENT.
+    # * Goal is to turn one contiguous sequence spanning both single copy contigs into:
+    #   CONTIG -> BRIDGE -> CONTIG
 
-        # Use the long reads which aligned entirely within contigs (which are most likely correct)
-        # to determine a minimum score.
-        contained_reads = [x for x in read_dict.values() if x.has_one_contained_alignment()]
-        contained_scores = []
-        for read in contained_reads:
-            contained_scores += [x.scaled_score for x in read.alignments]
-        min_scaled_score = get_percentile(contained_scores, settings.MIN_SCALED_SCORE_PERCENTILE)
+    # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
+    # * Goal 1: if we can find a short read version of the bridge, we should use that because it
+    #   will probably be more accurate.
+    # * Goal 2: using a graph path will let us 'use up' the segments, which helps with clean-up.
+    # * In order to replace a miniasm assembly bridge sequence with a graph path sequence, the
+    #   match has to be very strong! High identity over all sequence windows.
+    # * Can use my existing path finding code, but tweak the settings to make them faster. This is
+    #   because failing to find an existing path isn't too terrible, as we already have the miniasm
+    #   sequence.
 
-        log.log('\nSetting the minimum scaled score to the ' +
-                float_to_str(settings.MIN_SCALED_SCORE_PERCENTILE, 1) +
-                'th percentile of full read alignments: ' + float_to_str(min_scaled_score, 2), 2)
+    # DO SOME BASIC GRAPH CLEAN-UP AND MERGE ALL POSSIBLE SEGMENTS.
+    # * Clean up will be a bit tougher as we may have missed used sequence.
 
-        # Do the long read bridging - this is the good part!
-        log.log_section_header('Building long read bridges')
-        expected_linear_seqs = args.linear_seqs > 0
-        bridges = create_long_read_bridges(unbridged_graph, read_dict, read_names,
-                                           single_copy_segments, args.verbosity, bridges,
-                                           min_scaled_score, args.threads, scoring_scheme,
-                                           min_alignment_length, expected_linear_seqs,
-                                           args.min_bridge_qual)
-        graph = copy.deepcopy(unbridged_graph)
-        log.log_section_header('Bridging graph with long reads')
-        seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
-                                                       args.min_bridge_qual, unbridged_graph)
-        if args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'long_read_bridges_applied'),
-                              save_seg_type_info=True, save_copy_depth_info=True, newline=True)
+    # RE-RUN COPY NUMBER DETERMINATION.
 
-        graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
-        graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                        args.min_dead_end_size, unbridged_graph,
-                                        single_copy_segments)
-        if args.keep > 2:
-            log.log('', 2)
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
-                              save_seg_type_info=True, save_copy_depth_info=True)
-        graph.merge_all_possible(single_copy_segments, args.mode)
-        if args.keep > 2:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
+    # CONDUCT 'CLASSIC' LONG READ BRIDGING ON REMAINING PARTS?
+    # * May be necessary because the miniasm assembly will fail in cases of short alignments.
+    # * A minimap-based (as opposed to unicycler_align-based) approach would be nice, for speed.
 
-    # Perform a final clean on the graph, including overlap removal.
-    graph.final_clean()
-    log.log_section_header('Bridged assembly graph')
-    graph.print_component_table()
-    if args.keep > 0:
-        graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'), newline=True)
 
-    # Rotate completed replicons in the graph to a standard starting gene.
-    completed_replicons = graph.completed_circular_replicons()
-    if not args.no_rotate and len(completed_replicons) > 0:
-        log.log_section_header('Rotating completed replicons')
 
-        rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
-                                  'Strand', 'Identity', 'Coverage']]
-        blast_dir = os.path.join(args.out, 'blast')
-        if not os.path.exists(blast_dir):
-            os.makedirs(blast_dir)
-        completed_replicons = sorted(completed_replicons, reverse=True,
-                                     key=lambda x: graph.segments[x].get_length())
-        rotation_count = 0
-        for completed_replicon in completed_replicons:
-            segment = graph.segments[completed_replicon]
-            sequence = segment.forward_sequence
-            if graph.overlap > 0:
-                sequence = sequence[:-graph.overlap]
-            depth = segment.depth
-            log.log('Segment ' + str(segment.number) + ':', 2)
-            rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
-                                   float_to_str(depth, 2) + 'x']
-            try:
-                blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
-                                            args.start_gene_cov, blast_dir, args.makeblastdb_path,
-                                            args.tblastn_path, args.threads)
-            except CannotFindStart:
-                rotation_result_row += ['none found', '', '', '', '']
-            else:
-                rotation_result_row += [blast_hit.qseqid, int_to_str(blast_hit.start_pos),
-                                        'reverse' if blast_hit.flip else 'forward',
-                                        '%.1f' % blast_hit.pident + '%',
-                                        '%.1f' % blast_hit.query_cov + '%']
-                segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip, graph.overlap)
-                rotation_count += 1
-            rotation_result_table.append(rotation_result_row)
 
-        log.log('', 2)
-        print_table(rotation_result_table, alignments='RRRLRLRR', indent=0,
-                    sub_colour={'none found': 'red'})
-        if rotation_count and args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
-        if args.keep < 3 and os.path.exists(blast_dir):
-            shutil.rmtree(blast_dir)
 
-    # Polish the final assembly!
-    if not args.no_pilon:
-        log.log_section_header('Polishing assembly with Pilon')
-        polish_dir = os.path.join(args.out, 'pilon_polish')
-        if not os.path.exists(polish_dir):
-            os.makedirs(polish_dir)
-        starting_dir = os.getcwd()
-        try:
-            polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
-                              args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
-                              args.short1, args.short2, args.threads)
-        except CannotPolish as e:
-            log.log('Unable to polish assembly using Pilon: ' + e.message)
-        else:
-            if args.keep > 0:
-                graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
-        os.chdir(starting_dir)
-        if args.keep < 3 and os.path.exists(polish_dir):
-            shutil.rmtree(polish_dir)
 
-    # Save the final state as both a GFA and FASTA file.
-    log.log_section_header('Complete')
-    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'))
-    graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), min_length=args.min_fasta_length)
-    log.log('')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
+    # # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
+    # if args.mode == 0:
+    #     bridges = []
+    #     graph = copy.deepcopy(unbridged_graph)
+    # else:
+    #     log.log_section_header('Bridging graph with SPAdes contigs')
+    #     bridges = create_spades_contig_bridges(unbridged_graph, single_copy_segments)
+    #     bridges += create_loop_unrolling_bridges(unbridged_graph)
+    #     graph = copy.deepcopy(unbridged_graph)
+    #     if not bridges:
+    #         log.log('none found', 1)
+    #     else:
+    #         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
+    #                                                        args.min_bridge_qual, unbridged_graph)
+    #         log.log('')
+    #         if args.keep > 0:
+    #             graph.save_to_gfa(gfa_path(args.out, next(counter), 'short_read_bridges_applied'),
+    #                               save_seg_type_info=True, save_copy_depth_info=True)
+    #
+    #         graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
+    #         graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
+    #                                         args.min_dead_end_size, unbridged_graph,
+    #                                         single_copy_segments)
+    #         if args.keep > 2:
+    #             graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
+    #                               save_seg_type_info=True, save_copy_depth_info=True)
+    #         graph.merge_all_possible(single_copy_segments, args.mode)
+    #         if args.keep > 2:
+    #             graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
+    #
+    # # Prepare for long read alignment.
+    # alignment_dir = os.path.join(args.out, 'read_alignment')
+    # graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
+    # single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
+    # single_copy_segment_names = set(str(x.number) for x in single_copy_segments)
+    # alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
+    # scoring_scheme = AlignmentScoringScheme(args.scores)
+    # min_alignment_length = unbridged_graph.overlap * \
+    #     settings.MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP
+    # if args.long:
+    #     if not os.path.exists(alignment_dir):
+    #         os.makedirs(alignment_dir)
+    #     unbridged_graph.save_to_fasta(graph_fasta)
+    #     unbridged_graph.save_specific_segments_to_fasta(single_copy_segments_fasta,
+    #                                                     single_copy_segments)
+    #
+    # # If all long reads are available now, then we do the entire process in one pass.
+    # if args.long:
+    #     references = load_references(graph_fasta, section_header='Loading single copy segments')
+    #     reference_dict = {x.name: x for x in references}
+    #     read_dict, read_names, long_read_filename = load_long_reads(args.long)
+    #
+    #     # Load existing alignments if available.
+    #     if os.path.isfile(alignments_sam) and sam_references_match(alignments_sam, unbridged_graph):
+    #         log.log('\nSAM file already exists. Will use these alignments instead of conducting '
+    #               'a new alignment:')
+    #         log.log('  ' + alignments_sam)
+    #         alignments = load_sam_alignments(alignments_sam, read_dict, reference_dict,
+    #                                          scoring_scheme)
+    #         for alignment in alignments:
+    #             read_dict[alignment.read.name].alignments.append(alignment)
+    #         print_alignment_summary_table(read_dict, args.verbosity, False)
+    #
+    #     # Conduct the alignment if an existing SAM is not available.
+    #     else:
+    #         alignments_1_sam = os.path.join(alignment_dir, 'long_read_alignments_pass_1.sam')
+    #         alignments_1_in_progress = alignments_1_sam + '.incomplete'
+    #         alignments_2_sam = os.path.join(alignment_dir, 'long_read_alignments_pass_2.sam')
+    #         alignments_2_in_progress = alignments_2_sam + '.incomplete'
+    #
+    #         allowed_overlap = int(round(unbridged_graph.overlap *
+    #                                     settings.ALLOWED_ALIGNMENT_OVERLAP))
+    #         low_score_threshold = [args.low_score]
+    #         semi_global_align_long_reads(references, graph_fasta, read_dict, read_names,
+    #                                      long_read_filename, args.threads, scoring_scheme,
+    #                                      low_score_threshold, False, min_alignment_length,
+    #                                      alignments_1_in_progress, full_command, allowed_overlap,
+    #                                      0, args.contamination, args.verbosity,
+    #                                      stdout_header='Aligning reads (first pass)',
+    #                                      single_copy_segment_names=single_copy_segment_names)
+    #         shutil.move(alignments_1_in_progress, alignments_1_sam)
+    #
+    #         # Some reads are aligned again with a more sensitive mode: those with multiple
+    #         # alignments or unaligned parts.
+    #         retry_read_names = [x.name for x in read_dict.values() if
+    #                             (x.get_fraction_aligned() < settings.MIN_READ_FRACTION_ALIGNED or
+    #                              len(x.alignments) > 1) and x.get_length() >= min_alignment_length]
+    #         if retry_read_names:
+    #             semi_global_align_long_reads(references, single_copy_segments_fasta, read_dict,
+    #                                          retry_read_names, long_read_filename,
+    #                                          args.threads, scoring_scheme, low_score_threshold,
+    #                                          False, min_alignment_length, alignments_2_in_progress,
+    #                                          full_command, allowed_overlap, 3,
+    #                                          args.contamination, args.verbosity,
+    #                                          stdout_header='Aligning reads (second pass)',
+    #                                          display_low_score=False,
+    #                                          single_copy_segment_names=single_copy_segment_names)
+    #             shutil.move(alignments_2_in_progress, alignments_2_sam)
+    #
+    #             # Now we have to put together a final SAM file. If a read is in the second pass,
+    #             # then we use the alignments from that SAM. Otherwise we take the alignments from
+    #             # the first SAM.
+    #             retry_read_names = set(retry_read_names)
+    #             with open(alignments_sam, 'wt') as alignments_file:
+    #                 with open(alignments_1_sam, 'rt') as alignments_1:
+    #                     for line in alignments_1:
+    #                         if line.startswith('@'):
+    #                             alignments_file.write(line)
+    #                         else:
+    #                             read_name = line.split('\t', 1)[0]
+    #                             if read_name not in retry_read_names:
+    #                                 alignments_file.write(line)
+    #                 with open(alignments_2_sam, 'rt') as alignments_2:
+    #                     for line in alignments_2:
+    #                         if not line.startswith('@'):
+    #                             alignments_file.write(line)
+    #
+    #         # If there are no low fraction reads, we can just rename the first pass SAM to the
+    #         # final SAM.
+    #         else:
+    #             shutil.move(alignments_1_sam, alignments_sam)
+    #         if args.keep < 2:
+    #             shutil.rmtree(alignment_dir)
+    #             log.log('\nDeleting ' + alignment_dir + '/')
+    #         if args.keep < 3 and os.path.isfile(alignments_1_sam):
+    #             os.remove(alignments_1_sam)
+    #         if args.keep < 3 and os.path.isfile(alignments_2_sam):
+    #             os.remove(alignments_2_sam)
+    #         if args.keep < 3 and os.path.isfile(graph_fasta):
+    #             os.remove(graph_fasta)
+    #         if args.keep < 3 and os.path.isfile(single_copy_segments_fasta):
+    #             os.remove(single_copy_segments_fasta)
+    #
+    #     # Discard any reads that mostly align to known contamination.
+    #     if args.contamination:
+    #         filtered_read_names = []
+    #         filtered_read_dict = {}
+    #         contaminant_read_count = 0
+    #         for read_name in read_names:
+    #             if read_dict[read_name].mostly_aligns_to_contamination():
+    #                 contaminant_read_count += 1
+    #             else:
+    #                 filtered_read_names.append(read_name)
+    #                 filtered_read_dict[read_name] = read_dict[read_name]
+    #         read_names = filtered_read_names
+    #         read_dict = filtered_read_dict
+    #         log.log('\nDiscarded', contaminant_read_count, 'reads as contamination', 2)
+    #
+    #     # Use the long reads which aligned entirely within contigs (which are most likely correct)
+    #     # to determine a minimum score.
+    #     contained_reads = [x for x in read_dict.values() if x.has_one_contained_alignment()]
+    #     contained_scores = []
+    #     for read in contained_reads:
+    #         contained_scores += [x.scaled_score for x in read.alignments]
+    #     min_scaled_score = get_percentile(contained_scores, settings.MIN_SCALED_SCORE_PERCENTILE)
+    #
+    #     log.log('\nSetting the minimum scaled score to the ' +
+    #             float_to_str(settings.MIN_SCALED_SCORE_PERCENTILE, 1) +
+    #             'th percentile of full read alignments: ' + float_to_str(min_scaled_score, 2), 2)
+    #
+    #     # Do the long read bridging - this is the good part!
+    #     log.log_section_header('Building long read bridges')
+    #     expected_linear_seqs = args.linear_seqs > 0
+    #     bridges = create_long_read_bridges(unbridged_graph, read_dict, read_names,
+    #                                        single_copy_segments, args.verbosity, bridges,
+    #                                        min_scaled_score, args.threads, scoring_scheme,
+    #                                        min_alignment_length, expected_linear_seqs,
+    #                                        args.min_bridge_qual)
+    #     graph = copy.deepcopy(unbridged_graph)
+    #     log.log_section_header('Bridging graph with long reads')
+    #     seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
+    #                                                    args.min_bridge_qual, unbridged_graph)
+    #     if args.keep > 0:
+    #         graph.save_to_gfa(gfa_path(args.out, next(counter), 'long_read_bridges_applied'),
+    #                           save_seg_type_info=True, save_copy_depth_info=True, newline=True)
+    #
+    #     graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
+    #     graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
+    #                                     args.min_dead_end_size, unbridged_graph,
+    #                                     single_copy_segments)
+    #     if args.keep > 2:
+    #         log.log('', 2)
+    #         graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
+    #                           save_seg_type_info=True, save_copy_depth_info=True)
+    #     graph.merge_all_possible(single_copy_segments, args.mode)
+    #     if args.keep > 2:
+    #         graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
+    #
+    # # Perform a final clean on the graph, including overlap removal.
+    # graph.final_clean()
+    # log.log_section_header('Bridged assembly graph')
+    # graph.print_component_table()
+    # if args.keep > 0:
+    #     graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'), newline=True)
+    #
+    # # Rotate completed replicons in the graph to a standard starting gene.
+    # completed_replicons = graph.completed_circular_replicons()
+    # if not args.no_rotate and len(completed_replicons) > 0:
+    #     log.log_section_header('Rotating completed replicons')
+    #
+    #     rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
+    #                               'Strand', 'Identity', 'Coverage']]
+    #     blast_dir = os.path.join(args.out, 'blast')
+    #     if not os.path.exists(blast_dir):
+    #         os.makedirs(blast_dir)
+    #     completed_replicons = sorted(completed_replicons, reverse=True,
+    #                                  key=lambda x: graph.segments[x].get_length())
+    #     rotation_count = 0
+    #     for completed_replicon in completed_replicons:
+    #         segment = graph.segments[completed_replicon]
+    #         sequence = segment.forward_sequence
+    #         if graph.overlap > 0:
+    #             sequence = sequence[:-graph.overlap]
+    #         depth = segment.depth
+    #         log.log('Segment ' + str(segment.number) + ':', 2)
+    #         rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
+    #                                float_to_str(depth, 2) + 'x']
+    #         try:
+    #             blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
+    #                                         args.start_gene_cov, blast_dir, args.makeblastdb_path,
+    #                                         args.tblastn_path, args.threads)
+    #         except CannotFindStart:
+    #             rotation_result_row += ['none found', '', '', '', '']
+    #         else:
+    #             rotation_result_row += [blast_hit.qseqid, int_to_str(blast_hit.start_pos),
+    #                                     'reverse' if blast_hit.flip else 'forward',
+    #                                     '%.1f' % blast_hit.pident + '%',
+    #                                     '%.1f' % blast_hit.query_cov + '%']
+    #             segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip, graph.overlap)
+    #             rotation_count += 1
+    #         rotation_result_table.append(rotation_result_row)
+    #
+    #     log.log('', 2)
+    #     print_table(rotation_result_table, alignments='RRRLRLRR', indent=0,
+    #                 sub_colour={'none found': 'red'})
+    #     if rotation_count and args.keep > 0:
+    #         graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
+    #     if args.keep < 3 and os.path.exists(blast_dir):
+    #         shutil.rmtree(blast_dir)
+    #
+    # # Polish the final assembly!
+    # if not args.no_pilon:
+    #     log.log_section_header('Polishing assembly with Pilon')
+    #     polish_dir = os.path.join(args.out, 'pilon_polish')
+    #     if not os.path.exists(polish_dir):
+    #         os.makedirs(polish_dir)
+    #     starting_dir = os.getcwd()
+    #     try:
+    #         polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
+    #                           args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
+    #                           args.short1, args.short2, args.threads)
+    #     except CannotPolish as e:
+    #         log.log('Unable to polish assembly using Pilon: ' + e.message)
+    #     else:
+    #         if args.keep > 0:
+    #             graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
+    #     os.chdir(starting_dir)
+    #     if args.keep < 3 and os.path.exists(polish_dir):
+    #         shutil.rmtree(polish_dir)
+    #
+    # # Save the final state as both a GFA and FASTA file.
+    # log.log_section_header('Complete')
+    # graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'))
+    # graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), min_length=args.min_fasta_length)
+    # log.log('')
 
 
 def get_arguments():
