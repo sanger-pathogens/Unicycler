@@ -154,6 +154,7 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
                 subreads[qid].s = min_start - end_clip;
                 subreads[qid].e = max_end + end_clip;
                 subreads[qid].del = 0;
+                ++n_remained;
 			}
 
             // If the read isn't a contig (i.e. it's a normal read) then we do the standard miniasm
