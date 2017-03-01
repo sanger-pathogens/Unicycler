@@ -405,7 +405,7 @@ class AssemblyGraph(object):
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for seg in sorted_segments:
                 if seg.number in self.copy_depths and len(self.copy_depths[seg.number]) == 1:
-                    fastq.write('@')
+                    fastq.write('@CONTIG_')
                     fastq.write(str(seg.number))
                     fastq.write('\n')
                     fastq.write(seg.forward_sequence)
