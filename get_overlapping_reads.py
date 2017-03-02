@@ -193,13 +193,6 @@ class LongRead(object):
         return list(zip(range_starts, range_ends))
 
 
-        if len(self.alignments) <= 1:
-            return []
-        for i in range(len(self.alignments) - 1):
-            a1 = self.alignments[i]
-            a2 = self.alignments[i+1]
-
-
 
 def range_overlap(x1, x2, y1, y2):
     """

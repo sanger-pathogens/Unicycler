@@ -29,7 +29,8 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
     """
     references = []
     total_bases = 0
-    log.log_section_header(section_header)
+    if section_header:
+        log.log_section_header(section_header)
     try:
         if get_sequence_file_type(fasta_filename) != 'FASTA':
             quit_with_error(fasta_filename + ' is not in FASTA format')

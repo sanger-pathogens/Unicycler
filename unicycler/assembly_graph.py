@@ -1005,13 +1005,20 @@ class AssemblyGraph(object):
             return ''
         return '\n'.join(['%.3f' % x for x in self.copy_depths[segment.number]])
 
+    def get_copy_number(self, segment):
+        """
+        Returns the segment's copy number (0 if copy number determination did not occur for this
+        segment).
+        """
+        if segment.number not in self.copy_depths:
+            return 0
+        return len(self.copy_depths[segment.number])
+
     def get_copy_number_colour(self, segment):
         """
         Given a particular segment, this function returns a colour string based on the copy number.
         """
-        if segment.number not in self.copy_depths:
-            return 'grey'
-        copy_number = len(self.copy_depths[segment.number])
+        copy_number = self.get_copy_number(segment)
         if copy_number == 0:
             return 'grey'
         elif copy_number == 1:
@@ -2144,6 +2151,37 @@ class AssemblyGraph(object):
         # If the code got here, then the bridging mode is level 1 (normal). If the segment has
         # become single copy, then it's okay to merge.
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
+
+    def find_simple_two_way_junctions(self, min_single_copy_seg_len):
+        """
+        This function returns a list of segment numbers that are simple two-way junctions.
+        Simple two-way junctions are defined as cases where two single copy segments join and then
+        split. The single copy segments must exceed the minimum length parameter. Also, the single
+        copy segments do not have to be unique, e.g. a loop can count as a two-way junction (the
+        same segment is in inputs and outputs.
+        """
+        simple_two_way_junctions = []
+        for segment in self.segments.values():
+            if self.get_copy_number(segment) != 2:
+                continue
+            seg_num = segment.number
+            input_count = (
+            len(self.reverse_links[seg_num]) if seg_num in self.reverse_links else 0)
+            output_count = (
+            len(self.forward_links[seg_num]) if seg_num in self.forward_links else 0)
+            if input_count != 2 or output_count != 2:
+                continue
+            exclusive_input_count = len(self.get_exclusive_inputs(seg_num))
+            exclusive_output_count = len(self.get_exclusive_outputs(seg_num))
+            if exclusive_input_count != 2 or exclusive_output_count != 2:
+                continue
+            neighbour_segments = self.get_connected_segments(seg_num)
+            long_enough = all(self.segments[x].get_length() > min_single_copy_seg_len
+                              for x in neighbour_segments)
+            if not long_enough:
+                continue
+            simple_two_way_junctions.append(seg_num)
+        return simple_two_way_junctions
 
 
 def get_headers_and_sequences(filename):

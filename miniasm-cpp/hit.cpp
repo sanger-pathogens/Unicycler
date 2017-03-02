@@ -67,7 +67,7 @@ sdict_t *prefilter_contained_reads(const char *fn, int min_span, int min_match, 
 	return d;
 }
 
-ma_hit_t *read_hits_file(const char *fn, int min_span, int min_match, sdict_t *d, size_t *n, int bi_dir, const sdict_t *excl)
+ma_hit_t *read_hits_file(const char *fn, int min_span, int min_match, sdict_t *read_dict, size_t *n, int bi_dir, const sdict_t *excl)
 {
 	paf_file_t *fp;
 	paf_rec_t r;
@@ -81,22 +81,22 @@ ma_hit_t *read_hits_file(const char *fn, int min_span, int min_match, sdict_t *d
 		if (r.qe - r.qs < min_span || r.te - r.ts < min_span || r.ml < min_match) continue;
 		if (excl && (sd_get(excl, r.qn) >= 0 || sd_get(excl, r.tn) >= 0)) continue;
 		kv_pushp(ma_hit_t, h, &p);
-		p->qns = (uint64_t)sd_put(d, r.qn, r.ql)<<32 | r.qs;
+		p->qns = (uint64_t)sd_put(read_dict, r.qn, r.ql)<<32 | r.qs;
 		p->qe = r.qe;
-		p->tn = sd_put(d, r.tn, r.tl);
+		p->tn = sd_put(read_dict, r.tn, r.tl);
 		p->ts = r.ts, p->te = r.te, p->rev = r.rev, p->ml = r.ml, p->bl = r.bl;
 		if (bi_dir && p->qns>>32 != p->tn) {
 			kv_pushp(ma_hit_t, h, &p);
-			p->qns = (uint64_t)sd_put(d, r.tn, r.tl)<<32 | r.ts;
+			p->qns = (uint64_t)sd_put(read_dict, r.tn, r.tl)<<32 | r.ts;
 			p->qe = r.te;
-			p->tn = sd_put(d, r.qn, r.ql);
+			p->tn = sd_put(read_dict, r.qn, r.ql);
 			p->ts = r.qs, p->te = r.qe, p->rev = r.rev, p->ml = r.ml, p->bl = r.bl;
 		}
 	}
 	paf_close(fp);
-	for (i = 0; i < d->n_seq; ++i)
-		tot_len += d->seq[i].len;
-	fprintf(stderr, "[M::%s::%s] read %ld hits; stored %ld hits and %d sequences (%ld bp)\n", __func__, sys_timestamp(), tot, h.n, d->n_seq, tot_len);
+	for (i = 0; i < read_dict->n_seq; ++i)
+		tot_len += read_dict->seq[i].len;
+	fprintf(stderr, "[M::%s::%s] read %ld hits; stored %ld hits and %d sequences (%ld bp)\n", __func__, sys_timestamp(), tot, h.n, read_dict->n_seq, tot_len);
 	ma_hit_sort(h.n, h.a);
 	*n = h.n;
 	return h.a;

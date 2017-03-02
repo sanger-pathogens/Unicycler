@@ -13,6 +13,25 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
+
+# Simple bridging will only proceed for single-copy segments above a certain length. This is to
+# ensure that it does not occur for complex areas of the assembly graph.
+MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING = 4000
+
+
+# When aligning minimap reads to the graph (which is overlap-free), we still want to allow a tiny
+# bit of overlap because minimap alignments are a bit course.
+ALLOWED_MINIMAP_OVERLAP = 5
+
+
+# When aligning minimap reads to the graph, we can exclude hits that are too much worse than the
+# best hit.
+MAX_TO_MIN_MINIMISER_RATIO = 10
+
+
+
+
+
 # Unicycler will only work with read alignments if they are long enough. This values specifies
 # the threshold relative to the graph overlap. E.g. if this value is 2 and the graph used was a
 # SPAdes 95-mer graph, it would have an overlap of 95 bp and so the minimum used alignment would

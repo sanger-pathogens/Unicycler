@@ -24,6 +24,7 @@ import random
 import itertools
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
+from .bridge_long_read_simple import apply_simple_long_read_bridges
 from .bridge_long_read import create_long_read_bridges
 from .bridge_spades_contig import create_spades_contig_bridges
 from .bridge_loop_unroll import create_loop_unrolling_bridges
@@ -60,47 +61,40 @@ def main():
 
     # Files are numbered in chronological order
     counter = itertools.count(start=1)
-    unbridged_graph_filename = gfa_path(args.out, next(counter), 'unbridged_graph')
+    unbridged_graph_filename = gfa_path(args.out, next(counter), 'best_spades_graph')
 
     # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
     if os.path.isfile(unbridged_graph_filename):
-        log.log('\nUnbridged graph already exists. Will use this graph instead of running '
+        log.log('\nSPAdes graph already exists. Will use this graph instead of running '
                 'SPAdes:\n  ' + unbridged_graph_filename)
-        unbridged_graph = AssemblyGraph(unbridged_graph_filename, None)
+        graph = AssemblyGraph(unbridged_graph_filename, None)
     else:
-        unbridged_graph = get_best_spades_graph(args.short1, args.short2, args.unpaired,
-                                                args.out, settings.READ_DEPTH_FILTER,
-                                                args.verbosity, args.spades_path, args.threads,
-                                                args.keep, args.kmer_count, args.min_kmer_frac,
-                                                args.max_kmer_frac, args.no_correct,
-                                                args.linear_seqs)
-
-    # Determine copy number and get single copy segments.
-    single_copy_segments = get_single_copy_segments(unbridged_graph, 0)
+        graph = get_best_spades_graph(args.short1, args.short2, args.unpaired, args.out,
+                                      settings.READ_DEPTH_FILTER, args.verbosity, args.spades_path,
+                                      args.threads, args.keep, args.kmer_count, args.min_kmer_frac,
+                                      args.max_kmer_frac, args.no_correct, args.linear_seqs)
+    # Determine copy number.
+    get_single_copy_segments(graph, 0)
     if args.keep > 0:
-        unbridged_graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True)
-        single_copy_seg_reads = os.path.join(args.out, '001_single_copy_segments.fastq')
-        unbridged_graph.save_single_copy_segs_as_reads(single_copy_seg_reads, qual=40)
+        graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True)
+
+    # Trim off the SPAdes k-mer overlaps so graph segments adjoin directly.
+    graph.remove_all_overlaps()
+    if args.keep > 2:
+        overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlap_removed')
+        graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True)
 
     # SHORT READ BRIDGING?
     # * If I'm ever going to bridge with the short reads, here is the time to do it! I won't use
     #   SPAdes contigs paths, though (don't trust them).
 
-    # ALIGN LONG READS TO THE SINGLE COPY CONTIGS USING MINIMAP
-
-    # LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
-    # READS.
-    # * For example, a two-way merge and split.
-    # * Places in the graph where there are X ways in, X ways out, and each way in to way out has
-    #   one and only one path.
-    # * First, find these locations.
-    # * Second, determine all possible paths. For a 2-2 junction, this will be 4 paths. For a 3-3
-    #   junction, this will be 9 paths, etc.
-    # * Evaluate each path using the minimap alignments and sort the paths from best to worst.
-    # * If the top X paths (where X is the in and out degree) are complete and not conflicting
-    #   (they use each in path once and each out path once), then we can apply the bridges!
-
-    # APPLY SIMPLE MINIMAP BRIDGES
+    # Apply simple bridges using long reads.
+    read_dict, read_names, long_read_filename = load_long_reads(args.long)
+    graph = apply_simple_long_read_bridges(graph, args.out, args.keep, args.threads, read_dict,
+                                           read_names, long_read_filename)
+    if args.keep > 0:
+        graph.save_to_gfa(gfa_path(args.out, next(counter), 'simple_bridges_applied'),
+                          save_seg_type_info=True, save_copy_depth_info=True, newline=True)
 
     # RE-RUN COPY NUMBER DETERMINATION? MAY NOT BE NECESSARY, AS I DON'T KNOW IF THE ABOVE STEPS
     # CAN CHANGE ANYTHING RELEVANT.
@@ -651,8 +645,8 @@ def get_arguments():
                                                'leftover sequences after bridging is complete.'
                                                if show_all_args else argparse.SUPPRESS)
     cleaning_group.add_argument('--min_component_size', type=int, default=1000,
-                                help='Unbridged graph components smaller than this size (bp) will '
-                                     'be removed from the final graph'
+                                help='Graph components smaller than this size (bp) will be '
+                                     'removed from the final graph'
                                      if show_all_args else argparse.SUPPRESS)
     cleaning_group.add_argument('--min_dead_end_size', type=int, default=1000,
                                 help='Graph dead ends smaller than this size (bp) will be removed '

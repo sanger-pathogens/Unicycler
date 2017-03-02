@@ -58,21 +58,21 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
             const mm_reg1_t *r = &reg[j];
 
             std::string readName = ks->name.s;
-            // int readLen = ks->seq.l;
+            int readLen = ks->seq.l;
             int readStart = r->qs;
             int readEnd = r->qe;
             char readStrand = "+-"[r->rev];
 
             std::string refName = mi->name[r->rid];
-            // int refLen = mi->len[r->rid];
+            int refLen = mi->len[r->rid];
             int refStart = r->rs;
             int refEnd = r->re;
 
             int numberOfMinimisers = r->cnt;
 
-            std::string alignmentString = readName + "\t";
+            std::string alignmentString = readName + "\t" + std::to_string(readLen) + "\t";
             alignmentString += std::to_string(readStart) + "\t" + std::to_string(readEnd) + "\t" + readStrand + "\t";
-            alignmentString += refName + "\t";
+            alignmentString += refName + "\t" + std::to_string(refLen) + "\t";
             alignmentString += std::to_string(refStart) + "\t" + std::to_string(refEnd) + "\t";
             alignmentString += std::to_string(numberOfMinimisers) + "\t";
             alignmentString += "\n";
