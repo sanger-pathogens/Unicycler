@@ -23,7 +23,8 @@ from . import settings
 from . import log
 
 
-def load_references(fasta_filename, contamination=False, section_header='Loading references'):
+def load_references(fasta_filename, contamination=False, section_header='Loading references',
+                    show_progress=True):
     """
     This function loads in sequences from a FASTA file and returns a list of Reference objects.
     """
@@ -46,7 +47,8 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
         num_refs = sum(1 for line in fasta if line.startswith('>'))
     if not num_refs:
         quit_with_error('There are no references sequences in ' + fasta_filename)
-    log.log_progress_line(0, num_refs)
+    if show_progress:
+        log.log_progress_line(0, num_refs)
 
     fasta_file = open_func(fasta_filename, 'rt')
     name = ''
@@ -66,7 +68,8 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
                 progress = 100.0 * len(references) / num_refs
                 progress_rounded_down = math.floor(progress / step) * step
                 if progress == 100.0 or progress_rounded_down > last_progress:
-                    log.log_progress_line(len(references), num_refs, total_bases)
+                    if show_progress:
+                        log.log_progress_line(len(references), num_refs, total_bases)
                     last_progress = progress_rounded_down
                 sequence = ''
             name = get_nice_header(line[1:])
@@ -78,9 +81,10 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
             name = 'CONTAMINATION_' + name
         references.append(Reference(name, sequence))
         total_bases += len(sequence)
-        log.log_progress_line(len(references), num_refs, total_bases)
-
-    log.log_progress_line(len(references), len(references), total_bases, end_newline=True)
+        if show_progress:
+            log.log_progress_line(len(references), num_refs, total_bases)
+    if show_progress:
+        log.log_progress_line(len(references), len(references), total_bases, end_newline=True)
 
     return references
 

@@ -73,13 +73,18 @@ def main():
                                       settings.READ_DEPTH_FILTER, args.verbosity, args.spades_path,
                                       args.threads, args.keep, args.kmer_count, args.min_kmer_frac,
                                       args.max_kmer_frac, args.no_correct, args.linear_seqs)
-    # Determine copy number.
-    get_single_copy_segments(graph, 0)
+    determine_copy_depth(graph)
     if args.keep > 0:
-        graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True)
+        graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True, newline=True)
 
     # Trim off the SPAdes k-mer overlaps so graph segments adjoin directly.
+    log.log('')
     graph.remove_all_overlaps()
+    graph.remove_zero_length_segs()
+    graph.merge_small_segments(5)
+    graph.normalise_read_depths()
+    graph.renumber_segments()
+    graph.sort_link_order()
     if args.keep > 2:
         overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlap_removed')
         graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True)

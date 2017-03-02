@@ -335,11 +335,11 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, newline=False, min_length=1):
+    def save_to_fasta(self, filename, newline=False, min_length=1, verbosity=1):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        log.log(('\n' if newline else '') + 'Saving ' + filename)
+        log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)

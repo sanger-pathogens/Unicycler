@@ -578,6 +578,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
     indenter = ' ' * indent
     full_table_str = ''
     for i, row in enumerate(table):
+        row = [str(x) for x in row]
         if hide_header and i == 0:
             continue
 
@@ -707,7 +708,10 @@ def bold_red_underline(text):
 
 
 def len_without_format(text):
-    return len(remove_formatting(text))
+    try:
+        return len(remove_formatting(text))
+    except TypeError:
+        return len(str(text))
 
 
 def remove_formatting(text):
