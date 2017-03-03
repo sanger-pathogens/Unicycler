@@ -29,6 +29,11 @@ ALLOWED_MINIMAP_OVERLAP = 5
 MAX_TO_MIN_MINIMISER_RATIO = 10
 
 
+# When testing various repeat counts using fully global alignment in Seqan, we use this band size
+# to make the alignment faster.
+SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 100
+
+
 
 
 

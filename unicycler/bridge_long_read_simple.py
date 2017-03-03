@@ -19,12 +19,13 @@ import os
 import shutil
 from collections import defaultdict
 import itertools
-from .cpp_wrappers import minimap_align_reads
+from .cpp_wrappers import minimap_align_reads, fully_global_alignment
 from .minimap_alignment import load_minimap_alignments
 from .read_ref import load_references
 from .assembly_graph_segment import Segment
 from .assembly_graph_copy_depth import determine_copy_depth
 from .misc import print_table, get_right_arrow
+from .alignment import AlignmentScoringScheme
 from . import log
 from . import settings
 
@@ -90,7 +91,8 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
 
     simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments)
-    simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments)
+    simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
+                        read_dict)
     log.log('', 2)
 
     graph.merge_all_possible(None, 2)
@@ -221,5 +223,127 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
     log.log('')
 
 
-def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments):
+def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
+                        read_dict):
     log.log('Simple loop bridges:')
+
+    scoring_scheme = AlignmentScoringScheme('0,-1,-1,-1')
+
+    loops = graph.find_all_simple_loops()
+    for start, end, middle, repeat in loops:
+        start_len = graph.segments[abs(start)].get_length()
+        end_len = graph.segments[abs(end)].get_length()
+        if start_len < settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING or \
+                end_len < settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING:
+            continue
+
+        print()  # TEMP
+        print()  # TEMP
+        print()  # TEMP
+        print()  # TEMP
+        print(start, end, middle, repeat)  # TEMP
+
+        forward_strand_reads = end_overlap_reads[start] & start_overlap_reads[end]
+        reverse_strand_reads = end_overlap_reads[-end] & start_overlap_reads[-start]
+
+        all_reads = list(forward_strand_reads) + list(reverse_strand_reads)
+        strands = ['F'] * len(forward_strand_reads) + ['R'] * len(reverse_strand_reads)
+
+        # This dictionary will collect the votes. The key is the number of times through the loop
+        # and the value is the vote count. Votes for -1 times through the loop occur for reads
+        # which don't conform to the loop assumption.
+        votes = defaultdict(int)
+
+        # We'll try a range of repeat counts, using the segment depth to guide how high we should
+        # go.
+        mean_start_end_depth = (graph.segments[abs(start)].depth +
+                                graph.segments[abs(end)].depth) / 2
+        best_repeat_guess = int(round(graph.segments[abs(middle)].depth / mean_start_end_depth))
+        best_repeat_guess = max(1, best_repeat_guess)
+        print('best_repeat_guess =', best_repeat_guess)  # TEMP
+        max_tested_repeat = (best_repeat_guess + 1) * 2
+        print('max_tested_repeat =', max_tested_repeat)  # TEMP
+
+        for read, strand in zip(all_reads, strands):
+            print(read, strand)  # TEMP
+
+            if strand == 'F':
+                s, e, m, r = start, end, middle, repeat
+            else:  # strand == 'R'
+                s, e, m, r = -end, -start, -middle, -repeat
+            alignments = minimap_alignments[read]
+
+            last_index_of_start = -1
+            for i, a in enumerate(alignments):
+                if a.get_signed_ref_name() == str(s):
+                    last_index_of_start = i
+            first_index_of_end = -1
+            for i in range(last_index_of_start + 1, len(alignments)):
+                a = alignments[i]
+                if a.get_signed_ref_name() == str(e):
+                    first_index_of_end = i
+                    break
+
+            # We should now have the indices of the alignments around the repeat.
+            assert(last_index_of_start != -1)
+            assert(first_index_of_end != -1)
+
+            # If there are any alignment in between the start and end segments, they are only
+            # allowed to be the middle or repeat segments.
+            bad_middle = False
+            for i in range(last_index_of_start+1, first_index_of_end):
+                ref_name = alignments[i].get_signed_ref_name()
+                if ref_name != str(m) and ref_name != str(r):
+                    bad_middle = True
+            if bad_middle:
+                votes[-1] += 1  # vote for bad read
+                continue
+
+            start_alignment = alignments[last_index_of_start]
+            end_alignment = alignments[first_index_of_end]
+            print(start_alignment)  # TEMP
+            print(end_alignment)  # TEMP
+
+            # Now that we have the alignments, we can extract the relevant part of the read...
+            read_start_pos, read_end_pos = start_alignment.read_start, end_alignment.read_end
+            read_seq = read_dict[read].sequence[read_start_pos:read_end_pos]
+
+            # ... and the relevant parts of the start/end segments.
+            if start_alignment.read_strand == '+':
+                start_seg_start_pos = start_alignment.ref_start
+            else:  # start_alignment.read_strand == '-'
+                start_seg_start_pos = start_alignment.ref_length - start_alignment.ref_end
+            if end_alignment.read_strand == '+':
+                end_seg_end_pos = end_alignment.ref_end
+            else:  # end_alignment.read_strand == '-'
+                end_seg_end_pos = end_alignment.ref_length - end_alignment.ref_start
+            start_seg_seq = graph.seq_from_signed_seg_num(s)[start_seg_start_pos:]
+            end_seg_seq = graph.seq_from_signed_seg_num(e)[:end_seg_end_pos]
+
+            print('READ SEQ:  ', read_seq)  # TEMP
+
+            middle_seq = graph.seq_from_signed_seg_num(m)
+            repeat_seq = graph.seq_from_signed_seg_num(r)
+
+            for repeat_count in range(0, max_tested_repeat + 1):
+                test_seq = start_seg_seq + repeat_seq
+                for _ in range(repeat_count):
+                    test_seq += middle_seq + repeat_seq
+                test_seq += end_seg_seq
+                print('TEST SEQ ' + str(repeat_count) + ':', test_seq)  # TEMP
+                alignment_result = fully_global_alignment(read_seq, test_seq, scoring_scheme, True,
+                                                          settings.SIMPLE_REPEAT_BRIDGING_BAND_SIZE)
+                if alignment_result:
+                    seqan_parts = alignment_result.split(',', 9)
+                    test_seq_score = int(seqan_parts[6])
+                else:
+                    test_seq_score = 0
+
+                print('TEST SEQ ' + str(repeat_count) + ' SCORE:', test_seq_score)  # TEMP
+
+            print()  # TEMP
+
+
+
+
+

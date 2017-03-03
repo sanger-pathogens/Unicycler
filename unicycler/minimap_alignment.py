@@ -51,6 +51,12 @@ class MinimapAlignment(object):
             self.ref_name + ':' + str(self.ref_start) + '-' + str(self.ref_end) + \
             '(' + str(self.minimiser_count) + ')'
 
+    def get_signed_ref_name(self):
+        """
+        Returns the ref name preceded by a '-' if the read strand is '-'.
+        """
+        return ('-' if self.read_strand == '-' else '') + self.ref_name
+
 
 def line_iterator(string_with_line_breaks):
     """Iterates over a string containing line breaks, one line at a time."""
@@ -105,5 +111,4 @@ def range_overlap(x1, x2, y1, y2):
 
 def alignments_overlap(a, other, allowed_overlap):
     adjusted_start = a.read_start + allowed_overlap
-    adjusted_end = a.read_end - allowed_overlap
-    return any(range_overlap(adjusted_start, adjusted_end, x.read_start, x.read_end) for x in other)
+    return any(range_overlap(adjusted_start, a.read_end, x.read_start, x.read_end) for x in other)
