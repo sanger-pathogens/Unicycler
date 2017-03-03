@@ -105,7 +105,7 @@ def main():
     # Apply simple bridges using long reads.
     read_dict, read_names, long_read_filename = load_long_reads(args.long)
     graph = apply_simple_long_read_bridges(graph, args.out, args.keep, args.threads, read_dict,
-                                           read_names, long_read_filename, scoring_scheme)
+                                           long_read_filename, scoring_scheme)
     if args.keep > 0:
         graph.save_to_gfa(gfa_path(args.out, next(counter), 'simple_bridges_applied'),
                           save_seg_type_info=True, save_copy_depth_info=True, newline=True)

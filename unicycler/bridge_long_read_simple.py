@@ -30,8 +30,8 @@ from . import log
 from . import settings
 
 
-def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, read_names,
-                                   long_read_filename, scoring_scheme):
+def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
+                                   scoring_scheme):
     """
     LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
     READS.
