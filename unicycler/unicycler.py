@@ -25,6 +25,7 @@ import itertools
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read_simple import apply_simple_long_read_bridges
+from .miniasm_assembly import build_miniasm_bridges
 from .bridge_long_read import create_long_read_bridges
 from .bridge_spades_contig import create_spades_contig_bridges
 from .bridge_loop_unroll import create_loop_unrolling_bridges
@@ -110,64 +111,10 @@ def main():
         graph.save_to_gfa(gfa_path(args.out, next(counter), 'simple_bridges_applied'),
                           save_seg_type_info=True, save_copy_depth_info=True, newline=True)
 
-    # RE-RUN COPY NUMBER DETERMINATION? MAY NOT BE NECESSARY, AS I DON'T KNOW IF THE ABOVE STEPS
-    # CAN CHANGE ANYTHING RELEVANT.
 
-    # ALIGN LONG READS TO THE SINGLE COPY CONTIGS USING MINIMAP.
-
-    # EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
-    # * Take all single copy contigs over a certain length and get reads which overlap two or more.
-    #   * Some logic is currently in get_overlapping_reads.py.
-    #   * While I'm at it, I should throw out reads which look like chimeras based on incompatible
-    #     mapping.
-    # * Create a file of "long reads" which contains:
-    #   * real long reads as found (and possibly split) by the above step
-    #   * single copy contigs in FASTQ form (with a high quality, 'I' or something)
-
-    # ASSEMBLE LONG READS USING MINIASM.
-    # * The min_ovlp setting should either be 1 or dynamically determined based on depth.
-    # * Final target: the string graph.
-
-    # REMOVE OVERLAPS FROM MINIASM STRING GRAPH.
-    # * Selectively remove overlaps from lower quality sequences first.
-    # * Keep as much contig sequence as possible.
-    # * Process idea:
-    #   * Find the lowest quality read, based on average qscore and remove as much as possible
-    #     (could be all of the read if its neighbours overlap).
-    #   * Repeat until there are no more overlaps.
-    # * Merge the assembly together (keeping single copy contigs separate).
-
-    # EXTRACT ALL CONTIG-CONTIG BRIDGE SEQUENCES.
-    # * Any two single copy contigs connected by an unbranching path that contains no other contigs.
-
-    # POLISH EACH BRIDGE SEQUENCE.
-    # * For this we use the set of long reads which overlap the two single copy contigs on the
-    #   correct side. It is not necessary for reads to overlap both contigs, as this will give us
-    #   better coverage in the intervening repeat region.
-    # * Include the single copy contigs as 'reads'.
-    #   * Specifically, use the slightly trimmed single copy contigs in the miniasm string graph
-    #     (in case the entire contig has a bogus end).
-    #   * The high qscores here should ensure that no changes are made in these regions. Include
-    #     extra copies if necessary.
-
-    # MAKE EACH BRIDGE SEGMENT.
-    # * Goal is to turn one contiguous sequence spanning both single copy contigs into:
-    #   CONTIG -> BRIDGE -> CONTIG
-
-    # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
-    # * Goal 1: if we can find a short read version of the bridge, we should use that because it
-    #   will probably be more accurate.
-    # * Goal 2: using a graph path will let us 'use up' the segments, which helps with clean-up.
-    # * In order to replace a miniasm assembly bridge sequence with a graph path sequence, the
-    #   match has to be very strong! High identity over all sequence windows.
-    # * Can use my existing path finding code, but tweak the settings to make them faster. This is
-    #   because failing to find an existing path isn't too terrible, as we already have the miniasm
-    #   sequence.
-
-    # DO SOME BASIC GRAPH CLEAN-UP AND MERGE ALL POSSIBLE SEGMENTS.
-    # * Clean up will be a bit tougher as we may have missed used sequence.
-
-    # RE-RUN COPY NUMBER DETERMINATION.
+    # Try assembling the contigs along with the long reads using a modified miniasm+racon. If
+    # successful, we extract bridges from the assembly and apply them to the graph.
+    build_miniasm_bridges(graph, args.out, args.keep, args.threads, read_dict, long_read_filename)
 
     # CONDUCT 'CLASSIC' LONG READ BRIDGING ON REMAINING PARTS?
     # * May be necessary because the miniasm assembly will fail in cases of short alignments.

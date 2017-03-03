@@ -56,7 +56,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lon
 
     # Do a minimap alignment of all reads to all segments.
     segments_fasta = os.path.join(bridging_dir, 'all_segments.fasta')
-    log.log('Aligning long reads to graph using minimap', 2)
+    log.log('Aligning long reads to graph using minimap', 1)
     graph.save_to_fasta(segments_fasta, verbosity=2)
     references = load_references(segments_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
@@ -67,7 +67,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lon
                                                  filter_by_minimisers=True,
                                                  minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)
     log.log('Number of minimap alignments: ' + str(len(minimap_alignments)), 2)
-    log.log('', 2)
+    log.log('', 1)
 
     # Build indices of start and end contig overlaps so we can quickly determine which reads
     # overlap which end of a particular contig.
