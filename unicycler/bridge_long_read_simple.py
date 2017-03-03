@@ -19,6 +19,7 @@ import os
 import shutil
 from collections import defaultdict
 import itertools
+from multiprocessing.dummy import Pool as ThreadPool
 from .cpp_wrappers import minimap_align_reads, fully_global_alignment
 from .minimap_alignment import load_minimap_alignments
 from .read_ref import load_references
@@ -94,7 +95,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
     simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments)
     simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict, scoring_scheme)
+                        read_dict, scoring_scheme, threads)
     log.log('', 2)
 
     graph.merge_all_possible(None, 2)
@@ -240,7 +241,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
 
 def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict, scoring_scheme):
+                        read_dict, scoring_scheme, threads):
     ra = get_right_arrow()
     zero_loops = 'A' + ra + 'C' + ra + 'B'
     one_loop = 'A' + ra + 'C' + ra + 'D' + ra + 'C' + ra + 'B'
@@ -290,80 +291,23 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
         best_repeat_guess = max(1, best_repeat_guess)
         max_tested_loop_count = (best_repeat_guess + 1) * 2
 
-        for read, strand in zip(all_reads, strands):
-            if strand == 'F':
-                s, e, m, r = start, end, middle, repeat
-            else:  # strand == 'R'
-                s, e, m, r = -end, -start, -middle, -repeat
-            alignments = minimap_alignments[read]
+        # Use a simple loop if we only have one thread.
+        if threads == 1:
+            for read, strand in zip(all_reads, strands):
+                vote = get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments,
+                                          read, read_dict, graph, max_tested_loop_count,
+                                          scoring_scheme)
+                votes[vote] += 1
 
-            last_index_of_start = -1
-            for i, a in enumerate(alignments):
-                if a.get_signed_ref_name() == str(s):
-                    last_index_of_start = i
-            first_index_of_end = -1
-            for i in range(last_index_of_start + 1, len(alignments)):
-                a = alignments[i]
-                if a.get_signed_ref_name() == str(e):
-                    first_index_of_end = i
-                    break
-
-            # We should now have the indices of the alignments around the repeat.
-            assert(last_index_of_start != -1)
-            assert(first_index_of_end != -1)
-
-            # If there are any alignments in between the start and end segments, they are only
-            # allowed to be the middle or repeat segments.
-            bad_middle = False
-            for i in range(last_index_of_start+1, first_index_of_end):
-                ref_name = alignments[i].get_signed_ref_name()
-                if ref_name != str(m) and ref_name != str(r):
-                    bad_middle = True
-            if bad_middle:
-                votes[-1] += 1  # vote for bad read
-                continue
-
-            start_alignment = alignments[last_index_of_start]
-            end_alignment = alignments[first_index_of_end]
-
-            # Now that we have the alignments, we can extract the relevant part of the read...
-            read_start_pos, read_end_pos = start_alignment.read_start, end_alignment.read_end
-            read_seq = read_dict[read].sequence[read_start_pos:read_end_pos]
-
-            # ... and the relevant parts of the start/end segments.
-            if start_alignment.read_strand == '+':
-                start_seg_start_pos = start_alignment.ref_start
-            else:  # start_alignment.read_strand == '-'
-                start_seg_start_pos = start_alignment.ref_length - start_alignment.ref_end
-            if end_alignment.read_strand == '+':
-                end_seg_end_pos = end_alignment.ref_end
-            else:  # end_alignment.read_strand == '-'
-                end_seg_end_pos = end_alignment.ref_length - end_alignment.ref_start
-            start_seg_seq = graph.seq_from_signed_seg_num(s)[start_seg_start_pos:]
-            end_seg_seq = graph.seq_from_signed_seg_num(e)[:end_seg_end_pos]
-
-            middle_seq = graph.seq_from_signed_seg_num(m)
-            repeat_seq = graph.seq_from_signed_seg_num(r)
-
-            best_score = None
-            best_count = None
-            for loop_count in range(0, max_tested_loop_count + 1):
-                test_seq = start_seg_seq + repeat_seq
-                for _ in range(loop_count):
-                    test_seq += middle_seq + repeat_seq
-                test_seq += end_seg_seq
-                alignment_result = fully_global_alignment(read_seq, test_seq, scoring_scheme, True,
-                                                          settings.SIMPLE_REPEAT_BRIDGING_BAND_SIZE)
-                if alignment_result:
-                    seqan_parts = alignment_result.split(',', 9)
-                    test_seq_score = int(seqan_parts[6])
-                    if best_score is None or test_seq_score > best_score:
-                        best_score = test_seq_score
-                        best_count = loop_count
-
-            # This read now casts its vote for the best repeat count!
-            if best_count is not None:
-                votes[best_count] += 1
+        # Use a thread pool if we have more than one thread.
+        else:
+            pool = ThreadPool(threads)
+            arg_list = []
+            for read, strand in zip(all_reads, strands):
+                arg_list.append((start, end, middle, repeat, strand, minimap_alignments,
+                                 read, read_dict, graph, max_tested_loop_count, scoring_scheme))
+            for vote in pool.imap_unordered(get_read_loop_vote_one_arg, arg_list):
+                votes[vote] += 1
 
         # Format the vote totals nicely for the table.
         vote_str = ''
@@ -424,3 +368,86 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
         print_table([loop_table_row], fixed_col_widths=col_widths, header_format='normal',
                     alignments='RRRRRLL', left_align_header=False, bottom_align_header=False,
                     sub_colour=sub_colours)
+
+
+def get_read_loop_vote_one_arg(all_args):
+    start, end, middle, repeat, strand, minimap_alignments, read, read_dict, graph, \
+        max_tested_loop_count, scoring_scheme = all_args
+    return get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, read, read_dict,
+                       graph, max_tested_loop_count, scoring_scheme)
+
+
+def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, read, read_dict,
+                       graph, max_tested_loop_count, scoring_scheme):
+    if strand == 'F':
+        s, e, m, r = start, end, middle, repeat
+    else:  # strand == 'R'
+        s, e, m, r = -end, -start, -middle, -repeat
+    alignments = minimap_alignments[read]
+
+    last_index_of_start = -1
+    for i, a in enumerate(alignments):
+        if a.get_signed_ref_name() == str(s):
+            last_index_of_start = i
+    first_index_of_end = -1
+    for i in range(last_index_of_start + 1, len(alignments)):
+        a = alignments[i]
+        if a.get_signed_ref_name() == str(e):
+            first_index_of_end = i
+            break
+
+    # We should now have the indices of the alignments around the repeat.
+    assert (last_index_of_start != -1)
+    assert (first_index_of_end != -1)
+
+    # If there are any alignments in between the start and end segments, they are only
+    # allowed to be the middle or repeat segments.
+    bad_middle = False
+    for i in range(last_index_of_start + 1, first_index_of_end):
+        ref_name = alignments[i].get_signed_ref_name()
+        if ref_name != str(m) and ref_name != str(r):
+            bad_middle = True
+    if bad_middle:
+        return -1  # vote for bad read
+
+    start_alignment = alignments[last_index_of_start]
+    end_alignment = alignments[first_index_of_end]
+
+    # Now that we have the alignments, we can extract the relevant part of the read...
+    read_start_pos, read_end_pos = start_alignment.read_start, end_alignment.read_end
+    read_seq = read_dict[read].sequence[read_start_pos:read_end_pos]
+
+    # ... and the relevant parts of the start/end segments.
+    if start_alignment.read_strand == '+':
+        start_seg_start_pos = start_alignment.ref_start
+    else:  # start_alignment.read_strand == '-'
+        start_seg_start_pos = start_alignment.ref_length - start_alignment.ref_end
+    if end_alignment.read_strand == '+':
+        end_seg_end_pos = end_alignment.ref_end
+    else:  # end_alignment.read_strand == '-'
+        end_seg_end_pos = end_alignment.ref_length - end_alignment.ref_start
+    start_seg_seq = graph.seq_from_signed_seg_num(s)[start_seg_start_pos:]
+    end_seg_seq = graph.seq_from_signed_seg_num(e)[:end_seg_end_pos]
+
+    middle_seq = graph.seq_from_signed_seg_num(m)
+    repeat_seq = graph.seq_from_signed_seg_num(r)
+
+    best_score = None
+    best_count = None
+    for loop_count in range(0, max_tested_loop_count + 1):
+        test_seq = start_seg_seq + repeat_seq
+        for _ in range(loop_count):
+            test_seq += middle_seq + repeat_seq
+        test_seq += end_seg_seq
+        alignment_result = fully_global_alignment(read_seq, test_seq, scoring_scheme, True,
+                                                  settings.SIMPLE_REPEAT_BRIDGING_BAND_SIZE)
+        if alignment_result:
+            seqan_parts = alignment_result.split(',', 9)
+            test_seq_score = int(seqan_parts[6])
+            if best_score is None or test_seq_score > best_score:
+                best_score = test_seq_score
+                best_count = loop_count
+
+    # This read now casts its vote for the best repeat count!
+    if best_count is not None:
+        return best_count
