@@ -25,7 +25,6 @@ from .read_ref import load_references
 from .assembly_graph_segment import Segment
 from .assembly_graph_copy_depth import determine_copy_depth
 from .misc import print_table, get_right_arrow
-from .alignment import AlignmentScoringScheme
 from . import log
 from . import settings
 
@@ -46,6 +45,9 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
       (they use each in path once and each out path once), then we can apply the bridges!
     """
     log.log_section_header('Simple repeat bridging with minimap alignments')
+    log.log_explanation('Unicycler uses long read alignments (from minimap) to resolve simple '
+                        'repeat structures in the graph. This simplifies the graph before more '
+                        'complex bridging approaches are applied in later steps.')
 
     bridging_dir = os.path.join(out_dir, 'simple_bridging')
     if not os.path.exists(bridging_dir):
@@ -105,9 +107,18 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
 
 def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments):
+    c_with_arrows = get_right_arrow() + 'C' + get_right_arrow()
+    log.log_explanation('Two-way junctions are defined as cases where two graph contigs (A and B) '
+                        'join together (C) and then split apart again (D and E). This usually '
+                        'represents a simple 2-copy repeat, and there are two possible options to '
+                        'resolve it: (A' + c_with_arrows + 'D and B' + c_with_arrows + 'E) or '
+                        '(A' + c_with_arrows + 'E and B' + c_with_arrows + 'D). '
+                        'Each read which spans such a junction gets to "vote" for option 1, '
+                        'option 2 or neither. If the reads\' votes show option 1 or 2 as a clear '
+                        'winner, Unicycler resolves the graph at that junction.')
+
     two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', 'Op. 1 votes', 'Op. 2 votes',
-                                'Alt votes', 'Result']]
-    log.log('Simple two-way junction bridges:')
+                                'Neither votes', 'Result']]
 
     junctions = graph.find_simple_two_way_junctions(settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING)
     for junction in junctions:
@@ -222,7 +233,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
     max_op_2_len = max(max(len(y) for y in x[2].split(', ')) for x in two_way_junctions_table) + 1
     max_result_len = max(len(x[-1]) for x in two_way_junctions_table)
     print_table(two_way_junctions_table, alignments='RLLRRRR', left_align_header=False,
-                fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 5, max_result_len],
+                fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 7, max_result_len],
                 sub_colour={'too many alt': 'red', 'no support': 'red', 'too close': 'red',
                             'applied': 'green'})
     log.log('')
@@ -230,7 +241,19 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
 def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
                         read_dict, scoring_scheme):
-    log.log('Simple loop bridges:')
+    ra = get_right_arrow()
+    zero_loops = 'A' + ra + 'C' + ra + 'B'
+    one_loop = 'A' + ra + 'C' + ra + 'D' + ra + 'C' + ra + 'B'
+    two_loops = 'A' + ra + 'C' + ra + 'D' + ra + 'C' + ra + 'D' + ra + 'C' + ra + 'B'
+    log.log_explanation('Simple loops are defined as parts of the graph where two contigs (A and '
+                        'B) are connected via a repeat contig (C) which loops back to itself (via '
+                        'D). It is possible to traverse the loop 0 times (' + zero_loops + '), 1 '
+                        'time (' + one_loop + '), two times (' + two_loops + '), etc. '
+                        'Long reads which span the loop inform which is the correct number of '
+                        'times through. In this step, such reads are found and each is aligned '
+                        'against alternative loop counts. A reads casts its "vote" for the loop '
+                        'count it agrees best with, and Unicycler resolves the graph using the '
+                        'most voted for count.')
 
     col_widths = [5, 6, 6, 5, 5, 18, 17]
     loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes', 'Result']

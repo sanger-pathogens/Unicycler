@@ -17,6 +17,8 @@ import sys
 import os
 import datetime
 import re
+import shutil
+import textwrap
 
 
 class Log(object):
@@ -97,6 +99,21 @@ def log_progress_line(completed, total, base_pairs=None, end_newline=False):
     log('\r' + progress_str, end=end_char, write_to_log_file=False)
     if end_newline:
         log(progress_str, print_to_screen=False)
+
+
+def log_explanation(text, verbosity=1, print_to_screen=True, write_to_log_file=True,
+                    extra_empty_lines_after=1):
+    """
+    This function writes explanatory text to the screen.
+    """
+    terminal_width = shutil.get_terminal_size().columns
+    for line in textwrap.wrap(text, width=terminal_width-1):
+        formatted_text = dim(line)
+        log(formatted_text, verbosity=verbosity, print_to_screen=print_to_screen,
+            write_to_log_file=write_to_log_file)
+    for _ in range(extra_empty_lines_after):
+        log('', verbosity=verbosity, print_to_screen=print_to_screen,
+            write_to_log_file=write_to_log_file)
 
 
 def int_to_str(num, max_num=0):
