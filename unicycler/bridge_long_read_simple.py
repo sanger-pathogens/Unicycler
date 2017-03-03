@@ -31,7 +31,7 @@ from . import settings
 
 
 def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, read_names,
-                                   long_read_filename):
+                                   long_read_filename, scoring_scheme):
     """
     LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
     READS.
@@ -92,7 +92,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
     simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments)
     simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict)
+                        read_dict, scoring_scheme)
     log.log('', 2)
 
     graph.merge_all_possible(None, 2)
@@ -105,7 +105,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, rea
 
 def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments):
-    two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', '1 votes', '2 votes',
+    two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', 'Op. 1 votes', 'Op. 2 votes',
                                 'Alt votes', 'Result']]
     log.log('Simple two-way junction bridges:')
 
@@ -122,12 +122,13 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
         #   2) inputs[0], junction, outputs[1]
         #      inputs[1], junction, outputs[0]]
 
-        option_1_1_str = get_right_arrow().join(str(x) for x in [inputs[0], junction, outputs[0]])
-        option_1_2_str = get_right_arrow().join(str(x) for x in [inputs[1], junction, outputs[1]])
-        table_row.append(option_1_1_str + ' ' + option_1_2_str)
-        option_2_1_str = get_right_arrow().join(str(x) for x in [inputs[0], junction, outputs[1]])
-        option_2_2_str = get_right_arrow().join(str(x) for x in [inputs[1], junction, outputs[0]])
-        table_row.append(option_2_1_str + ' ' + option_2_2_str)
+        spaced_arrow = ' ' + get_right_arrow() + ' '
+        option_1_1_str = spaced_arrow.join(str(x) for x in [inputs[0], junction, outputs[0]])
+        option_1_2_str = spaced_arrow.join(str(x) for x in [inputs[1], junction, outputs[1]])
+        table_row.append(option_1_1_str + ', ' + option_1_2_str)
+        option_2_1_str = spaced_arrow.join(str(x) for x in [inputs[0], junction, outputs[1]])
+        option_2_2_str = spaced_arrow.join(str(x) for x in [inputs[1], junction, outputs[0]])
+        table_row.append(option_2_1_str + ', ' + option_2_2_str)
 
         # Gather up all reads which could possibly span this junction.
         relevant_reads = list(end_overlap_reads[inputs[0]] | end_overlap_reads[inputs[1]] |
@@ -217,19 +218,26 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
         two_way_junctions_table.append(table_row)
 
-    print_table(two_way_junctions_table, alignments='RLLRRRR', max_col_width=13,
+    max_op_1_len = max(max(len(y) for y in x[1].split(', ')) for x in two_way_junctions_table) + 1
+    max_op_2_len = max(max(len(y) for y in x[2].split(', ')) for x in two_way_junctions_table) + 1
+    max_result_len = max(len(x[-1]) for x in two_way_junctions_table)
+    print_table(two_way_junctions_table, alignments='RLLRRRR', left_align_header=False,
+                fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 5, max_result_len],
                 sub_colour={'too many alt': 'red', 'no support': 'red', 'too close': 'red',
                             'applied': 'green'})
     log.log('')
 
 
 def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict):
+                        read_dict, scoring_scheme):
     log.log('Simple loop bridges:')
 
-    scoring_scheme = AlignmentScoringScheme('0,-1,-1,-1')
+    col_widths = [5, 6, 6, 5, 5, 18, 17]
+    loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes', 'Result']
+    print_table([loop_table_header], fixed_col_widths=col_widths, left_align_header=False,
+                alignments='RRRRRLL')
 
-    loops = graph.find_all_simple_loops()
+    loops = sorted(graph.find_all_simple_loops())
     for start, end, middle, repeat in loops:
         start_len = graph.segments[abs(start)].get_length()
         end_len = graph.segments[abs(end)].get_length()
@@ -237,36 +245,29 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                 end_len < settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING:
             continue
 
-        print()  # TEMP
-        print()  # TEMP
-        print()  # TEMP
-        print()  # TEMP
-        print(start, end, middle, repeat)  # TEMP
+        loop_table_row = [start, repeat, middle, end]
 
         forward_strand_reads = end_overlap_reads[start] & start_overlap_reads[end]
         reverse_strand_reads = end_overlap_reads[-end] & start_overlap_reads[-start]
 
         all_reads = list(forward_strand_reads) + list(reverse_strand_reads)
         strands = ['F'] * len(forward_strand_reads) + ['R'] * len(reverse_strand_reads)
+        loop_table_row.append(len(all_reads))
 
         # This dictionary will collect the votes. The key is the number of times through the loop
         # and the value is the vote count. Votes for -1 times through the loop occur for reads
         # which don't conform to the loop assumption.
         votes = defaultdict(int)
 
-        # We'll try a range of repeat counts, using the segment depth to guide how high we should
-        # go.
+        # We'll try a range of repeat counts. The segment depth gives us a first guess as to the
+        # repeat count, which guides how high we should test.
         mean_start_end_depth = (graph.segments[abs(start)].depth +
                                 graph.segments[abs(end)].depth) / 2
         best_repeat_guess = int(round(graph.segments[abs(middle)].depth / mean_start_end_depth))
         best_repeat_guess = max(1, best_repeat_guess)
-        print('best_repeat_guess =', best_repeat_guess)  # TEMP
-        max_tested_repeat = (best_repeat_guess + 1) * 2
-        print('max_tested_repeat =', max_tested_repeat)  # TEMP
+        max_tested_loop_count = (best_repeat_guess + 1) * 2
 
         for read, strand in zip(all_reads, strands):
-            print(read, strand)  # TEMP
-
             if strand == 'F':
                 s, e, m, r = start, end, middle, repeat
             else:  # strand == 'R'
@@ -288,7 +289,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
             assert(last_index_of_start != -1)
             assert(first_index_of_end != -1)
 
-            # If there are any alignment in between the start and end segments, they are only
+            # If there are any alignments in between the start and end segments, they are only
             # allowed to be the middle or repeat segments.
             bad_middle = False
             for i in range(last_index_of_start+1, first_index_of_end):
@@ -301,8 +302,6 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
 
             start_alignment = alignments[last_index_of_start]
             end_alignment = alignments[first_index_of_end]
-            print(start_alignment)  # TEMP
-            print(end_alignment)  # TEMP
 
             # Now that we have the alignments, we can extract the relevant part of the read...
             read_start_pos, read_end_pos = start_alignment.read_start, end_alignment.read_end
@@ -320,30 +319,85 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
             start_seg_seq = graph.seq_from_signed_seg_num(s)[start_seg_start_pos:]
             end_seg_seq = graph.seq_from_signed_seg_num(e)[:end_seg_end_pos]
 
-            print('READ SEQ:  ', read_seq)  # TEMP
-
             middle_seq = graph.seq_from_signed_seg_num(m)
             repeat_seq = graph.seq_from_signed_seg_num(r)
 
-            for repeat_count in range(0, max_tested_repeat + 1):
+            best_score = None
+            best_count = None
+            for loop_count in range(0, max_tested_loop_count + 1):
                 test_seq = start_seg_seq + repeat_seq
-                for _ in range(repeat_count):
+                for _ in range(loop_count):
                     test_seq += middle_seq + repeat_seq
                 test_seq += end_seg_seq
-                print('TEST SEQ ' + str(repeat_count) + ':', test_seq)  # TEMP
                 alignment_result = fully_global_alignment(read_seq, test_seq, scoring_scheme, True,
                                                           settings.SIMPLE_REPEAT_BRIDGING_BAND_SIZE)
                 if alignment_result:
                     seqan_parts = alignment_result.split(',', 9)
                     test_seq_score = int(seqan_parts[6])
+                    if best_score is None or test_seq_score > best_score:
+                        best_score = test_seq_score
+                        best_count = loop_count
+
+            # This read now casts its vote for the best repeat count!
+            if best_count is not None:
+                votes[best_count] += 1
+
+        # Format the vote totals nicely for the table.
+        vote_str = ''
+        for loop_count in sorted(votes.keys()):
+            if loop_count == -1:
+                vote_str += 'bad: '
+            elif loop_count == 1:
+                vote_str += '1 loop: '
+            else:
+                vote_str += str(loop_count) + ' loops: '
+            vote_count = votes[loop_count]
+            vote_str += str(vote_count) + ' vote' + ('s' if vote_count != 1 else '') + '    '
+        loop_table_row.append(vote_str.strip())
+
+        # Determine the repeat count which wins!
+        applied_message = None
+        results = sorted(list(votes.items()), key=lambda x: x[1], reverse=True)
+        if not results:
+            loop_table_row.append('no reads')
+        else:
+            winning_loop_count = results[0][0]
+            if len(results) == 1:
+                second_best_ratio = 0.0
+            else:
+                second_best_ratio = results[1][1] / results[0][1]
+            if winning_loop_count == -1:
+                loop_table_row.append('too many bad')
+            elif second_best_ratio > 0.5:
+                loop_table_row.append('too close')
+            else:
+                applied_message = 'applied: ' + str(winning_loop_count) + ' loop' + \
+                                  ('' if winning_loop_count == 1 else 's')
+                loop_table_row.append(applied_message)
+
+                # If we got here, then we're good to bridge!
+                middle_seq = graph.seq_from_signed_seg_num(middle)
+                repeat_seq = graph.seq_from_signed_seg_num(repeat)
+                new_seg_seq = repeat_seq
+                for _ in range(winning_loop_count):
+                    new_seg_seq += middle_seq + repeat_seq
+                new_seg_num = graph.get_next_available_seg_number()
+                new_seg = Segment(new_seg_num, mean_start_end_depth, new_seg_seq, True)
+                graph.segments[new_seg_num] = new_seg
+                graph.add_link(start, new_seg_num)
+                graph.add_link(new_seg_num, end)
+
+                # If we've traversed the loop, we can delete the segments. If we've haven't, then
+                # we leave them as a separate circular sequence.
+                if winning_loop_count > 0:
+                    graph.remove_segments([abs(middle), abs(repeat)])
                 else:
-                    test_seq_score = 0
+                    graph.remove_link(start, repeat)
+                    graph.remove_link(repeat, end)
 
-                print('TEST SEQ ' + str(repeat_count) + ' SCORE:', test_seq_score)  # TEMP
-
-            print()  # TEMP
-
-
-
-
-
+        sub_colours = {'too many bad': 'red', 'no reads': 'red', 'too close': 'red'}
+        if applied_message:
+            sub_colours[applied_message] = 'green'
+        print_table([loop_table_row], fixed_col_widths=col_widths, header_format='normal',
+                    alignments='RRRRRLL', left_align_header=False, bottom_align_header=False,
+                    sub_colour=sub_colours)

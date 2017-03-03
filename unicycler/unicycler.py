@@ -89,14 +89,23 @@ def main():
         overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlap_removed')
         graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True)
 
+    # SHORT READ ALIGNMENT TO GRAPH
+    # * This would be very useful for a number of reasons:
+    #   * Would allow better calculation of segment depths, which would in turn help with copy
+    #     depth determination.
+    #   * Would allow for short read bridging.
+
     # SHORT READ BRIDGING?
     # * If I'm ever going to bridge with the short reads, here is the time to do it! I won't use
     #   SPAdes contigs paths, though (don't trust them).
 
+    # TUNE ALIGNMENT PARAMETERS WITH LAST-TRAIN?
+    scoring_scheme = AlignmentScoringScheme(args.scores)
+
     # Apply simple bridges using long reads.
     read_dict, read_names, long_read_filename = load_long_reads(args.long)
     graph = apply_simple_long_read_bridges(graph, args.out, args.keep, args.threads, read_dict,
-                                           read_names, long_read_filename)
+                                           read_names, long_read_filename, scoring_scheme)
     if args.keep > 0:
         graph.save_to_gfa(gfa_path(args.out, next(counter), 'simple_bridges_applied'),
                           save_seg_type_info=True, save_copy_depth_info=True, newline=True)

@@ -528,10 +528,21 @@ class MyHelpFormatter(argparse.HelpFormatter):
             return argparse.HelpFormatter._fill_text(self, text, width, indent)
 
 
+END_FORMATTING = '\033[0m'
+BOLD = '\033[1m'
+UNDERLINE = '\033[4m'
+RED = '\033[31m'
+GREEN = '\033[32m'
+MAGENTA = '\033[35m'
+YELLOW = '\033[93m'
+DIM = '\033[2m'
+
+
 def print_table(table, alignments='', max_col_width=30, col_separation=3, indent=2,
                 row_colour=None, sub_colour=None, row_extra_text=None, leading_newline=False,
                 subsequent_indent='', return_str=False, header_format='underline',
-                hide_header=False, fixed_col_widths=None, left_align_header=True, verbosity=1):
+                hide_header=False, fixed_col_widths=None, left_align_header=True,
+                bottom_align_header=True, verbosity=1):
     """
     Args:
         table: a list of lists of strings (one row is one list, all rows should be the same length)
@@ -549,6 +560,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
         hide_header: if True, the header is not printed
         fixed_col_widths: a list to specify exact column widths (automatic if not used)
         left_align_header: if False, the header will follow the column alignments
+        bottom_align_header: if False, the header will align to the top, like other rows
         verbosity: the table will only be logged if the logger verbosity is >= this value
     """
     column_count = len(table[0])
@@ -592,7 +604,11 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
             wrapper = textwrap.TextWrapper(subsequent_indent=subsequent_indent, width=max_col_width)
             wrapped_row = [wrapper.wrap(x) for x in row]
 
-        for j in range(max(len(x) for x in wrapped_row)):
+        row_rows = max(len(x) for x in wrapped_row)
+        if i == 0 and bottom_align_header:
+            wrapped_row = [[''] * (row_rows - len(x)) + x for x in wrapped_row]
+
+        for j in range(row_rows):
             row_line = [x[j] if j < len(x) else '' for x in wrapped_row]
             aligned_row = []
             for value, col_width, alignment in zip(row_line, col_widths, alignments):
@@ -609,22 +625,14 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
                 row_str = colour(row_str, row_colour[i])
             for text, colour_name in sub_colour.items():
                 row_str = row_str.replace(text, colour(text, colour_name))
+            if j < row_rows - 1 and UNDERLINE in row_str:
+                row_str = re.sub('\033\[4m', '', row_str)
             if return_str:
                 full_table_str += indenter + row_str + '\n'
             else:
                 log.log(indenter + row_str, verbosity)
     if return_str:
         return full_table_str
-
-
-END_FORMATTING = '\033[0m'
-BOLD = '\033[1m'
-UNDERLINE = '\033[4m'
-RED = '\033[31m'
-GREEN = '\033[32m'
-MAGENTA = '\033[35m'
-YELLOW = '\033[93m'
-DIM = '\033[2m'
 
 
 def colour(text, text_colour):
