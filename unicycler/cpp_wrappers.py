@@ -259,14 +259,15 @@ def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
 C_LIB.minimapAlignReads.argtypes = [c_char_p,  # Reference fasta filename
                                     c_char_p,  # Reads fastq filename
                                     c_int,     # Threads
-                                    c_int]     # Sensitivity level
+                                    c_int,     # Sensitivity level
+                                    c_bool]    # Read vs read mappings
 C_LIB.minimapAlignReads.restype = c_void_p     # String describing alignments
 
 
-def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level):
+def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level, read_vs_read):
     """
     Python wrapper for destroyMinimapIndex C++ function.
     """
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
-                                  threads, sensitivity_level)
+                                  threads, sensitivity_level, read_vs_read)
     return c_string_to_python_string(ptr)

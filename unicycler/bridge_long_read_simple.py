@@ -70,8 +70,8 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
     c_with_arrows = get_right_arrow() + 'C' + get_right_arrow()
     log.log_explanation('Two-way junctions are defined as cases where two graph contigs (A and B) '
                         'join together (C) and then split apart again (D and E). This usually '
-                        'represents a simple 2-copy repeat, and there are two possible options to '
-                        'resolve it: (A' + c_with_arrows + 'D and B' + c_with_arrows + 'E) or '
+                        'represents a simple 2-copy repeat, and there are two possible options for '
+                        'its resolution: (A' + c_with_arrows + 'D and B' + c_with_arrows + 'E) or '
                         '(A' + c_with_arrows + 'E and B' + c_with_arrows + 'D). '
                         'Each read which spans such a junction gets to "vote" for option 1, '
                         'option 2 or neither. If the reads\' votes show option 1 or 2 as a clear '
@@ -192,7 +192,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
     max_op_1_len = max(max(len(y) for y in x[1].split(', ')) for x in two_way_junctions_table) + 1
     max_op_2_len = max(max(len(y) for y in x[2].split(', ')) for x in two_way_junctions_table) + 1
     max_result_len = max(len(x[-1]) for x in two_way_junctions_table)
-    print_table(two_way_junctions_table, alignments='RLLRRRR', left_align_header=False,
+    print_table(two_way_junctions_table, alignments='RLLRRRR', left_align_header=False, indent=0,
                 fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 7, max_result_len],
                 sub_colour={'too many alt': 'red', 'no support': 'red', 'too close': 'red',
                             'applied': 'green'})
@@ -218,7 +218,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
     col_widths = [5, 6, 6, 5, 5, 18, 17]
     loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes', 'Result']
     print_table([loop_table_header], fixed_col_widths=col_widths, left_align_header=False,
-                alignments='RRRRRLL')
+                alignments='RRRRRLL', indent=0)
 
     loops = sorted(graph.find_all_simple_loops())
     for start, end, middle, repeat in loops:
@@ -326,7 +326,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
             sub_colours[applied_message] = 'green'
         print_table([loop_table_row], fixed_col_widths=col_widths, header_format='normal',
                     alignments='RRRRRLL', left_align_header=False, bottom_align_header=False,
-                    sub_colour=sub_colours)
+                    sub_colour=sub_colours, indent=0)
 
 
 def get_read_loop_vote_one_arg(all_args):

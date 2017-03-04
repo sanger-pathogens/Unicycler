@@ -38,7 +38,11 @@ class MinimapAlignment(object):
         self.ref_length = int(line_parts[6])
         self.ref_start = int(line_parts[7])
         self.ref_end = int(line_parts[8])
-        self.minimiser_count = int(line_parts[9])
+
+        self.matching_bases = int(line_parts[9])
+        self.num_bases = int(line_parts[10])
+        # Mapping quality is part 11, not currently used
+        self.minimiser_count = int(line_parts[12].split('cm:i:')[-1])
 
         self.read = read_dict[self.read_name]
         self.ref = ref_dict[self.ref_name]
@@ -150,7 +154,8 @@ def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, t
     graph.save_to_fasta(segments_fasta, verbosity=2)
     references = load_references(segments_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
-    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0)
+    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0,
+                                                 False)
     minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict,
                                                  filter_overlaps=True,
                                                  allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,

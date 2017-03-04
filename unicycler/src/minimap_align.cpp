@@ -22,7 +22,7 @@ KSEQ_INIT(gzFile, gzread)
 
 
 char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
-                         int sensitivityLevel) {
+                         int sensitivityLevel, bool readVsRead) {
 
     int k = LEVEL_0_MINIMAP_KMER_SIZE;
     if (sensitivityLevel == 1)
@@ -38,7 +38,11 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
     kseq_t *ks = kseq_init(f);
 
     // Build the reference index.
-    int w = (int)(.6666667 * k + .499);  // 2/3 of k
+    int w;
+    if (readVsRead)
+        w = 5;
+    else
+        w = int(.6666667 * k + .499);  // 2/3 of k
     mm_verbose = 0;
     mm_idx_t * mi = mm_idx_build(referenceFasta, w, k, n_threads);
     assert(mi);
@@ -47,6 +51,14 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
 
     mm_mapopt_t opt;
     mm_mapopt_init(&opt); // initialize mapping parameters
+
+    // When mapping reads against themselves, use the recommended options: -Sw5 -L100 -m0
+    if (readVsRead) {
+        opt.flag |= MM_F_AVA | MM_F_NO_SELF;
+        opt.min_match = 100;
+        opt.merge_frac = 0.0;
+    }
+
     mm_tbuf_t *tbuf = mm_tbuf_init(); // thread buffer; for multi-threading, allocate one tbuf for each thread
     while (kseq_read(ks) >= 0) { // each kseq_read() call reads one query sequence
         const mm_reg1_t *reg;
@@ -68,14 +80,17 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
             int refStart = r->rs;
             int refEnd = r->re;
 
+            int numMatchingBases = r->len;
+            int numBases = r->re - r->rs > r->qe - r->qs ? r->re - r->rs : r->qe - r->qs;
             int numberOfMinimisers = r->cnt;
 
             std::string alignmentString = readName + "\t" + std::to_string(readLen) + "\t";
             alignmentString += std::to_string(readStart) + "\t" + std::to_string(readEnd) + "\t" + readStrand + "\t";
             alignmentString += refName + "\t" + std::to_string(refLen) + "\t";
             alignmentString += std::to_string(refStart) + "\t" + std::to_string(refEnd) + "\t";
-            alignmentString += std::to_string(numberOfMinimisers) + "\t";
-            alignmentString += "\n";
+            alignmentString += std::to_string(numMatchingBases) + "\t";
+            alignmentString += std::to_string(numBases) + "\t" + "255" + "\t";
+            alignmentString += "cm:i:" + std::to_string(numberOfMinimisers) + "\n";
 
             outputString += alignmentString;
         }

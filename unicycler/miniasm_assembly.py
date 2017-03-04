@@ -16,18 +16,28 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 from .minimap_alignment import align_long_reads_to_assembly_graph
+from .cpp_wrappers import minimap_align_reads
 from . import log
 from . import settings
 
 
 def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename):
+    """
+    EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
+    * Take all single copy contigs over a certain length and get reads which overlap two or more.
+      * While I'm at it, I should throw out reads which look like chimeras based on incompatible
+        mapping.
+    * Create a file of "long reads" which contains:
+      * real long reads as found (and possibly split) by the above step
+      * single copy contigs in FASTQ form (with a high quality, 'I' or something)
 
+    """
     log.log_section_header('Assemble contigs and long reads with miniasm and Racon')
     log.log_explanation('Unicycler uses a modified version of miniasm to construct a string graph '
                         'assembly using both the short read contigs and the long reads. If this '
                         'produces a reliable assembly, Unicycler will extract bridges between '
                         'contigs, improve them with Racon and use them to simplify the assembly '
-                        'graph.')
+                        'graph.', extra_empty_lines_after=0)
     log.log_explanation('This method requires decent coverage of long reads and therefore may not '
                         'be fruitful if long reads are sparse. However, this method does not rely '
                         'on the short read assembly graph having good connectivity and is '
@@ -41,28 +51,25 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                                                             threads, read_dict)
     assembly_read_names = get_miniasm_assembly_reads(minimap_alignments, graph)
 
-    print('All reads:', len(read_dict))
-    print('Potential reads:', len(assembly_read_names))
-
-    long_read_filename = os.path.join(miniasm_dir, 'long_reads.fastq')
+    # Save appropriate single copy contigs and informative reads to a FASTQ file.
+    log.log_explanation('Unicycler uses two types of "reads" as input for the miniasm assembly: '
+                        'sufficiently long single-copy short read contigs and actual long reads '
+                        'which overlap two or more of these contigs.')
+    long_read_filename = os.path.join(miniasm_dir, 'assembly_reads.fastq')
     save_assembly_reads_to_file(minimap_alignments, long_read_filename, assembly_read_names,
                                 read_dict, graph)
 
+    # Do an all vs all alignment and save the results in a PAF file.
+    log.log_explanation('Minimap finds all overlaps between the  assembly reads which miniasm '
+                        'will use to produce a string graph assembly.')
+    minimap_alignments_str = minimap_align_reads(long_read_filename, long_read_filename, threads,
+                                                 0, True)
+    mappings_filename = os.path.join(miniasm_dir, 'mappings.paf')
+    log.log('Saving ' + mappings_filename)
+    with open(mappings_filename, 'wt') as mappings:
+        mappings.write(minimap_alignments_str)
 
 
-    # USE start_overlap_reads AND end_overlap_reads TO GET THE SET OF READS WHICH OVERLAP ENDS OF
-    # SINGLE COPY CONTIGS.
-
-
-
-    # EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
-    # * Take all single copy contigs over a certain length and get reads which overlap two or more.
-    #   * Some logic is currently in get_overlapping_reads.py.
-    #   * While I'm at it, I should throw out reads which look like chimeras based on incompatible
-    #     mapping.
-    # * Create a file of "long reads" which contains:
-    #   * real long reads as found (and possibly split) by the above step
-    #   * single copy contigs in FASTQ form (with a high quality, 'I' or something)
 
     # ASSEMBLE LONG READS USING MINIASM.
     # * The min_ovlp setting should either be 1 or dynamically determined based on depth.
@@ -128,14 +135,15 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
 
 
 def save_assembly_reads_to_file(minimap_alignments, read_filename, read_names, read_dict, graph):
-    with open(read_filename, 'wt') as fastq:
+    qual = chr(settings.CONTIG_READ_QSCORE + 33)
+    log.log('Saving to ' + read_filename + ':')
 
+    with open(read_filename, 'wt') as fastq:
         # First save the Illumina contigs as 'reads'. They are given a constant high qscore to
         # reflect our confidence in them.
-        qual = chr(settings.CONTIG_READ_QSCORE + 33)
+        seg_count = 0
         for seg in sorted(graph.segments.values(), key=lambda x: x.number):
-            if segment_suitable_for_miniasm_assembly(graph, seg) and \
-                    seg.get_length() >= settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
+            if segment_suitable_for_miniasm_assembly(graph, seg):
                 fastq.write('@CONTIG_')
                 fastq.write(str(seg.number))
                 fastq.write('\n')
@@ -143,6 +151,9 @@ def save_assembly_reads_to_file(minimap_alignments, read_filename, read_names, r
                 fastq.write('\n+\n')
                 fastq.write(qual * seg.get_length())
                 fastq.write('\n')
+                seg_count += 1
+        log.log('  ' + str(seg_count) + ' single copy contigs ' +
+                str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer')
 
         # Now save the actual long reads (though they may be split to prevent Illumina contigs
         # from being contained).
@@ -159,6 +170,9 @@ def save_assembly_reads_to_file(minimap_alignments, read_filename, read_names, r
                 fastq.write('\n+\n')
                 fastq.write(read.qualities[s:e])
                 fastq.write('\n')
+        log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
+                str(len(read_dict)) + ' total long reads)')
+    log.log('')
 
 
 def get_assembly_output_ranges(read_alignments, read_length, graph):
@@ -170,9 +184,7 @@ def get_assembly_output_ranges(read_alignments, read_length, graph):
     range_starts, range_ends = [], []
     for a in read_alignments:
         seg = graph.segments[int(a.ref_name)]
-        if segment_suitable_for_miniasm_assembly(graph, seg) and \
-                seg.get_length() >= settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING and \
-                a.ref_contained_in_read():
+        if segment_suitable_for_miniasm_assembly(graph, seg) and a.ref_contained_in_read():
             range_starts.append(a.read_start + settings.BROKEN_ASSEMBLY_READ_END_GAP)
             range_ends.append(a.read_end - settings.BROKEN_ASSEMBLY_READ_END_GAP)
     range_starts = [0] + range_starts
@@ -184,8 +196,11 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
     """
     Returns True if the segment is:
       1) single copy
-      2) not already circular and complete
+      2) long enough
+      3) not already circular and complete
     """
     if graph.get_copy_number(segment) != 1:
+        return False
+    if segment.get_length() < settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
         return False
     return not graph.is_component_complete([segment.number])

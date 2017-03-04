@@ -20,7 +20,7 @@
 extern "C" {
 
     char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
-                             int sensitivityLevel);
+                             int sensitivityLevel, bool readVsRead);
 }
 
 #endif // MINIMAP_ALIGN_H
