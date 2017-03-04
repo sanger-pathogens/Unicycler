@@ -18,20 +18,20 @@ not, see <http://www.gnu.org/licenses/>.
 # ensure that it does not occur for complex areas of the assembly graph.
 MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING = 4000
 
-
 # When aligning minimap reads to the graph (which is overlap-free), we still want to allow a tiny
 # bit of overlap because minimap alignments are a bit course.
 ALLOWED_MINIMAP_OVERLAP = 5
-
 
 # When aligning minimap reads to the graph, we can exclude hits that are too much worse than the
 # best hit.
 MAX_TO_MIN_MINIMISER_RATIO = 10
 
-
 # When testing various repeat counts using fully global alignment in Seqan, we use this band size
 # to make the alignment faster.
 SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 50
+
+# Only single copy segments longer than this will be included as 'reads' in the miniasm assembly.
+MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
 
 
 

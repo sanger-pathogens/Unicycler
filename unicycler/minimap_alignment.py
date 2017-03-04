@@ -14,9 +14,13 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
-from .misc import get_nice_header, dim
+import os
 from collections import defaultdict
+from .misc import get_nice_header, dim
+from .read_ref import load_references
+from .cpp_wrappers import minimap_align_reads
 from . import log
+from . import settings
 
 
 class MinimapAlignment(object):
@@ -56,6 +60,28 @@ class MinimapAlignment(object):
         Returns the ref name preceded by a '-' if the read strand is '-'.
         """
         return ('-' if self.read_strand == '-' else '') + self.ref_name
+
+    def overlaps_reference(self):
+        """
+        Returns true if the alignment overlaps either end of the reference.
+        """
+        adjusted_contig_start = self.ref_start - self.read_start
+        adjusted_contig_end = self.ref_end + self.read_end_gap
+        return adjusted_contig_start < 0 or adjusted_contig_end >= self.ref_length
+
+    def ref_contained_in_read(self):
+        """
+        Returns true if the read overlaps both ends of the reference.
+        """
+        if self.read_strand == '+':
+            strand_specific_ref_start = self.ref_start
+            strand_specific_ref_end = self.ref_end
+        else:  # self.read_strand == '-'
+            strand_specific_ref_start = self.ref_length - self.ref_end
+            strand_specific_ref_end = self.ref_length - self.ref_start
+        adjusted_ref_start = strand_specific_ref_start - self.read_start
+        adjusted_ref_end = strand_specific_ref_end + self.read_end_gap
+        return adjusted_ref_start < 0 and adjusted_ref_end >= self.ref_length
 
 
 def line_iterator(string_with_line_breaks):
@@ -112,3 +138,52 @@ def range_overlap(x1, x2, y1, y2):
 def alignments_overlap(a, other, allowed_overlap):
     adjusted_start = a.read_start + allowed_overlap
     return any(range_overlap(adjusted_start, a.read_end, x.read_start, x.read_end) for x in other)
+
+
+def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, threads, read_dict):
+    """
+    Aligns all long reads to all graph segments and returns a dictionary of alignments (key =
+    read name, value = list of MinimapAlignment objects).
+    """
+    segments_fasta = os.path.join(working_dir, 'all_segments.fasta')
+    log.log('Aligning long reads to graph using minimap', 1)
+    graph.save_to_fasta(segments_fasta, verbosity=2)
+    references = load_references(segments_fasta, section_header=None, show_progress=False)
+    reference_dict = {x.name: x for x in references}
+    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0)
+    minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict,
+                                                 filter_overlaps=True,
+                                                 allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
+                                                 filter_by_minimisers=True,
+                                                 minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)
+    log.log('Number of minimap alignments: ' + str(len(minimap_alignments)), 2)
+    log.log('', 1)
+    return minimap_alignments
+
+
+def build_start_end_overlap_sets(minimap_alignments):
+    """
+    Build indices of start and end contig overlaps so we can quickly determine which reads
+    overlap which end of a particular contig. These dictionaries have a key of a signed segment
+    number and a value of a set of reads names.
+    """
+    start_overlap_reads = defaultdict(set)
+    end_overlap_reads = defaultdict(set)
+    min_overlap_amount = 100
+    for read_name, alignments in minimap_alignments.items():
+        for a in alignments:
+            seg_num = int(a.ref_name)
+            if a.read_strand == '+':
+                seg_start = a.ref_start
+                seg_end = a.ref_end
+            else:  # a.read_strand == '-'
+                seg_num *= -1
+                seg_start = a.ref_length - a.ref_end
+                seg_end = a.ref_length - a.ref_start
+            adjusted_seg_start = seg_start - a.read_start
+            adjusted_seg_end = seg_end + a.read_end_gap
+            if adjusted_seg_start < -min_overlap_amount:
+                start_overlap_reads[seg_num].add(read_name)
+            if adjusted_seg_end > a.ref_length + min_overlap_amount:
+                end_overlap_reads[seg_num].add(read_name)
+    return start_overlap_reads, end_overlap_reads

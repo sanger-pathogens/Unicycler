@@ -37,11 +37,12 @@ class Log(object):
 
         if self.log_filename:
             log_file_exists = os.path.isfile(self.log_filename)
-            self.log_file = open(self.log_filename, 'at', 1)  # line buffering
+            self.log_file = open(self.log_filename, 'at', 1, encoding='utf8')  # line buffering
             if log_file_exists:
                 self.log_file.write('\n\n\n\n\n\n\n\n')
         else:
             self.log_file = None
+
 
     def __del__(self):
         if self.log_file and not self.log_file.closed:

@@ -6,6 +6,10 @@ This module takes care of simple long read bridging. This is where parts of the 
 straightforward repeat and minimap alignments can conclusively support one over the alternatives.
 Simple long read bridging is done before other, more complex bridging processes.
 
+Specifically, there are two kinds of simple bridging:
+ * two way junctions
+ * simple loops
+
 This file is part of Unicycler. Unicycler is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by the Free Software Foundation,
 either version 3 of the License, or (at your option) any later version. Unicycler is distributed in
@@ -20,9 +24,8 @@ import shutil
 from collections import defaultdict
 import itertools
 from multiprocessing.dummy import Pool as ThreadPool
-from .cpp_wrappers import minimap_align_reads, fully_global_alignment
-from .minimap_alignment import load_minimap_alignments
-from .read_ref import load_references
+from .cpp_wrappers import fully_global_alignment
+from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .assembly_graph_segment import Segment
 from .assembly_graph_copy_depth import determine_copy_depth
 from .misc import print_table, get_right_arrow
@@ -33,17 +36,7 @@ from . import settings
 def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
                                    scoring_scheme):
     """
-    LOOK FOR VERY SIMPLE PARTS IN THE GRAPH WHICH CAN BE UNAMBIGUOUSLY RESOLVED WITH THE LONG
-    READS.
-    * For example, a two-way merge and split.
-    * Places in the graph where there are X ways in, X ways out, and each way in to way out has
-      one and only one path.
-    * First, find these locations.
-    * Second, determine all possible paths. For a 2-2 junction, this will be 4 paths. For a 3-3
-      junction, this will be 9 paths, etc.
-    * Evaluate each path using the minimap alignments and sort the paths from best to worst.
-    * If the top X paths (where X is the in and out degree) are complete and not conflicting
-      (they use each in path once and each out path once), then we can apply the bridges!
+    Look for and apply simple long read bridges to the graph.
     """
     log.log_section_header('Simple repeat bridging with minimap alignments')
     log.log_explanation('Unicycler uses long read alignments (from minimap) to resolve simple '
@@ -54,43 +47,9 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lon
     if not os.path.exists(bridging_dir):
         os.makedirs(bridging_dir)
 
-    # Do a minimap alignment of all reads to all segments.
-    segments_fasta = os.path.join(bridging_dir, 'all_segments.fasta')
-    log.log('Aligning long reads to graph using minimap', 1)
-    graph.save_to_fasta(segments_fasta, verbosity=2)
-    references = load_references(segments_fasta, section_header=None, show_progress=False)
-    reference_dict = {x.name: x for x in references}
-    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0)
-    minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict,
-                                                 filter_overlaps=True,
-                                                 allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
-                                                 filter_by_minimisers=True,
-                                                 minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)
-    log.log('Number of minimap alignments: ' + str(len(minimap_alignments)), 2)
-    log.log('', 1)
-
-    # Build indices of start and end contig overlaps so we can quickly determine which reads
-    # overlap which end of a particular contig.
-    # These dictionaries have a key of a signed segment number and a value of a set of reads names.
-    start_overlap_reads = defaultdict(set)
-    end_overlap_reads = defaultdict(set)
-    min_overlap_amount = 100
-    for read_name, alignments in minimap_alignments.items():
-        for a in alignments:
-            seg_num = int(a.ref_name)
-            if a.read_strand == '+':
-                seg_start = a.ref_start
-                seg_end = a.ref_end
-            else:  # a.read_strand == '-'
-                seg_num *= -1
-                seg_start = a.ref_length - a.ref_end
-                seg_end = a.ref_length - a.ref_start
-            adjusted_seg_start = seg_start - a.read_start
-            adjusted_seg_end = seg_end + a.read_end_gap
-            if adjusted_seg_start < -min_overlap_amount:
-                start_overlap_reads[seg_num].add(read_name)
-            if adjusted_seg_end > a.ref_length + min_overlap_amount:
-                end_overlap_reads[seg_num].add(read_name)
+    minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
+                                                            bridging_dir, threads, read_dict)
+    start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
 
     simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments)
