@@ -28,11 +28,10 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                         'produces a reliable assembly, Unicycler will extract bridges between '
                         'contigs, improve them with Racon and use them to simplify the assembly '
                         'graph.')
-    log.log_explanation('This method requires decent coverage of long reads and may therefore not '
+    log.log_explanation('This method requires decent coverage of long reads and therefore may not '
                         'be fruitful if long reads are sparse. However, this method does not rely '
                         'on the short read assembly graph having good connectivity and is '
-                        'therefore able to bridge an assembly graph even when it contains many '
-                        'dead ends.')
+                        'able to bridge an assembly graph even when it contains many dead ends.')
 
     miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
@@ -121,8 +120,7 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
         for a in alignments:
             if a.overlaps_reference():
                 seg = graph.segments[int(a.ref_name)]
-                if graph.get_copy_number(seg) == 1 and \
-                        seg.get_length() >= settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
+                if segment_suitable_for_miniasm_assembly(graph, seg):
                     overlap_count += 1
         if overlap_count >= 2:
             miniasm_assembly_reads.append(read_name)
@@ -131,6 +129,23 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
 
 def save_assembly_reads_to_file(minimap_alignments, read_filename, read_names, read_dict, graph):
     with open(read_filename, 'wt') as fastq:
+
+        # First save the Illumina contigs as 'reads'. They are given a constant high qscore to
+        # reflect our confidence in them.
+        qual = chr(settings.CONTIG_READ_QSCORE + 33)
+        for seg in sorted(graph.segments.values(), key=lambda x: x.number):
+            if segment_suitable_for_miniasm_assembly(graph, seg) and \
+                    seg.get_length() >= settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
+                fastq.write('@CONTIG_')
+                fastq.write(str(seg.number))
+                fastq.write('\n')
+                fastq.write(seg.forward_sequence)
+                fastq.write('\n+\n')
+                fastq.write(qual * seg.get_length())
+                fastq.write('\n')
+
+        # Now save the actual long reads (though they may be split to prevent Illumina contigs
+        # from being contained).
         for read_name in read_names:
             read = read_dict[read_name]
             ranges = get_assembly_output_ranges(minimap_alignments[read_name], read.get_length(),
@@ -155,11 +170,22 @@ def get_assembly_output_ranges(read_alignments, read_length, graph):
     range_starts, range_ends = [], []
     for a in read_alignments:
         seg = graph.segments[int(a.ref_name)]
-        if graph.get_copy_number(seg) == 1 and \
+        if segment_suitable_for_miniasm_assembly(graph, seg) and \
                 seg.get_length() >= settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING and \
                 a.ref_contained_in_read():
-            range_starts.append(a.read_start + 10)
-            range_ends.append(a.read_end - 10)
+            range_starts.append(a.read_start + settings.BROKEN_ASSEMBLY_READ_END_GAP)
+            range_ends.append(a.read_end - settings.BROKEN_ASSEMBLY_READ_END_GAP)
     range_starts = [0] + range_starts
     range_ends.append(read_length)
     return list(zip(range_starts, range_ends))
+
+
+def segment_suitable_for_miniasm_assembly(graph, segment):
+    """
+    Returns True if the segment is:
+      1) single copy
+      2) not already circular and complete
+    """
+    if graph.get_copy_number(segment) != 1:
+        return False
+    return not graph.is_component_complete([segment.number])
