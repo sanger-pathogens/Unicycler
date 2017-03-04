@@ -1,7 +1,10 @@
 #include <string.h>
-#include "sdict.h"
 
-#include "khash.h"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
+#include "miniasm/sdict.h"
+#include "miniasm/khash.h"
+
 KHASH_MAP_INIT_STR(str, uint32_t)
 typedef khash_t(str) shash_t;
 

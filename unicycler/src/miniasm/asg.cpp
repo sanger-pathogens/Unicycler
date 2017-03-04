@@ -1,10 +1,14 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
-#include "asg.h"
-#include "kvec.h"
 
-#include "ksort.h"
+#pragma GCC diagnostic ignored "-Wvla-extension"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
+#include "miniasm/asg.h"
+#include "miniasm/kvec.h"
+#include "miniasm/ksort.h"
+
 #define asg_arc_key(a) ((a).ul)
 KRADIX_SORT_INIT(asg, asg_arc_t, asg_arc_key, 8)
 

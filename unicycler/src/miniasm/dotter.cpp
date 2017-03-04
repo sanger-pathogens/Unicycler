@@ -3,10 +3,13 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <math.h>
-#include "paf.h"
-#include "sdict.h"
-#include "kvec.h"
-#include "eps.h"
+
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
+#include "miniasm/paf.h"
+#include "miniasm/sdict.h"
+#include "miniasm/kvec.h"
+#include "miniasm/eps.h"
 
 typedef struct {
 	uint32_t qn, qs, qe;
@@ -45,7 +48,7 @@ static inline int mixed_numcompare(const char *_a, const char *_b)
 	return *pa? 1 : *pb? -1 : 0;
 }
 
-#include "ksort.h"
+#include "miniasm/ksort.h"
 #define srtx_lt(a, b) (mixed_numcompare((a).name, (b).name) < 0)
 KSORT_INIT(dtx, srtaux_t, srtx_lt)
 #define srty_lt(a, b) ((a).tot < (b).tot)

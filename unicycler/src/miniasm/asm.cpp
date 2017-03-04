@@ -9,10 +9,10 @@
 #include <unordered_set>
 #include <unordered_map>
 
-#include "miniasm.h"
-#include "kvec.h"
-#include "sdict.h"
-#include "kseq.h"
+#include "miniasm/miniasm.h"
+#include "miniasm/kvec.h"
+#include "miniasm/sdict.h"
+#include "miniasm/kseq.h"
 
 KSEQ_INIT(gzFile, gzread)
 
@@ -125,7 +125,7 @@ void save_string_graph(const asg_t *g, const sdict_t *read_dict, const ma_sub_t 
  * Unitig generation *
  *********************/
 
-#include "kdq.h"
+#include "miniasm/kdq.h"
 KDQ_INIT(uint64_t)
 
 void destroy_unitig_graph(ma_ug_t *ug)

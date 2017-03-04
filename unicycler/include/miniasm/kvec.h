@@ -26,7 +26,7 @@
 /*
   An example:
 
-#include "kvec.h"
+#include "miniasm/kvec.h"
 int main() {
 	kvec_t(int) array;
 	kv_init(array);

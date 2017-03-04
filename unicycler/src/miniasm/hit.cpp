@@ -4,13 +4,16 @@
 #include <assert.h>
 #include <iostream>
 #include <limits>
-#include "sdict.h"
-#include "paf.h"
-#include "kvec.h"
-#include "sys.h"
-#include "miniasm.h"
 
-#include "ksort.h"
+#pragma GCC diagnostic ignored "-Wvla-extension"
+
+#include "miniasm/sdict.h"
+#include "miniasm/paf.h"
+#include "miniasm/kvec.h"
+#include "miniasm/sys.h"
+#include "miniasm/miniasm.h"
+#include "miniasm/ksort.h"
+
 #define ma_hit_key(a) ((a).qns)
 KRADIX_SORT_INIT(hit, ma_hit_t, ma_hit_key, 8)
 

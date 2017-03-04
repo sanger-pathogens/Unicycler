@@ -5,8 +5,11 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <string>
-#include "sdict.h"
-#include "asg.h"
+
+#pragma GCC diagnostic ignored "-Wsign-compare"
+
+#include "miniasm/sdict.h"
+#include "miniasm/asg.h"
 
 extern int ma_verbose;
 

@@ -1,9 +1,10 @@
 #include <zlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "paf.h"
 
-#include "kseq.h"
+#include "miniasm/paf.h"
+#include "miniasm/kseq.h"
+
 KSTREAM_INIT(gzFile, gzread, 0x10000)
 
 paf_file_t *paf_open(const char *fn)
