@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <string>
 #include "bseq.h"
 
 #define MM_IDX_DEF_B    14
@@ -62,9 +63,9 @@ extern double mm_realtime0;
 struct mm_tbuf_s;
 typedef struct mm_tbuf_s mm_tbuf_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+//#ifdef __cplusplus
+//extern "C" {
+//#endif
 
 // compute minimizers
 void mm_sketch(const char *str, int len, int w, int k, uint32_t rid, mm128_v *p);
@@ -97,8 +98,8 @@ void radix_sort_128x(mm128_t *beg, mm128_t *end);
 void radix_sort_64(uint64_t *beg, uint64_t *end);
 uint32_t ks_ksmall_uint32_t(size_t n, uint32_t arr[], size_t kk);
 
-#ifdef __cplusplus
-}
-#endif
+//#ifdef __cplusplus
+//}
+//#endif
 
 #endif

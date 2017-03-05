@@ -14,6 +14,9 @@
 #include <assert.h>
 #include <zlib.h>
 #include <iostream>
+#include <sstream>
+
+#pragma GCC diagnostic ignored "-Wunused-function"
 
 #include "string_functions.h"
 #include "settings.h"
@@ -23,7 +26,7 @@ KSEQ_INIT(gzFile, gzread)
 
 char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
                          int sensitivityLevel, bool readVsRead) {
-
+    // The k-mer size depends on the sensitivity level.
     int k = LEVEL_0_MINIMAP_KMER_SIZE;
     if (sensitivityLevel == 1)
         k = LEVEL_1_MINIMAP_KMER_SIZE;
@@ -32,74 +35,44 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
     else if (sensitivityLevel == 3)
         k = LEVEL_3_MINIMAP_KMER_SIZE;
 
-    // Load in the reads.
-    gzFile f = gzopen(readsFastq, "r");
-    assert(f);
-    kseq_t *ks = kseq_init(f);
-
-    // Build the reference index.
-    int w;
+    // Set up some options and parameters.
+    int w = int(.6666667 * k + .499);  // 2/3 of k
     if (readVsRead)
         w = 5;
-    else
-        w = int(.6666667 * k + .499);  // 2/3 of k
     mm_verbose = 0;
-    mm_idx_t * mi = mm_idx_build(referenceFasta, w, k, n_threads);
-    assert(mi);
-
-    std::string outputString;
-
     mm_mapopt_t opt;
-    mm_mapopt_init(&opt); // initialize mapping parameters
+    mm_mapopt_init(&opt);
+	int tbatch_size = 100000000;
+	uint64_t ibatch_size = 4000000000ULL;
+	float f = 0.001;
 
-    // When mapping reads against themselves, use the recommended options: -Sw5 -L100 -m0
+    // When mapping reads against themselves, use the recommended settings: -Sw5 -L100 -m0
     if (readVsRead) {
         opt.flag |= MM_F_AVA | MM_F_NO_SELF;
         opt.min_match = 100;
         opt.merge_frac = 0.0;
     }
 
-    mm_tbuf_t *tbuf = mm_tbuf_init(); // thread buffer; for multi-threading, allocate one tbuf for each thread
-    while (kseq_read(ks) >= 0) { // each kseq_read() call reads one query sequence
-        const mm_reg1_t *reg;
-        int j, n_reg;
-        // get all hits for the query
-        reg = mm_map(mi, ks->seq.l, ks->seq.s, &n_reg, tbuf, &opt, 0);
-        // traverse hits and print them out
-        for (j = 0; j < n_reg; ++j) {
-            const mm_reg1_t *r = &reg[j];
+    // Redirect minimap's output to a stringstream, instead of outputting it to stdout.
+    // http://stackoverflow.com/questions/5419356/redirect-stdout-stderr-to-a-string
+    std::stringstream outputBuffer;
+    std::streambuf * old = std::cout.rdbuf(outputBuffer.rdbuf());
 
-            std::string readName = ks->name.s;
-            int readLen = ks->seq.l;
-            int readStart = r->qs;
-            int readEnd = r->qe;
-            char readStrand = "+-"[r->rev];
+	bseq_file_t *fp = bseq_open(referenceFasta);
+	for (;;) {
+		mm_idx_t *mi = 0;
+		if (!bseq_eof(fp))
+			mi = mm_idx_gen(fp, w, k, MM_IDX_DEF_B, tbatch_size, n_threads, ibatch_size, 1);
+		if (mi == 0)
+		    break;
+		mm_idx_set_max_occ(mi, f);
+		mm_map_file(mi, readsFastq, &opt, n_threads, tbatch_size);
+		mm_idx_destroy(mi);
+	}
+	bseq_close(fp);
 
-            std::string refName = mi->name[r->rid];
-            int refLen = mi->len[r->rid];
-            int refStart = r->rs;
-            int refEnd = r->re;
+	// Return the stdout buffer to its original state.
+	std::cout.rdbuf(old);
 
-            int numMatchingBases = r->len;
-            int numBases = r->re - r->rs > r->qe - r->qs ? r->re - r->rs : r->qe - r->qs;
-            int numberOfMinimisers = r->cnt;
-
-            std::string alignmentString = readName + "\t" + std::to_string(readLen) + "\t";
-            alignmentString += std::to_string(readStart) + "\t" + std::to_string(readEnd) + "\t" + readStrand + "\t";
-            alignmentString += refName + "\t" + std::to_string(refLen) + "\t";
-            alignmentString += std::to_string(refStart) + "\t" + std::to_string(refEnd) + "\t";
-            alignmentString += std::to_string(numMatchingBases) + "\t";
-            alignmentString += std::to_string(numBases) + "\t" + "255" + "\t";
-            alignmentString += "cm:i:" + std::to_string(numberOfMinimisers) + "\n";
-
-            outputString += alignmentString;
-        }
-    }
-    mm_tbuf_destroy(tbuf);
-
-    mm_idx_destroy(mi);
-    kseq_destroy(ks);
-    gzclose(f);
-
-    return cppStringToCString(outputString);
+    return cppStringToCString(outputBuffer.str());
 }

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <iostream>
 #include "minimap/bseq.h"
 #include "minimap/kvec.h"
 #include "minimap/minimap.h"
@@ -350,12 +351,33 @@ static void *worker_pipeline(void *shared, int step, void *in)
 			bseq1_t *t = &s->seq[i];
 			for (j = 0; j < s->n_reg[i]; ++j) {
 				mm_reg1_t *r = &s->reg[i][j];
-				if (r->len < p->opt->min_match) continue;
-				printf("%s\t%d\t%d\t%d\t%c\t", t->name, t->l_seq, r->qs, r->qe, "+-"[r->rev]);
-				if (mi->name) fputs(mi->name[r->rid], stdout);
-				else printf("%d", r->rid + 1);
-				printf("\t%d\t%d\t%d\t%d\t%d\t255\tcm:i:%d\n", mi->len[r->rid], r->rs, r->re, r->len,
-						r->re - r->rs > r->qe - r->qs? r->re - r->rs : r->qe - r->qs, r->cnt);
+				if (r->len < p->opt->min_match)
+				    continue;
+
+				// RRW: I changed this code from using printf to cout, because I redirected cout
+				// to an ostringstream so I can capture it for return to Python.
+				std::cout << t->name << "\t";
+				std::cout << t->l_seq << "\t";
+				std::cout << r->qs << "\t";
+				std::cout << r->qe << "\t";
+				std::cout << "+-"[r->rev] << "\t";
+				if (mi->name)
+    				std::cout << mi->name[r->rid] << "\t";
+    			else
+				    std::cout << (r->rid + 1) << "\t";
+				std::cout << mi->len[r->rid] << "\t";
+				std::cout << r->rs << "\t";
+				std::cout << r->re << "\t";
+				std::cout << r->len << "\t";
+				std::cout << (r->re - r->rs > r->qe - r->qs? r->re - r->rs : r->qe - r->qs) << "\t";
+				std::cout << "255" << "\t";
+				std::cout << "cm:i:" << r->cnt << "\n";
+
+//				printf("%s\t%d\t%d\t%d\t%c\t", t->name, t->l_seq, r->qs, r->qe, "+-"[r->rev]);
+//				if (mi->name) fputs(mi->name[r->rid], stdout);
+//				else printf("%d", r->rid + 1);
+//				printf("\t%d\t%d\t%d\t%d\t%d\t255\tcm:i:%d\n", mi->len[r->rid], r->rs, r->re, r->len,
+//						r->re - r->rs > r->qe - r->qs? r->re - r->rs : r->qe - r->qs, r->cnt);
 			}
 			free(s->reg[i]);
 			free(s->seq[i].seq); free(s->seq[i].name);

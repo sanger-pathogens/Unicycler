@@ -10,9 +10,9 @@
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
 #define LEVEL_0_MINIMAP_KMER_SIZE 15
-#define LEVEL_1_MINIMAP_KMER_SIZE 15
-#define LEVEL_2_MINIMAP_KMER_SIZE 14
-#define LEVEL_3_MINIMAP_KMER_SIZE 13
+#define LEVEL_1_MINIMAP_KMER_SIZE 14
+#define LEVEL_2_MINIMAP_KMER_SIZE 13
+#define LEVEL_3_MINIMAP_KMER_SIZE 12
 
 #define LEVEL_0_KMER_SIZE 10
 #define LEVEL_1_KMER_SIZE 10

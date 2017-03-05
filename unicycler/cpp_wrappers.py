@@ -266,7 +266,7 @@ C_LIB.minimapAlignReads.restype = c_void_p     # String describing alignments
 
 def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level, read_vs_read):
     """
-    Python wrapper for destroyMinimapIndex C++ function.
+    Python wrapper for minimapAlignReads C++ function.
     """
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
                                   threads, sensitivity_level, read_vs_read)
