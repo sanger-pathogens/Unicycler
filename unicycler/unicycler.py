@@ -733,6 +733,20 @@ def print_intro_message(args, full_command, out_dir_message):
     Prints a message at the start of the program's execution.
     """
     log.log_section_header('Starting Unicycler', single_newline=True)
+
+    intro_message = 'Welcome to Unicycler, an assembly pipeline for bacterial genomes.'
+    if args.long:
+        intro_message += ('Since you provided both short and long reads, Unicycler will perform a '
+                          'hybrid assembly. It will first use SPAdes to produce a short read '
+                          'assembly graph, and then it will use various approaches to scaffold '
+                          'that graph using information from the long reads.')
+    else:
+        intro_message += ('Since you provided both only short reads, Unicycler will essentially '
+                          'function as a SPAdes-optimiser. It will try many k-mer sizes, choose '
+                          'the best based on contig length and graph connectivity, and scaffold '
+                          'the graph using SPAdes repeat resolution.')
+    log.log_explanation(intro_message)
+
     log.log('Command: ' + bold(full_command))
     log.log('')
     log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
