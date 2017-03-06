@@ -15,10 +15,19 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
+import shutil
 from .minimap_alignment import align_long_reads_to_assembly_graph
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from . import log
 from . import settings
+
+
+class MiniasmFailure(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return repr(self.message)
 
 
 def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename):
@@ -71,12 +80,15 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         mappings.write(minimap_alignments_str)
 
     # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
+    # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The miniasm
+    #        default is 3, so perhaps use 3 if the depth is high enough, 2 if it's lower and 1 if
+    #        it's very low. I'm not yet sure what the risks are (if any) with using a min_ovlp of
+    #        1 when the depth is high.
     log.log('Assembling reads with miniasm')
     miniasm_assembly(long_read_filename, mappings_filename, miniasm_dir)
-
-    # ASSEMBLE LONG READS USING MINIASM.
-    # * The min_ovlp setting should either be 1 or dynamically determined based on depth.
-    # * Final target: the string graph.
+    string_graph = os.path.join(miniasm_dir, '10_final_string_graph.gfa')
+    if not os.path.isfile(string_graph):
+        raise MiniasmFailure('miniasm failed to generate a string graph')
 
     # REMOVE OVERLAPS FROM MINIASM STRING GRAPH.
     # * Selectively remove overlaps from lower quality sequences first.
@@ -85,7 +97,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     #   * Find the lowest quality read, based on average qscore and remove as much as possible
     #     (could be all of the read if its neighbours overlap).
     #   * Repeat until there are no more overlaps.
-    # * Merge the assembly together (keeping single copy contigs separate).
+    # * Merge the read sequences together (keeping single copy contigs separate).
 
     # EXTRACT ALL CONTIG-CONTIG BRIDGE SEQUENCES.
     # * Any two single copy contigs connected by an unbranching path that contains no other contigs.
@@ -94,15 +106,9 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # * For this we use the set of long reads which overlap the two single copy contigs on the
     #   correct side. It is not necessary for reads to overlap both contigs, as this will give us
     #   better coverage in the intervening repeat region.
-    # * Include the single copy contigs as 'reads'.
-    #   * Specifically, use the slightly trimmed single copy contigs in the miniasm string graph
-    #     (in case the entire contig has a bogus end).
-    #   * The high qscores here should ensure that no changes are made in these regions. Include
-    #     extra copies if necessary.
-
-    # MAKE EACH BRIDGE SEGMENT.
-    # * Goal is to turn one contiguous sequence spanning both single copy contigs into:
-    #   CONTIG -> BRIDGE -> CONTIG
+    # * Use only the long read sequences, not the Illumina contigs. Since the Illumina contigs may
+    #   not have been used all the way to their ends (slightly trimmed), this means a bit of contig
+    #   sequence may be replaced by long read consensus.
 
     # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
     # * Goal 1: if we can find a short read version of the bridge, we should use that because it
@@ -118,6 +124,9 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # * Clean up will be a bit tougher as we may have missed used sequence.
 
     # RE-RUN COPY NUMBER DETERMINATION.
+
+    if keep < 3:
+        shutil.rmtree(miniasm_dir)
 
 
 def get_miniasm_assembly_reads(minimap_alignments, graph):
