@@ -26,6 +26,8 @@ if not os.path.isfile(SO_FILE_FULL):
                     "Please reinstall Unicycler or run make from Unicycler's source directory")
 C_LIB = CDLL(SO_FILE_FULL)
 
+
+
 # This is the big semi-global C++ Seqan alignment function at the heart of the aligner.
 C_LIB.semiGlobalAlignment.argtypes = [c_char_p,  # Read name
                                       c_char_p,  # Read sequence
@@ -41,19 +43,16 @@ C_LIB.semiGlobalAlignment.argtypes = [c_char_p,  # Read name
                                       c_int]     # Sensitivity level
 C_LIB.semiGlobalAlignment.restype = c_void_p     # String describing alignments
 
-
 def semi_global_alignment(read_name, read_sequence, verbosity, minimap_alignments_str,
                           kmer_positions_ptr, match_score, mismatch_score, gap_open_score,
                           gap_extend_score, low_score_threshold, keep_bad, sensitivity_level):
-    """
-    Python wrapper for semiGlobalAlignment C++ function.
-    """
     ptr = C_LIB.semiGlobalAlignment(read_name.encode('utf-8'), read_sequence.encode('utf-8'),
                                     verbosity, minimap_alignments_str.encode('utf-8'),
                                     kmer_positions_ptr, match_score, mismatch_score,
                                     gap_open_score, gap_extend_score, low_score_threshold,
                                     keep_bad, sensitivity_level)
     return c_string_to_python_string(ptr)
+
 
 
 # This is the global alignment function mainly used to compare read consensus sequences to assembly
@@ -68,16 +67,13 @@ C_LIB.fullyGlobalAlignment.argtypes = [c_char_p,  # Sequence 1
                                        c_int]  # Band size
 C_LIB.fullyGlobalAlignment.restype = c_void_p  # String describing alignment
 
-
 def fully_global_alignment(sequence_1, sequence_2, scoring_scheme, use_banding, band_size):
-    """
-    Python wrapper for fullyGlobalAlignment C++ function.
-    """
     ptr = C_LIB.fullyGlobalAlignment(sequence_1.encode('utf-8'), sequence_2.encode('utf-8'),
                                      scoring_scheme.match, scoring_scheme.mismatch,
                                      scoring_scheme.gap_open, scoring_scheme.gap_extend,
                                      use_banding, band_size)
     return c_string_to_python_string(ptr)
+
 
 
 # This is the mostly-global alignment function mainly used to compare potential path sequences to
@@ -93,11 +89,7 @@ C_LIB.pathAlignment.argtypes = [c_char_p,  # Sequence 1
                                 c_int]  # Band size
 C_LIB.pathAlignment.restype = c_void_p  # String describing alignment
 
-
 def path_alignment(partial_seq, full_seq, scoring_scheme, use_banding, band_size):
-    """
-    Python wrapper for pathAlignment C++ function.
-    """
     ptr = C_LIB.pathAlignment(partial_seq.encode('utf-8'), full_seq.encode('utf-8'),
                               scoring_scheme.match, scoring_scheme.mismatch,
                               scoring_scheme.gap_open, scoring_scheme.gap_extend,
@@ -105,11 +97,11 @@ def path_alignment(partial_seq, full_seq, scoring_scheme, use_banding, band_size
     return c_string_to_python_string(ptr)
 
 
+
 # This function cleans up the heap memory for the C strings returned by the other C functions. It
 # must be called after them.
 C_LIB.freeCString.argtypes = [c_void_p]
 C_LIB.freeCString.restype = None
-
 
 def c_string_to_python_string(c_string):
     """
@@ -121,34 +113,28 @@ def c_string_to_python_string(c_string):
     return python_string
 
 
+
 # These functions make/delete a C++ object that will hold reference sequences for quick access.
 C_LIB.newRefSeqs.argtypes = []
 C_LIB.newRefSeqs.restype = c_void_p
 
-
 def new_ref_seqs():
-    """Python wrapper for newRefSeqs C++ function."""
     return C_LIB.newRefSeqs()
-
 
 C_LIB.addRefSeq.argtypes = [c_void_p,  # SeqMap pointer
                             c_char_p,  # Name
                             c_char_p]  # Sequence
 C_LIB.addRefSeq.restype = None
 
-
 def add_ref_seq(ref_seqs_ptr, name, sequence):
-    """Python wrapper for addRefSeq C++ function."""
     C_LIB.addRefSeq(ref_seqs_ptr, name.encode('utf-8'), sequence.encode('utf-8'))
-
 
 C_LIB.deleteRefSeqs.argtypes = [c_void_p]
 C_LIB.deleteRefSeqs.restype = None
 
-
 def delete_ref_seqs(ref_seqs_ptr):
-    """Python wrapper for deleteRefSeqs C++ function."""
     C_LIB.deleteRefSeqs(ref_seqs_ptr)
+
 
 
 # This function gets the mean and standard deviation of alignments between random sequences.
@@ -160,17 +146,14 @@ C_LIB.getRandomSequenceAlignmentScores.argtypes = [c_int,  # Random sequence len
                                                    c_int]  # Gap extension score
 C_LIB.getRandomSequenceAlignmentScores.restype = c_void_p
 
-
 def get_random_sequence_alignment_mean_and_std_dev(seq_length, count, scoring_scheme):
-    """
-    Python wrapper for getRandomSequenceAlignmentScores C++ function.
-    """
     ptr = C_LIB.getRandomSequenceAlignmentScores(seq_length, count,
                                                  scoring_scheme.match, scoring_scheme.mismatch,
                                                  scoring_scheme.gap_open, scoring_scheme.gap_extend)
     return_str = c_string_to_python_string(ptr)
     return_parts = return_str.split(',')
     return float(return_parts[0]), float(return_parts[1])
+
 
 
 # This function gets the mean and standard deviation of alignments between random sequences.
@@ -182,16 +165,14 @@ C_LIB.getRandomSequenceAlignmentErrorRates.argtypes = [c_int,  # Random sequence
                                                        c_int]  # Gap extension score
 C_LIB.getRandomSequenceAlignmentErrorRates.restype = c_void_p
 
-
 def get_random_sequence_alignment_error_rates(seq_length, count, scoring_scheme):
-    """
-    Python wrapper for getRandomSequenceAlignmentErrorRate C++ function.
-    """
-    ptr = C_LIB.getRandomSequenceAlignmentErrorRates(seq_length, count,
-                                                     scoring_scheme.match, scoring_scheme.mismatch,
+
+    ptr = C_LIB.getRandomSequenceAlignmentErrorRates(seq_length, count, scoring_scheme.match,
+                                                     scoring_scheme.mismatch,
                                                      scoring_scheme.gap_open,
                                                      scoring_scheme.gap_extend)
     return c_string_to_python_string(ptr)
+
 
 
 # This function gets the mean and standard deviation of alignments between random sequences.
@@ -202,16 +183,13 @@ C_LIB.simulateDepths.argtypes = [POINTER(c_int),  # Alignment lengths
                                  c_int]  # Threads
 C_LIB.simulateDepths.restype = c_void_p
 
-
 def simulate_depths(read_lengths, ref_length, iterations, threads):
-    """
-    Python wrapper for simulateDepths C++ function.
-    """
     # noinspection PyCallingNonCallable
     read_lengths_array = (c_int * len(read_lengths))(*read_lengths)
     ptr = C_LIB.simulateDepths(read_lengths_array, len(read_lengths), ref_length, iterations,
                                threads)
     return c_string_to_python_string(ptr)
+
 
 
 # This function gets the mean and standard deviation of alignments between random sequences.
@@ -225,11 +203,7 @@ C_LIB.multipleSequenceAlignment.argtypes = [POINTER(c_char_p),  # Sequences
                                             c_int]  # Gap extension score
 C_LIB.multipleSequenceAlignment.restype = c_void_p
 
-
 def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
-    """
-    Python wrapper for multipleSequenceAlignment C++ function.
-    """
     count = len(sequences)
     if not count:  # At least one sequence is required.
         return "", []
@@ -255,19 +229,28 @@ def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
     return consensus, scores
 
 
+
 # This function conducts a minimap alignment between reads and reference.
-C_LIB.minimapAlignReads.argtypes = [c_char_p,  # Reference fasta filename
-                                    c_char_p,  # Reads fastq filename
+C_LIB.minimapAlignReads.argtypes = [c_char_p,  # Reference FASTA filename
+                                    c_char_p,  # Reads FASTQ filename
                                     c_int,     # Threads
                                     c_int,     # Sensitivity level
                                     c_bool]    # Read vs read mappings
 C_LIB.minimapAlignReads.restype = c_void_p     # String describing alignments
 
-
 def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level, read_vs_read):
-    """
-    Python wrapper for minimapAlignReads C++ function.
-    """
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
                                   threads, sensitivity_level, read_vs_read)
     return c_string_to_python_string(ptr)
+
+
+
+# This function conducts a miniasm assembly
+C_LIB.miniasmAssembly.argtypes = [c_char_p,  # Reads FASTQ filename
+                                  c_char_p,  # Overlaps PAF filename
+                                  c_char_p]  # Output GFA filename
+C_LIB.miniasmAssembly.restype = None         # No return value (function creates a GFA)
+
+def miniasm_assembly(reads_fastq, overlaps_paf, output_gfa):
+    C_LIB.miniasmAssembly(reads_fastq.encode('utf-8'), overlaps_paf.encode('utf-8'),
+                          output_gfa.encode('utf-8'))

@@ -16,7 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 from .minimap_alignment import align_long_reads_to_assembly_graph
-from .cpp_wrappers import minimap_align_reads
+from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from . import log
 from . import settings
 
@@ -33,15 +33,20 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
 
     """
     log.log_section_header('Assemble contigs and long reads with miniasm and Racon')
-    log.log_explanation('Unicycler uses a modified version of miniasm to construct a string graph '
+    log.log_explanation('Unicycler uses miniasm to construct a string graph '
                         'assembly using both the short read contigs and the long reads. If this '
-                        'produces a reliable assembly, Unicycler will extract bridges between '
+                        'produces an assembly, Unicycler will extract bridges between '
                         'contigs, improve them with Racon and use them to simplify the assembly '
-                        'graph.', extra_empty_lines_after=0)
-    log.log_explanation('This method requires decent coverage of long reads and therefore may not '
-                        'be fruitful if long reads are sparse. However, this method does not rely '
-                        'on the short read assembly graph having good connectivity and is '
-                        'able to bridge an assembly graph even when it contains many dead ends.')
+                        'graph. This method requires decent coverage of long reads and therefore '
+                        'may not be fruitful if long reads are sparse. However, this method does '
+                        'not rely on the short read assembly graph having good connectivity and is '
+                        'able to bridge an assembly graph even when it contains many dead ends.',
+                        extra_empty_lines_after=0)
+    log.log_explanation('Unicycler uses two types of "reads" as assembly input: '
+                        'sufficiently long single-copy short read contigs and actual long reads '
+                        'which overlap two or more of these contigs. It then assembles them with '
+                        'a modified version of miniasm which gives precedence to the contigs over '
+                        'the real long reads.')
 
     miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
@@ -52,24 +57,22 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     assembly_read_names = get_miniasm_assembly_reads(minimap_alignments, graph)
 
     # Save appropriate single copy contigs and informative reads to a FASTQ file.
-    log.log_explanation('Unicycler uses two types of "reads" as input for the miniasm assembly: '
-                        'sufficiently long single-copy short read contigs and actual long reads '
-                        'which overlap two or more of these contigs.')
-    long_read_filename = os.path.join(miniasm_dir, 'assembly_reads.fastq')
+    long_read_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     save_assembly_reads_to_file(minimap_alignments, long_read_filename, assembly_read_names,
                                 read_dict, graph)
 
     # Do an all vs all alignment and save the results in a PAF file.
-    log.log_explanation('Minimap finds all overlaps between the  assembly reads which miniasm '
-                        'will use to produce a string graph assembly.')
+    log.log('Finding read-read overlaps using minimap')
     minimap_alignments_str = minimap_align_reads(long_read_filename, long_read_filename, threads,
                                                  0, True)
-    mappings_filename = os.path.join(miniasm_dir, 'mappings.paf')
+    mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
     log.log('Saving ' + mappings_filename)
     with open(mappings_filename, 'wt') as mappings:
         mappings.write(minimap_alignments_str)
 
-
+    # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
+    log.log('Assembling reads with miniasm')
+    miniasm_assembly(long_read_filename, mappings_filename, miniasm_dir)
 
     # ASSEMBLE LONG READS USING MINIASM.
     # * The min_ovlp setting should either be 1 or dynamically determined based on depth.
