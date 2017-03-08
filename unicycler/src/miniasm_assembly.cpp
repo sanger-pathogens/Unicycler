@@ -49,6 +49,19 @@ using namespace std;
 //    }
 //}
 
+void print_used_reads(const sdict_t *read_dict, ma_sub_t *subreads)
+{
+    size_t num_reads = read_dict->n_seq;
+    for (size_t i = 0; i < num_reads; ++i) {
+        if (subreads[i].del == 0) {
+            string read_name = read_dict->seq[i].name;
+            if (read_name.find("CONTIG_") == 0)
+                cout << read_name << "\n";
+        }
+    }
+}
+
+
 void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     string paf_filename(overlaps);     // Input PAF mapping
     string reads_filename(reads);      // Input long reads
@@ -87,7 +100,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     string final_unitig_graph = outdir + "/11_unitig_graph.gfa";
     string miniasm_output = outdir + "/miniasm.out";
 
-    // Redirect miniasm's output to a stringstream, instead of outputting it to stdout.
+    // Redirect miniasm's output to a stringstream, instead of outputting it to stderr.
     // http://stackoverflow.com/questions/5419356/redirect-stdout-stderr-to-a-string
     std::ofstream outFile;
     outFile.open(miniasm_output);
@@ -129,6 +142,8 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
         std::cerr << "\n";
     }
 
+
+
     if (!no_second) {
         cerr << "===> Step 3: 2-pass (fine) read selection <===\n";
         ma_sub_t *subreads_2;
@@ -149,9 +164,17 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
         // Toss out chimeric reads.
         remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads);
 
+        cout << "\n\nAFTER remove_chimeric_reads:\n";  // TEMP
+        print_used_reads(read_dict, subreads);  // TEMP
+        cout << "\n\n";  // TEMP
+
         // Toss out contained reads (this is a big one and gets rid of a lot).
         num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits);
         std::cerr << "\n";
+
+        cout << "\n\nAFTER remove_contained_reads:\n";  // TEMP
+        print_used_reads(read_dict, subreads);  // TEMP
+        cout << "\n\n";  // TEMP
     }
 
     hits = (ma_hit_t*)realloc(hits, num_hits * sizeof(ma_hit_t));

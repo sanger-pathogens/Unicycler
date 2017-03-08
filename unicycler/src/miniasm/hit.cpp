@@ -107,9 +107,13 @@ ma_hit_t *read_hits_file(const char *fn, int min_span, int min_match, sdict_t *r
     return h.a;
 }
 
+
+string get_read_name(const sdict_t *read_dict, int id) {
+    return read_dict->seq[id].name;
+}
+
 bool is_read_illumina_contig(const sdict_t *read_dict, int id) {
-    string read_name = read_dict->seq[id].name;
-    return read_name.find("CONTIG_") == 0;
+    return get_read_name(read_dict, id).find("CONTIG_") == 0;
 }
 
 ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, size_t n, const ma_hit_t *a, const sdict_t *read_dict)
@@ -345,10 +349,30 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
 
         r = ma_hit2arc(h, query_subread->e - query_subread->s, target_subread->e - target_subread->s, max_hang, int_frac, min_ovlp, &t);
 
-        if (r == MA_HT_QCONT)
-            query_subread->del = 1;
-        else if (r == MA_HT_TCONT)
-            target_subread->del = 1;
+        if (r == MA_HT_QCONT) {  // If the query is contained in the target
+
+            // If the query is an Illumina contig, we delete the target, even though the query is
+            // the contained segment. This is to keep Illumina contigs at all costs.
+            if (is_read_illumina_contig(read_dict, query_i)) {
+                if (!is_read_illumina_contig(read_dict, target_i))
+                    target_subread->del = 1;
+            }
+            // If the query is not an Illumina contig (typical), then we delete it.
+            else
+                query_subread->del = 1;
+        }
+        else if (r == MA_HT_TCONT) {  // If the target is contained in the query
+
+            // If the target is an Illumina contig, we delete the query, even though the target is
+            // the contained segment. This is to keep Illumina contigs at all costs.
+            if (is_read_illumina_contig(read_dict, target_i)) {
+                if (!is_read_illumina_contig(read_dict, query_i))
+                    query_subread->del = 1;
+            }
+            // If the target is not an Illumina contig (typical), then we delete it.
+            else
+                target_subread->del = 1;
+        }
     }
     for (i = 0; i < read_dict->n_seq; ++i)
         if (subreads[i].del) read_dict->seq[i].del = 1;
