@@ -164,17 +164,9 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
         // Toss out chimeric reads.
         remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads);
 
-        cout << "\n\nAFTER remove_chimeric_reads:\n";  // TEMP
-        print_used_reads(read_dict, subreads);  // TEMP
-        cout << "\n\n";  // TEMP
-
         // Toss out contained reads (this is a big one and gets rid of a lot).
         num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits);
         std::cerr << "\n";
-
-        cout << "\n\nAFTER remove_contained_reads:\n";  // TEMP
-        print_used_reads(read_dict, subreads);  // TEMP
-        cout << "\n\n";  // TEMP
     }
 
     hits = (ma_hit_t*)realloc(hits, num_hits * sizeof(ma_hit_t));
@@ -193,6 +185,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     std::cerr << "\n";
 
     cerr << "===> Step 4.1: transitive reduction <===\n";
+
     asg_arc_del_trans(string_graph, gap_fuzz);
     save_string_graph(string_graph, read_dict, subreads, transitive_reduction_string_graph, reads_filename.c_str());
     std::cerr << "\n";

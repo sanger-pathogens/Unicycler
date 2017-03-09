@@ -17,7 +17,6 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 from collections import defaultdict
 from .misc import get_nice_header, dim
-from .read_ref import load_references
 from .cpp_wrappers import minimap_align_reads
 from . import log
 from . import settings
@@ -25,7 +24,7 @@ from . import settings
 
 class MinimapAlignment(object):
 
-    def __init__(self, minimap_line, read_dict, ref_dict):
+    def __init__(self, minimap_line):
         line_parts = minimap_line.split('\t')
 
         self.read_name = line_parts[0]
@@ -43,9 +42,6 @@ class MinimapAlignment(object):
         self.num_bases = int(line_parts[10])
         # Mapping quality is part 11, not currently used
         self.minimiser_count = int(line_parts[12].split('cm:i:')[-1])
-
-        self.read = read_dict[self.read_name]
-        self.ref = ref_dict[self.ref_name]
 
         self.read_end_gap = self.read_length - self.read_end
         self.ref_end_gap = self.ref_length - self.ref_end
@@ -73,10 +69,13 @@ class MinimapAlignment(object):
         adjusted_contig_end = self.ref_end + self.read_end_gap
         return adjusted_contig_start < 0 or adjusted_contig_end >= self.ref_length
 
-    def ref_contained_in_read(self):
+    def ref_contained_in_read(self, min_alignment_frac=0.9):
         """
         Returns true if the read overlaps both ends of the reference.
         """
+        alignment_frac = (self.ref_length - self.ref_start - self.ref_end_gap) / self.ref_length
+        if alignment_frac < min_alignment_frac:
+            return False
         if self.read_strand == '+':
             strand_specific_ref_start = self.ref_start
             strand_specific_ref_end = self.ref_end
@@ -86,6 +85,23 @@ class MinimapAlignment(object):
         adjusted_ref_start = strand_specific_ref_start - self.read_start
         adjusted_ref_end = strand_specific_ref_end + self.read_end_gap
         return adjusted_ref_start < 0 and adjusted_ref_end >= self.ref_length
+
+    def read_contained_in_ref(self, min_alignment_frac=0.95):
+        """
+        Returns true if the reference overlaps both ends of the read.
+        """
+        alignment_frac = (self.read_length - self.read_start - self.read_end_gap) / self.read_length
+        if alignment_frac < min_alignment_frac:
+            return False
+        if self.read_strand == '+':
+            strand_specific_read_start = self.read_start
+            strand_specific_read_end = self.read_end
+        else:  # self.read_strand == '-'
+            strand_specific_read_start = self.read_length - self.read_end
+            strand_specific_read_end = self.read_length - self.read_start
+        adjusted_read_start = strand_specific_read_start - self.ref_start
+        adjusted_read_end = strand_specific_read_end + self.ref_end_gap
+        return adjusted_read_start < 0 and adjusted_read_end >= self.read_length
 
 
 def line_iterator(string_with_line_breaks):
@@ -99,9 +115,20 @@ def line_iterator(string_with_line_breaks):
         prev_newline = next_newline
 
 
-def load_minimap_alignments(minimap_alignments_str, read_dict, ref_dict,
-                            filter_by_minimisers=False, minimiser_ratio = 10,
-                            filter_overlaps=False, allowed_overlap=0):
+def load_minimap_alignments_basic(minimap_alignments_str):
+    """
+    This simple function just loads the minimap alignments in a list of MinimapAlignment objects.
+    It doesn't filter, group by reads, or any of the other fancy stuff that the
+    load_minimap_alignments function does.
+    """
+    alignments = []
+    for line in line_iterator(minimap_alignments_str):
+        alignments.append(MinimapAlignment(line))
+    return alignments
+
+
+def load_minimap_alignments(minimap_alignments_str, filter_by_minimisers=False,
+                            minimiser_ratio=10, filter_overlaps=False, allowed_overlap=0):
     """
     Loads minimap's output string into MinimapAlignment objects, grouped by read.
     If filter_by_minimisers is True, it will remove low minimiser count hits.
@@ -111,7 +138,7 @@ def load_minimap_alignments(minimap_alignments_str, read_dict, ref_dict,
     for line in line_iterator(minimap_alignments_str):
         try:
             log.log(dim(line), 3)
-            alignment = MinimapAlignment(line, read_dict, ref_dict)
+            alignment = MinimapAlignment(line)
             read_alignments = alignments[alignment.read_name]
             read_alignments.append(alignment)
             read_alignments = sorted(read_alignments, key=lambda x: x.minimiser_count, reverse=True)
@@ -144,7 +171,7 @@ def alignments_overlap(a, other, allowed_overlap):
     return any(range_overlap(adjusted_start, a.read_end, x.read_start, x.read_end) for x in other)
 
 
-def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, threads, read_dict):
+def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, threads):
     """
     Aligns all long reads to all graph segments and returns a dictionary of alignments (key =
     read name, value = list of MinimapAlignment objects).
@@ -152,12 +179,9 @@ def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, t
     segments_fasta = os.path.join(working_dir, 'all_segments.fasta')
     log.log('Aligning long reads to graph using minimap', 1)
     graph.save_to_fasta(segments_fasta, verbosity=2)
-    references = load_references(segments_fasta, section_header=None, show_progress=False)
-    reference_dict = {x.name: x for x in references}
     minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0,
                                                  False)
-    minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict,
-                                                 filter_overlaps=True,
+    minimap_alignments = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
                                                  allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
                                                  filter_by_minimisers=True,
                                                  minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)

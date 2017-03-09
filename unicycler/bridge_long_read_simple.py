@@ -48,7 +48,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lon
         os.makedirs(bridging_dir)
 
     minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
-                                                            bridging_dir, threads, read_dict)
+                                                            bridging_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
 
     simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,

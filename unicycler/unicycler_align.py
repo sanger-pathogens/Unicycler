@@ -226,7 +226,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     log.log_section_header('Aligning reads with minimap', verbosity=2)
     minimap_alignments_str = minimap_align_reads(ref_fasta, reads_fastq, threads, 0, False)
-    minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict)
+    minimap_alignments = load_minimap_alignments(minimap_alignments_str)
     log.log('', 3)
     log.log('Done! ' + str(len(minimap_alignments)) + ' out of ' +
             str(len(read_dict)) + ' reads aligned', 2)

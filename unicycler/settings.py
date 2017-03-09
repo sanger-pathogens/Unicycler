@@ -35,7 +35,7 @@ MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
 
 # If long reads are broken before miniasm assembly (to prevent them from spanning a single copy
 # contig), then this is the size of the resulting gap between the read end and the contig end.
-BROKEN_ASSEMBLY_READ_END_GAP = 100
+BROKEN_ASSEMBLY_READ_END_GAP = 500
 
 # Illumina contigs are used as 'reads' in the miniasm and Racon steps. They are given this as a
 # qscore at each base.
