@@ -18,9 +18,10 @@ import os
 import shutil
 import statistics
 from .minimap_alignment import align_long_reads_to_assembly_graph, load_minimap_alignments_basic, \
-    build_start_end_overlap_sets
+    build_start_end_overlap_sets, MinimapAlignment
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
+from .misc import line_iterator
 from . import log
 from . import settings
 
@@ -77,6 +78,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # Look at the alignments to see where we need to split the reads to ensure no contigs are
     # contained in reads.
     read_split_points = {}
+
+    # TO DO: delete this chunk and just deal with that in the loop below?
     for read_name, alignments in minimap_alignments.items():
         for a in alignments:
             seg = graph.segments[int(a.ref_name)]
@@ -98,12 +101,9 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
                                                      assembly_reads_filename, threads, 0, True)
 
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
-        # TO DO: FILTER OUT ALIGNMENTS WITH WEIRD OVERHANGS ON THE CONTIGS
+        # Alignments which leave a lot of contig overhang are probably bogus (because the contigs
+        # are trusted). Toss them out!
+        minimap_alignments_str = filter_contig_overhang_alignments(minimap_alignments_str)
 
         # Before we continue, we need to double check that no contigs are contained within reads in
         # our new alignment. If they are, add new split points and repeat the above process.
@@ -174,6 +174,36 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
 
     if keep < 3:
         shutil.rmtree(miniasm_dir)
+
+
+def filter_contig_overhang_alignments(minimap_alignments_str):
+    """
+    Look for cases where the contig has a large amount of overhang. This is weird, because contigs
+    are trusted and genuine alignments should go nearly to their end. It could happen from a repeat
+    in the contig (e.g. an IS).
+    """
+    filtered_alignments_strings = []
+    full_count = 0
+    filtered_count = 0
+    for line in line_iterator(minimap_alignments_str):
+        a = MinimapAlignment(line)
+        full_count += 1
+        ref_is_contig = a.ref_name.startswith('CONTIG_')
+        read_is_contig = a.read_name.startswith('CONTIG_')
+        good_alignment = True
+        if ref_is_contig or read_is_contig:
+            start_overhang = min(a.read_start, a.ref_start)
+            end_overhang = min(a.read_end_gap, a.ref_end_gap)
+            if start_overhang > settings.MAX_ALLOWED_CONTIG_OVERHANG or \
+                    end_overhang > settings.MAX_ALLOWED_CONTIG_OVERHANG:
+                good_alignment = False
+        if good_alignment:
+            filtered_alignments_strings.append(line)
+        else:
+            filtered_count += 1
+    log.log('Removed ' + str(filtered_count) + ' out of ' + str(full_count) +
+            ' alignments due to excessive overhang', 2)
+    return '\n'.join(filtered_alignments_strings) + '\n'
 
 
 def contigs_are_contained_in_long_reads(minimap_alignments_str):
@@ -286,6 +316,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
 
         # Now save the actual long reads (though they may be split to prevent Illumina contigs
         # from being contained).
+        piece_count = 0
         for read_name in read_names:
             read = read_dict[read_name]
             read_length = read.get_length()
@@ -312,28 +343,13 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
                 fastq.write('\n+\n')
                 fastq.write(quals)
                 fastq.write('\n')
+                piece_count += 1
                 mean_read_quals[read_part_name] = statistics.mean(ord(x)-33 for x in quals)
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
-                str(len(read_dict)) + ' total long reads)')
+                str(len(read_dict)) + ' total long reads) split into ' + str(piece_count) +
+                ' pieces')
     log.log('')
     return mean_read_quals
-
-
-# def get_assembly_output_ranges(read_alignments, read_length, graph):
-#     """
-#     This function outputs the part(s) of the read which should be output as reads for assembly.
-#     The whole read isn't used because we don't want the read to contain a graph segment, because
-#     that would result in miniasm throwing out the graph segment because it is contained.
-#     """
-#     range_starts, range_ends = [], []
-#     for a in read_alignments:
-#         seg = graph.segments[int(a.ref_name)]
-#         if segment_suitable_for_miniasm_assembly(graph, seg) and a.ref_contained_in_read():
-#             range_starts.append(a.read_start + settings.BROKEN_ASSEMBLY_READ_END_GAP)
-#             range_ends.append(a.read_end - settings.BROKEN_ASSEMBLY_READ_END_GAP)
-#     range_starts = [0] + range_starts
-#     range_ends.append(read_length)
-#     return list(zip(range_starts, range_ends))
 
 
 def segment_suitable_for_miniasm_assembly(graph, segment):

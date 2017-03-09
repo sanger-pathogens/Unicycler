@@ -16,7 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 from collections import defaultdict
-from .misc import get_nice_header, dim
+from .misc import get_nice_header, dim, line_iterator
 from .cpp_wrappers import minimap_align_reads
 from . import log
 from . import settings
@@ -69,13 +69,10 @@ class MinimapAlignment(object):
         adjusted_contig_end = self.ref_end + self.read_end_gap
         return adjusted_contig_start < 0 or adjusted_contig_end >= self.ref_length
 
-    def ref_contained_in_read(self, min_alignment_frac=0.9):
+    def ref_contained_in_read(self):
         """
         Returns true if the read overlaps both ends of the reference.
         """
-        alignment_frac = (self.ref_length - self.ref_start - self.ref_end_gap) / self.ref_length
-        if alignment_frac < min_alignment_frac:
-            return False
         if self.read_strand == '+':
             strand_specific_ref_start = self.ref_start
             strand_specific_ref_end = self.ref_end
@@ -86,13 +83,10 @@ class MinimapAlignment(object):
         adjusted_ref_end = strand_specific_ref_end + self.read_end_gap
         return adjusted_ref_start < 0 and adjusted_ref_end >= self.ref_length
 
-    def read_contained_in_ref(self, min_alignment_frac=0.95):
+    def read_contained_in_ref(self):
         """
         Returns true if the reference overlaps both ends of the read.
         """
-        alignment_frac = (self.read_length - self.read_start - self.read_end_gap) / self.read_length
-        if alignment_frac < min_alignment_frac:
-            return False
         if self.read_strand == '+':
             strand_specific_read_start = self.read_start
             strand_specific_read_end = self.read_end
@@ -102,17 +96,6 @@ class MinimapAlignment(object):
         adjusted_read_start = strand_specific_read_start - self.ref_start
         adjusted_read_end = strand_specific_read_end + self.ref_end_gap
         return adjusted_read_start < 0 and adjusted_read_end >= self.read_length
-
-
-def line_iterator(string_with_line_breaks):
-    """Iterates over a string containing line breaks, one line at a time."""
-    prev_newline = -1
-    while True:
-        next_newline = string_with_line_breaks.find('\n', prev_newline + 1)
-        if next_newline < 0:
-            break
-        yield string_with_line_breaks[prev_newline + 1:next_newline]
-        prev_newline = next_newline
 
 
 def load_minimap_alignments_basic(minimap_alignments_str):

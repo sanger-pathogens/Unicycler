@@ -976,3 +976,14 @@ def pilon_path_and_version(pilon_path, java_path, args):
     except (ValueError, IndexError):
         version, status = '?', 'too old'
     return os.path.abspath(pilon_path), version, 'good'
+
+
+def line_iterator(string_with_line_breaks):
+    """Iterates over a string containing line breaks, one line at a time."""
+    prev_newline = -1
+    while True:
+        next_newline = string_with_line_breaks.find('\n', prev_newline + 1)
+        if next_newline < 0:
+            break
+        yield string_with_line_breaks[prev_newline + 1:next_newline]
+        prev_newline = next_newline

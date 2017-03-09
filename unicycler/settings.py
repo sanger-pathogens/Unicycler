@@ -41,6 +41,9 @@ BROKEN_ASSEMBLY_READ_END_GAP = 500
 # qscore at each base.
 CONTIG_READ_QSCORE = 40
 
+# When preparing overlaps for miniasm assembly, we toss out overlaps which have too much overhang
+# on a contig.
+MAX_ALLOWED_CONTIG_OVERHANG = 1000
 
 
 
