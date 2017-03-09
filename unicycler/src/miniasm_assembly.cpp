@@ -83,8 +83,6 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     float max_drop = 0.7;              // max overlap drop ratio
     float final_drop = 0.8;            // aggressive overlap drop ratio in the end
     bool bi_dir = false;               // both directions of an arc are present in input
-    bool no_first = false;             // skip 1-pass read selection
-    bool no_second = false;            // skip 2-pass read selection
 
     float cov = 40.0;
     string outfmt = "ug";
@@ -126,48 +124,44 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     std::cerr << "\n";
 
     ma_sub_t *subreads = 0;
-    if (!no_first) {
-        cerr << "===> Step 2: 1-pass (crude) read selection <===\n";
 
-        // Toss out reads which fail to meet the read depth threshold. It creates a sub object
-        // which stores the start and end positions of a read which have met the min depth. This
-        // first pass looks at the entire mappings (not clipped off at all).
-        subreads = filter_reads_using_depth(min_dp, min_iden, 0, num_hits, hits, read_dict);
+    cerr << "===> Step 2: 1-pass (crude) read selection <===\n";
 
-        // Toss out hits which fail to meet the minimum span threshold.
-        num_hits = filter_hits_using_span(subreads, min_span, num_hits, hits);
+    // Toss out reads which fail to meet the read depth threshold. It creates a sub object
+    // which stores the start and end positions of a read which have met the min depth. This
+    // first pass looks at the entire mappings (not clipped off at all).
+    subreads = filter_reads_using_depth(min_dp, min_iden, 0, num_hits, hits, read_dict);
 
-        // Toss out hits which have too much overhang.
-        num_hits = filter_hits_using_overhang(subreads, int(max_hang * 1.5), int(min_ovlp * 0.5), num_hits, hits, &cov);
-        std::cerr << "\n";
-    }
+    // Toss out hits which fail to meet the minimum span threshold.
+    num_hits = filter_hits_using_span(subreads, min_span, num_hits, hits);
 
+    // Toss out hits which have too much overhang.
+    num_hits = filter_hits_using_overhang(subreads, int(max_hang * 1.5), int(min_ovlp * 0.5), num_hits, hits, &cov);
+    std::cerr << "\n";
 
+    cerr << "===> Step 3: 2-pass (fine) read selection <===\n";
+    ma_sub_t *subreads_2;
 
-    if (!no_second) {
-        cerr << "===> Step 3: 2-pass (fine) read selection <===\n";
-        ma_sub_t *subreads_2;
+    // Toss out reads which fail to meet the read depth threshold again.
+    // This second pass trims the mappings down making it harder to meet the threshold (i.e.
+    // the trimmed mapping must meet the depth threshold).
+    subreads_2 = filter_reads_using_depth(min_dp, min_iden, min_span/2, num_hits, hits, read_dict);
 
-        // Toss out reads which fail to meet the read depth threshold again.
-        // This second pass trims the mappings down making it harder to meet the threshold (i.e.
-        // the trimmed mapping must meet the depth threshold).
-        subreads_2 = filter_reads_using_depth(min_dp, min_iden, min_span/2, num_hits, hits, read_dict);
+    // Filter hits using the minimum span threshold again. Since we just did a more stringent
+    // run through filter_reads_using_depth, this can toss out more alignments than our first call to this
+    // function.
+    num_hits = filter_hits_using_span(subreads_2, min_span, num_hits, hits);
 
-        // Filter hits using the minimum span threshold again. Since we just did a more stringent
-        // run through filter_reads_using_depth, this can toss out more alignments than our first call to this
-        // function.
-        num_hits = filter_hits_using_span(subreads_2, min_span, num_hits, hits);
+    merge_subreads(read_dict->n_seq, subreads, subreads_2);
+    free(subreads_2);
 
-        merge_subreads(read_dict->n_seq, subreads, subreads_2);
-        free(subreads_2);
+    // Toss out chimeric reads.
+    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads);
 
-        // Toss out chimeric reads.
-        remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads);
+    // Toss out contained reads (this is a big one and gets rid of a lot).
+    num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits);
+    std::cerr << "\n";
 
-        // Toss out contained reads (this is a big one and gets rid of a lot).
-        num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits);
-        std::cerr << "\n";
-    }
 
     hits = (ma_hit_t*)realloc(hits, num_hits * sizeof(ma_hit_t));
 

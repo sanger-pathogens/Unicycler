@@ -148,20 +148,28 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
             // parts from its ends.
             int min_depth;
             if (is_read_illumina_contig(read_dict, qid)) {
-                uint32_t min_start = numeric_limits<uint32_t>::max();
-                uint32_t max_end = 0;
-                for (j = 0, dp = 0; j < b.n; ++j) {
-                    if (b.a[j]&1) {  // is an end position
-                        uint32_t read_end = b.a[j] >> 1;
-                        max_end = std::max(read_end, max_end);
-                    }
-                    else {  // is a start position
-                        uint32_t read_start = b.a[j] >> 1;
-                        min_start = std::min(read_start, min_start);
-                    }
+
+                // If the Illumina contig has no alignments, then we just include the whole thing.
+                if (b.n == 0) {
+                    subreads[qid].s = 0;
+                    subreads[qid].e = read_dict->seq[qid].len;
                 }
-                subreads[qid].s = min_start - end_clip;
-                subreads[qid].e = max_end + end_clip;
+                // If the read has alignments, we use those to clip off unaligned parts.
+                else {
+                    uint32_t min_start = numeric_limits<uint32_t>::max();
+                    uint32_t max_end = 0;
+                    for (j = 0; j < b.n; ++j) {
+                        if (b.a[j] & 1) {  // is an end position
+                            uint32_t read_end = b.a[j] >> 1;
+                            max_end = std::max(read_end, max_end);
+                        } else {  // is a start position
+                            uint32_t read_start = b.a[j] >> 1;
+                            min_start = std::min(read_start, min_start);
+                        }
+                    }
+                    subreads[qid].s = min_start;
+                    subreads[qid].e = max_end;
+                }
                 subreads[qid].del = 0;
                 ++n_remained;
             }
@@ -350,32 +358,23 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
         r = ma_hit2arc(h, query_subread->e - query_subread->s, target_subread->e - target_subread->s, max_hang, int_frac, min_ovlp, &t);
 
         if (r == MA_HT_QCONT) {  // If the query is contained in the target
-
-            // If the query is an Illumina contig, we delete the target, even though the query is
-            // the contained segment. This is to keep Illumina contigs at all costs.
-            if (is_read_illumina_contig(read_dict, query_i)) {
-                if (!is_read_illumina_contig(read_dict, target_i))
-                    target_subread->del = 1;
-            }
-            // If the query is not an Illumina contig (typical), then we delete it.
-            else
-                query_subread->del = 1;
+            query_subread->del = 1;
         }
         else if (r == MA_HT_TCONT) {  // If the target is contained in the query
-
-            // If the target is an Illumina contig, we delete the query, even though the target is
-            // the contained segment. This is to keep Illumina contigs at all costs.
-            if (is_read_illumina_contig(read_dict, target_i)) {
-                if (!is_read_illumina_contig(read_dict, query_i))
-                    query_subread->del = 1;
-            }
-            // If the target is not an Illumina contig (typical), then we delete it.
-            else
-                target_subread->del = 1;
+            target_subread->del = 1;
         }
     }
-    for (i = 0; i < read_dict->n_seq; ++i)
-        if (subreads[i].del) read_dict->seq[i].del = 1;
+
+    for (i = 0; i < read_dict->n_seq; ++i) {
+
+        // Illumina contigs can't be deleted!
+        if (is_read_illumina_contig(read_dict, i))
+            subreads[i].del = 0;
+
+        if (subreads[i].del)
+            read_dict->seq[i].del = 1;
+    }
+
     ma_hit_mark_unused(read_dict, n, a);
     map = sd_squeeze(read_dict);
     for (i = 0; i < old_n_seq; ++i)

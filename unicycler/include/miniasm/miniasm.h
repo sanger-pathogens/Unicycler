@@ -67,6 +67,7 @@ size_t filter_hits_using_overhang(const ma_sub_t *sub, int max_hang, int min_ovl
 void merge_subreads(size_t n_sub, ma_sub_t *a, const ma_sub_t *b);
 size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *d, ma_sub_t *sub);
 size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *d, ma_sub_t *sub, size_t n, ma_hit_t *a);
+bool is_read_illumina_contig(const sdict_t *read_dict, int id);
 
 asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t const *d, ma_sub_t const *sub, unsigned long n_hits, ma_hit_t const *hit);
 void save_string_graph(const asg_t *g, const sdict_t *d, const ma_sub_t *sub, std::string graph_filename, const char *reads_filename);

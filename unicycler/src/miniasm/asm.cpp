@@ -8,6 +8,7 @@
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
+#include <miniasm/sdict.h>
 
 #include "miniasm/miniasm.h"
 #include "miniasm/kvec.h"
@@ -26,8 +27,10 @@ asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t con
     asg_t *g;
     g = asg_init();
     for (i = 0; i < read_dict->n_seq; ++i) {
-        if (sub) asg_seq_set(g, i, sub[i].e - sub[i].s, (sub[i].del || read_dict->seq[i].del));
-        else asg_seq_set(g, i, read_dict->seq[i].len, read_dict->seq[i].del);
+        if (sub)
+            asg_seq_set(g, i, sub[i].e - sub[i].s, (sub[i].del || read_dict->seq[i].del));
+        else
+            asg_seq_set(g, i, read_dict->seq[i].len, read_dict->seq[i].del);
     }
     for (i = 0; i < n_hits; ++i) {
         int r;
@@ -48,7 +51,6 @@ asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t con
         } else if (r == MA_HT_QCONT) g->seq[qn].del = 1;
     }
     asg_cleanup(g);
-//    fprintf(stderr, "[M::%s] read %d arcs\n", __func__, g->n_arc);
     std::cerr << "[M::" << __func__ << "] read " << g->n_arc << " arcs\n";
     return g;
 }
@@ -57,7 +59,8 @@ void save_string_graph(const asg_t *g, const sdict_t *read_dict, const ma_sub_t 
 {
     FILE *fp = fopen(graph_filename.c_str(), "w");
 
-    // First we have to figure out which reads will be included in the graph.
+    // First we have to figure out which reads will be included in the graph. Include any which are
+    // part of edges.
     set<size_t> used_read_indices;
     for (uint32_t i = 0; i < g->n_arc; ++i) {
         const asg_arc_t *p = &g->arc[i];
@@ -65,6 +68,12 @@ void save_string_graph(const asg_t *g, const sdict_t *read_dict, const ma_sub_t 
         size_t target_i = p->v >> 1;
         used_read_indices.insert(query_i);
         used_read_indices.insert(target_i);
+    }
+
+    // Also include any reads which are contigs.
+    for (size_t i = 0; i < read_dict->n_seq; ++i) {
+        if (is_read_illumina_contig(read_dict, i))
+            used_read_indices.insert(i);
     }
     unordered_set<string> used_read_names;
     for (set<size_t>::iterator it = used_read_indices.begin(); it != used_read_indices.end(); ++it)

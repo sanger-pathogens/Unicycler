@@ -152,6 +152,8 @@ class StringGraph(object):
             self.remove_segment(seg_name)
 
     def segment_leads_directly_to_contig_in_both_directions(self, seg_name):
+        if self.segments[seg_name].contig:
+            return True
         return (self.segment_leads_directly_to_contig(seg_name + '+') and
                 self.segment_leads_directly_to_contig(seg_name + '-'))
 

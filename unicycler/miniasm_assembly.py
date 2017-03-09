@@ -21,7 +21,6 @@ from .minimap_alignment import align_long_reads_to_assembly_graph, load_minimap_
     build_start_end_overlap_sets, MinimapAlignment
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
-from .misc import line_iterator
 from . import log
 from . import settings
 
@@ -75,48 +74,14 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
 
-    # Look at the alignments to see where we need to split the reads to ensure no contigs are
-    # contained in reads.
-    read_split_points = {}
+    mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
+                                                  read_dict, graph)
 
-    # TO DO: delete this chunk and just deal with that in the loop below?
-    for read_name, alignments in minimap_alignments.items():
-        for a in alignments:
-            seg = graph.segments[int(a.ref_name)]
-            if segment_suitable_for_miniasm_assembly(graph, seg) and a.ref_contained_in_read():
-                split_start = a.read_start + settings.BROKEN_ASSEMBLY_READ_END_GAP
-                split_end = a.read_end - settings.BROKEN_ASSEMBLY_READ_END_GAP
-                if read_name not in read_split_points:
-                    read_split_points[read_name] = []
-                read_split_points[read_name].append((split_start, split_end))
-
-    while True:
-        # Prepare an assembly FASTQ which contains both contigs and real long reads. The real long
-        # reads may be split to ensure that no contigs are contained within read (or else miniasm
-        # will filter them out of its assembly).
-        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
-                                                      read_dict, graph, read_split_points)
-
-        # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
-        minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
-                                                     assembly_reads_filename, threads, 0, True)
-
-        # Alignments which leave a lot of contig overhang are probably bogus (because the contigs
-        # are trusted). Toss them out!
-        minimap_alignments_str = filter_contig_overhang_alignments(minimap_alignments_str)
-
-        # Before we continue, we need to double check that no contigs are contained within reads in
-        # our new alignment. If they are, add new split points and repeat the above process.
-        more_read_split_points = contigs_are_contained_in_long_reads(minimap_alignments_str)
-        if more_read_split_points:
-            read_split_points = add_more_read_split_points(read_split_points,
-                                                           more_read_split_points)
-
-        # If no contigs are contained, then we are good to continue!
-        else:
-            with open(mappings_filename, 'wt') as mappings:
-                mappings.write(minimap_alignments_str)
-            break
+    # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
+    minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
+                                                 assembly_reads_filename, threads, 0, True)
+    with open(mappings_filename, 'wt') as mappings:
+        mappings.write(minimap_alignments_str)
 
     # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
     # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The miniasm
@@ -176,101 +141,6 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         shutil.rmtree(miniasm_dir)
 
 
-def filter_contig_overhang_alignments(minimap_alignments_str):
-    """
-    Look for cases where the contig has a large amount of overhang. This is weird, because contigs
-    are trusted and genuine alignments should go nearly to their end. It could happen from a repeat
-    in the contig (e.g. an IS).
-    """
-    filtered_alignments_strings = []
-    full_count = 0
-    filtered_count = 0
-    for line in line_iterator(minimap_alignments_str):
-        a = MinimapAlignment(line)
-        full_count += 1
-        ref_is_contig = a.ref_name.startswith('CONTIG_')
-        read_is_contig = a.read_name.startswith('CONTIG_')
-        good_alignment = True
-        if ref_is_contig or read_is_contig:
-            start_overhang = min(a.read_start, a.ref_start)
-            end_overhang = min(a.read_end_gap, a.ref_end_gap)
-            if start_overhang > settings.MAX_ALLOWED_CONTIG_OVERHANG or \
-                    end_overhang > settings.MAX_ALLOWED_CONTIG_OVERHANG:
-                good_alignment = False
-        if good_alignment:
-            filtered_alignments_strings.append(line)
-        else:
-            filtered_count += 1
-    log.log('Removed ' + str(filtered_count) + ' out of ' + str(full_count) +
-            ' alignments due to excessive overhang', 2)
-    return '\n'.join(filtered_alignments_strings) + '\n'
-
-
-def contigs_are_contained_in_long_reads(minimap_alignments_str):
-    """
-    This function takes the minimap output of an all-vs-all alignment for miniasm. If it finds that
-    any contig is contained within a read, it returns them in a list.
-    """
-    more_read_split_points = {}
-    minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
-
-    for a in minimap_alignments:
-
-        # Since this alignment is all-vs-all, either the 'read' or the 'ref' could be a contig.
-        ref_is_contig = a.ref_name.startswith('CONTIG_')
-        read_is_contig = a.read_name.startswith('CONTIG_')
-
-        # This covers where the 'read' is an actual read and the 'ref' is a contig.
-        if ref_is_contig and not read_is_contig and a.ref_contained_in_read():
-            subread_start_point = int(a.read_name.split(':')[-1].split('-')[0])
-            split_start = a.read_start + subread_start_point + settings.BROKEN_ASSEMBLY_READ_END_GAP
-            split_end = a.read_end + subread_start_point - settings.BROKEN_ASSEMBLY_READ_END_GAP
-            if a.read_name not in more_read_split_points:
-                more_read_split_points[a.read_name] = []
-            more_read_split_points[a.read_name].append((split_start, split_end))
-
-        # This covers where the 'read' is a contig and the 'ref' is an actual read.
-        if read_is_contig and not ref_is_contig and a.read_contained_in_ref():
-            subread_start_point = int(a.ref_name.split(':')[-1].split('-')[0])
-            split_start = a.ref_start + subread_start_point + settings.BROKEN_ASSEMBLY_READ_END_GAP
-            split_end = a.ref_end + subread_start_point - settings.BROKEN_ASSEMBLY_READ_END_GAP
-            if a.ref_name not in more_read_split_points:
-                more_read_split_points[a.ref_name] = []
-            more_read_split_points[a.ref_name].append((split_start, split_end))
-
-    return more_read_split_points
-
-
-def add_more_read_split_points(read_split_points, new_split_points):
-    for read_name, split_points in new_split_points.items():
-        read_name_no_range = read_name.rsplit(':', 1)[0]
-        if read_name_no_range not in read_split_points:
-            read_split_points[read_name_no_range] = []
-        read_split_points[read_name_no_range] = sorted(read_split_points[read_name_no_range] +
-                                                       split_points)
-
-    # Now we process the split points to deal with overlaps and containments.
-    for read_name, split_points in read_split_points.items():
-        points = []
-        for split_point in split_points:
-            points.append((split_point[0], 1))
-            points.append((split_point[1], -1))
-        points = sorted(points)
-
-        new_points = []
-        new_start = None
-        for p, change in points:
-            if change == 1:
-                new_start = p
-            else:  # change == -1:
-                if new_start is not None:
-                    new_points.append((new_start, p))
-                new_start = None
-        read_split_points[read_name] = new_points
-
-    return read_split_points
-
-
 def get_miniasm_assembly_reads(minimap_alignments, graph):
     """
     Returns a list of read names which overlap at least two different single copy graph segments.
@@ -287,12 +157,12 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
         # TO DO: I'm not sure if this value should be 2 (only taking reads which span all the way
         # from one contig to the next) or 1 (also taking reads which overlap one contig but do not
         # reach the next). I should test each option and analyse.
-        if overlap_count >= 1:
+        if overlap_count >= 2:
             miniasm_assembly_reads.append(read_name)
     return sorted(miniasm_assembly_reads)
 
 
-def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, read_split_points):
+def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
     mean_read_quals = {}
@@ -314,40 +184,19 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
         log.log('  ' + str(seg_count) + ' single copy contigs ' +
                 str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer')
 
-        # Now save the actual long reads (though they may be split to prevent Illumina contigs
-        # from being contained).
-        piece_count = 0
+        # Now save the actual long reads.
         for read_name in read_names:
             read = read_dict[read_name]
-            read_length = read.get_length()
-            if read_name not in read_split_points:
-                ranges = [(0, read_length)]
-            else:
-                range_starts, range_ends = [], []
-                for split_point in read_split_points[read_name]:
-                    range_starts.append(split_point[0])
-                    range_ends.append(split_point[1])
-                range_starts = [0] + range_starts
-                range_ends.append(read_length)
-                ranges = list(zip(range_starts, range_ends))
-
-            for i, out_range in enumerate(ranges):
-                s, e = out_range[0], out_range[1]
-                read_part_name = read_name + ':' + str(s) + '-' + str(e)
-                seq = read.sequence[s:e]
-                quals = read.qualities[s:e]
-                fastq.write('@')
-                fastq.write(read_part_name)
-                fastq.write('\n')
-                fastq.write(seq)
-                fastq.write('\n+\n')
-                fastq.write(quals)
-                fastq.write('\n')
-                piece_count += 1
-                mean_read_quals[read_part_name] = statistics.mean(ord(x)-33 for x in quals)
+            fastq.write('@')
+            fastq.write(read_name)
+            fastq.write('\n')
+            fastq.write(read.sequence)
+            fastq.write('\n+\n')
+            fastq.write(read.qualities)
+            fastq.write('\n')
+            mean_read_quals[read_name] = statistics.mean(ord(x)-33 for x in read.qualities)
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
-                str(len(read_dict)) + ' total long reads) split into ' + str(piece_count) +
-                ' pieces')
+                str(len(read_dict)) + ' total long reads)')
     log.log('')
     return mean_read_quals
 
