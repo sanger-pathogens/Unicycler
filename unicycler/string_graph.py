@@ -359,8 +359,7 @@ class StringGraph(object):
                         # TO DO
                         # TO DO
                         # TO DO
-                        a = 5  # TEMP
-                        a += 1  # TEMP
+                        print('  FAILED TO FIND EXACT OVERLAP IN GRAPH')  # TEMP
 
                     self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
                     self.remove_segment(seg_name)
