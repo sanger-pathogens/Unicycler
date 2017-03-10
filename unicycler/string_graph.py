@@ -395,92 +395,92 @@ class StringGraph(object):
         except AssertionError:
             print('GRAPH STILL HAS OVERLAPS - BOOOOOOOOOO')  # TEMP
 
-    # def merge_reads(self):
-    #     """
-    #     This function takes any reads in a simple path and merges them together. It assumes that
-    #     the graph is now overlap-free.
-    #     """
-    #     segments_in_paths = set()
-    #     paths_to_merge = []
-    #     for seg_name in self.segments.keys():
-    #         if seg_name in segments_in_paths:
-    #             continue
-    #         path = self.get_simple_read_path(seg_name + '+')
-    #         if path:
-    #             segments_in_paths.update(get_unsigned_seg_name(x) for x in path)
-    #         if len(path) > 1:
-    #             paths_to_merge.append(path)
-    #
-    #     print('\n\nPATHS TO MERGE:')  # TEMP
-    #     for path in paths_to_merge:
-    #         print(path)  # TEMP
-    #         merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
-    #         merged_seg_seq = ''
-    #         merged_seq_quals = []
-    #         for path_seg in path:
-    #             seq = self.seq_from_signed_seg_name(path_seg)
-    #             merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
-    #             merged_seg_seq += seq
-    #         merged_seq_qual = statistics.mean(merged_seq_quals)
-    #         print('')  # TEMP
-    #         self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
-    #         self.segments[merged_seg_name].qual = merged_seq_qual
-    #         pos_merged_seg_name = merged_seg_name + '+'
-    #
-    #         preceding_segments = self.get_preceding_segments(path[0])
-    #         following_segments = self.get_following_segments(path[-1])
-    #         assert len(preceding_segments) == 1
-    #         assert len(following_segments) == 1
-    #         preceding_segment = preceding_segments[0]
-    #         following_segment = following_segments[0]
-    #         assert preceding_segment.startswith('CONTIG_')
-    #         assert following_segment.startswith('CONTIG_')
-    #
-    #         self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
-    #         self.add_link(pos_merged_seg_name, following_segment, 0, 0)
-    #
-    #         for path_seg in path:
-    #             self.remove_segment(get_unsigned_seg_name(path_seg))
-    #
-    # def get_simple_read_path(self, starting_seg):
-    #     """
-    #     Starting from the given segment, this simple paths consisting only of reads (not contigs).
-    #     """
-    #     if self.segments[get_unsigned_seg_name(starting_seg)].contig:
-    #         return []
-    #     simple_path = [starting_seg]
-    #
-    #     # Extend path forward as much as possible.
-    #     current_seg_name = starting_seg
-    #     while True:
-    #         following_segments = self.get_following_segments(current_seg_name)
-    #         if len(following_segments) != 1:
-    #             break
-    #         current_seg_name = following_segments[0]
-    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-    #             break
-    #         simple_path.append(current_seg_name)
-    #
-    #     # Extend path backward as much as possible.
-    #     current_seg_name = starting_seg
-    #     while True:
-    #         preceding_segments = self.get_preceding_segments(current_seg_name)
-    #         if len(preceding_segments) != 1:
-    #             break
-    #         current_seg_name = preceding_segments[0]
-    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-    #             break
-    #         simple_path = [current_seg_name] + simple_path
-    #
-    #     return simple_path
-    #
-    # def seq_from_signed_seg_name(self, signed_name):
-    #     assert(signed_name.endswith('+') or signed_name.endswith('-'))
-    #     unsigned_seg_name = get_unsigned_seg_name(signed_name)
-    #     if signed_name.endswith('+'):
-    #         return self.segments[unsigned_seg_name].forward_sequence
-    #     else:
-    #         return self.segments[unsigned_seg_name].reverse_sequence
+    def merge_reads(self):
+        """
+        This function takes any reads in a simple path and merges them together. It assumes that
+        the graph is now overlap-free.
+        """
+        segments_in_paths = set()
+        paths_to_merge = []
+        for seg_name in self.segments.keys():
+            if seg_name in segments_in_paths:
+                continue
+            path = self.get_simple_read_path(seg_name + '+')
+            if path:
+                segments_in_paths.update(get_unsigned_seg_name(x) for x in path)
+            if len(path) > 1:
+                paths_to_merge.append(path)
+
+        print('\n\nPATHS TO MERGE:')  # TEMP
+        for path in paths_to_merge:
+            print(path)  # TEMP
+            merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
+            merged_seg_seq = ''
+            merged_seq_quals = []
+            for path_seg in path:
+                seq = self.seq_from_signed_seg_name(path_seg)
+                merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
+                merged_seg_seq += seq
+            merged_seq_qual = statistics.mean(merged_seq_quals)
+            print('')  # TEMP
+            self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
+            self.segments[merged_seg_name].qual = merged_seq_qual
+            pos_merged_seg_name = merged_seg_name + '+'
+
+            preceding_segments = self.get_preceding_segments(path[0])
+            following_segments = self.get_following_segments(path[-1])
+            assert len(preceding_segments) == 1
+            assert len(following_segments) == 1
+            preceding_segment = preceding_segments[0]
+            following_segment = following_segments[0]
+            assert preceding_segment.startswith('CONTIG_')
+            assert following_segment.startswith('CONTIG_')
+
+            self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
+            self.add_link(pos_merged_seg_name, following_segment, 0, 0)
+
+            for path_seg in path:
+                self.remove_segment(get_unsigned_seg_name(path_seg))
+
+    def get_simple_read_path(self, starting_seg):
+        """
+        Starting from the given segment, this simple paths consisting only of reads (not contigs).
+        """
+        if self.segments[get_unsigned_seg_name(starting_seg)].contig:
+            return []
+        simple_path = [starting_seg]
+
+        # Extend path forward as much as possible.
+        current_seg_name = starting_seg
+        while True:
+            following_segments = self.get_following_segments(current_seg_name)
+            if len(following_segments) != 1:
+                break
+            current_seg_name = following_segments[0]
+            if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
+                break
+            simple_path.append(current_seg_name)
+
+        # Extend path backward as much as possible.
+        current_seg_name = starting_seg
+        while True:
+            preceding_segments = self.get_preceding_segments(current_seg_name)
+            if len(preceding_segments) != 1:
+                break
+            current_seg_name = preceding_segments[0]
+            if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
+                break
+            simple_path = [current_seg_name] + simple_path
+
+        return simple_path
+
+    def seq_from_signed_seg_name(self, signed_name):
+        assert(signed_name.endswith('+') or signed_name.endswith('-'))
+        unsigned_seg_name = get_unsigned_seg_name(signed_name)
+        if signed_name.endswith('+'):
+            return self.segments[unsigned_seg_name].forward_sequence
+        else:
+            return self.segments[unsigned_seg_name].reverse_sequence
 
 
 class StringGraphSegment(object):
