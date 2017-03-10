@@ -100,10 +100,10 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
 
     string_graph.remove_non_bridging_paths()
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))
+    string_graph.simplify_bridges(before_transitive_reduction)
+    string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_simplified_bridges.gfa'))
     string_graph.remove_overlaps(before_transitive_reduction)
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_overlaps_removed.gfa'))
-    string_graph.merge_reads()
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_reads_merged.gfa'))
+    string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_overlaps_removed.gfa'))
 
 
 

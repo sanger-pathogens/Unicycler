@@ -172,6 +172,87 @@ class StringGraph(object):
                 return True
             current_seg_name = following_segments[0]
 
+    def get_bridging_paths(self):
+        """
+        Returns a list of all bridging paths. The contigs being bridged are included at the start
+        and end of each path.
+        """
+        paths = []
+        used_segments = set()
+        for seg_name, segment in self.segments.items():
+            if not segment.contig and seg_name not in used_segments and \
+                    self.segment_leads_directly_to_contig_in_both_directions(seg_name):
+                starting_seg = seg_name + '+'
+                current_seg = starting_seg
+                path = [current_seg]
+                while True:
+                    current_seg = self.get_following_segments(current_seg)[0]
+                    path.append(current_seg)
+                    if self.segments[get_unsigned_seg_name(current_seg)].contig:
+                        break
+                current_seg = starting_seg
+                while True:
+                    current_seg = self.get_preceding_segments(current_seg)[0]
+                    path.insert(0, current_seg)
+                    if self.segments[get_unsigned_seg_name(current_seg)].contig:
+                        break
+                for seg in path:
+                    used_segments.add(get_unsigned_seg_name(seg))
+                paths.append(path)
+        return paths
+
+    def simplify_bridges(self, before_transitive_reduction):
+        """
+        This function takes cases where there is a simple path from one contig to the next, and it
+        replaces it with a single spanning read.
+        """
+        paths = self.get_bridging_paths()
+        for path in paths:
+            print('')  # TEMP
+            print('SIMPLIFY BRIDGE:', path)  # TEMP
+            assert len(path) >= 3
+            contig_1 = path[0]
+            contig_2 = path[-1]
+            middle = path[1:-1]
+
+            # If there is only one read joining the contigs, then there's nothing to simplify.
+            if len(middle) == 1:
+                continue
+
+            # If there are multiple reads, we hope to find one that connects the two contigs.
+            # Search them in order of highest to lowest quality, seeing if the links we need are
+            # in the pre-transitive reduction graph.
+            single_bridge_read = None
+            reads_by_qual = sorted([x for x in middle], reverse=True,
+                               key=lambda x: self.segments[get_unsigned_seg_name(x)].qual)
+            for read in reads_by_qual:  # TEMP
+                print(read + ':', self.segments[get_unsigned_seg_name(read)].qual)  # TEMP
+            for read in reads_by_qual:
+                if (contig_1, read) in before_transitive_reduction.links and \
+                        (read, contig_2) in before_transitive_reduction.links:
+                    single_bridge_read = read
+                    break
+
+            print('SINGLE BRIDGE READ:', single_bridge_read)  # TEMP
+            if single_bridge_read is not None:
+
+                # Delete all of the other segments in the bridge.
+                for read in [x for x in middle if x != single_bridge_read]:
+                    self.remove_segment(get_unsigned_seg_name(read))
+
+                # Create links between the surviving segment and the contigs.
+                link_1_tuple = (contig_1, single_bridge_read)
+                link_2_tuple = (single_bridge_read, contig_2)
+                if link_1_tuple not in self.links:
+                    link_1 = before_transitive_reduction.links[link_1_tuple]
+                    self.add_link(link_1_tuple[0], link_1_tuple[1],
+                                  link_1.seg_1_overlap, link_1.seg_2_overlap)
+                if link_2_tuple not in self.links:
+                    link_2 = before_transitive_reduction.links[link_2_tuple]
+                    self.add_link(link_2_tuple[0], link_2_tuple[1],
+                                  link_2.seg_1_overlap, link_2.seg_2_overlap)
+
+
     def remove_overlaps(self, before_transitive_reduction):
         """
         Removes reads and trims reads to get rid of graph overlap:
@@ -244,9 +325,9 @@ class StringGraph(object):
                     rev_end_link.seg_2_overlap = 0
                     print('  LENGTH AFTER:', len(seg.forward_sequence))  # TEMP
 
-                # If the start and end overlap are more than the length of the segment, then we can try
-                # to remove the segment entirely (because the preceding and following segments will
-                # still overlap).
+                # If the start and end overlap are more than the length of the segment, then we can
+                # try to remove the segment entirely (because the preceding and following segments
+                # will still overlap).
                 else:
                     print('REMOVE WHOLE SEGMENT')  # TEMP
                     print('  NEW LINK: ' + preceding_seg_name + ' -> ' + following_seg_name)  # TEMP
@@ -258,7 +339,6 @@ class StringGraph(object):
                     new_link_overlap = -(seg_len - start_overlap - end_overlap)
                     overlap_1 = int(round(new_link_overlap * start_overlap_ratio))
                     overlap_2 = int(round(new_link_overlap * end_overlap_ratio))
-
                     print('  GUESS OVERLAP 1: ', overlap_1)  # TEMP
                     print('  GUESS OVERLAP 2: ', overlap_2)  # TEMP
 
@@ -271,123 +351,125 @@ class StringGraph(object):
                         overlap_2 = exact_link.seg_2_overlap
                         print('  EXACT OVERLAP 1: ', exact_link.seg_1_overlap)  # TEMP
                         print('  EXACT OVERLAP 2: ', exact_link.seg_2_overlap)  # TEMP
-
-                    self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
-                    self.remove_segment(seg_name)
-
+                        self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
+                        self.remove_segment(seg_name)
             print('')  # TEMP
 
-        # We should now have an overlap-free graph!
-        for seg_name in self.segments.keys():
-            pos_seg_name = seg_name + '+'
-            neg_seg_name = seg_name + '-'
-            preceding_segments = self.get_preceding_segments(pos_seg_name)
-            following_segments = self.get_following_segments(pos_seg_name)
-            assert len(preceding_segments) < 2
-            assert len(following_segments) < 2
-            if len(preceding_segments) == 1:
-                preceding_seg_name = preceding_segments[0]
-                start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
-                assert start_link.seg_1_overlap == 0
-                assert start_link.seg_2_overlap == 0
-                assert rev_start_link.seg_1_overlap == 0
-                assert rev_start_link.seg_2_overlap == 0
-            if len(following_segments) == 1:
-                following_seg_name = following_segments[0]
-                end_link = self.links[(pos_seg_name, following_seg_name)]
-                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
-                assert end_link.seg_1_overlap == 0
-                assert end_link.seg_2_overlap == 0
-                assert rev_end_link.seg_1_overlap == 0
-                assert rev_end_link.seg_2_overlap == 0
+        # We should now hopefully have an overlap-free graph!
+        try:
+            for seg_name in self.segments.keys():
+                pos_seg_name = seg_name + '+'
+                neg_seg_name = seg_name + '-'
+                preceding_segments = self.get_preceding_segments(pos_seg_name)
+                following_segments = self.get_following_segments(pos_seg_name)
+                assert len(preceding_segments) < 2
+                assert len(following_segments) < 2
+                if len(preceding_segments) == 1:
+                    preceding_seg_name = preceding_segments[0]
+                    start_link = self.links[(preceding_seg_name, pos_seg_name)]
+                    rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
+                    assert start_link.seg_1_overlap == 0
+                    assert start_link.seg_2_overlap == 0
+                    assert rev_start_link.seg_1_overlap == 0
+                    assert rev_start_link.seg_2_overlap == 0
+                if len(following_segments) == 1:
+                    following_seg_name = following_segments[0]
+                    end_link = self.links[(pos_seg_name, following_seg_name)]
+                    rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
+                    assert end_link.seg_1_overlap == 0
+                    assert end_link.seg_2_overlap == 0
+                    assert rev_end_link.seg_1_overlap == 0
+                    assert rev_end_link.seg_2_overlap == 0
+            print('GRAPH IS OVERLAP FREE!!!!!')  # TEMP
+        except AssertionError:
+            print('GRAPH STILL HAS OVERLAPS - BOOOOOOOOOO')  # TEMP
 
-    def merge_reads(self):
-        """
-        This function takes any reads in a simple path and merges them together. It assumes that
-        the graph is now overlap-free.
-        """
-        segments_in_paths = set()
-        paths_to_merge = []
-        for seg_name in self.segments.keys():
-            if seg_name in segments_in_paths:
-                continue
-            path = self.get_simple_read_path(seg_name + '+')
-            if path:
-                segments_in_paths.update(get_unsigned_seg_name(x) for x in path)
-            if len(path) > 1:
-                paths_to_merge.append(path)
-
-        print('\n\nPATHS TO MERGE:')  # TEMP
-        for path in paths_to_merge:
-            print(path)  # TEMP
-            merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
-            merged_seg_seq = ''
-            merged_seq_quals = []
-            for path_seg in path:
-                seq = self.seq_from_signed_seg_name(path_seg)
-                merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
-                merged_seg_seq += seq
-            merged_seq_qual = statistics.mean(merged_seq_quals)
-            print('')  # TEMP
-            self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
-            self.segments[merged_seg_name].qual = merged_seq_qual
-            pos_merged_seg_name = merged_seg_name + '+'
-
-            preceding_segments = self.get_preceding_segments(path[0])
-            following_segments = self.get_following_segments(path[-1])
-            assert len(preceding_segments) == 1
-            assert len(following_segments) == 1
-            preceding_segment = preceding_segments[0]
-            following_segment = following_segments[0]
-            assert preceding_segment.startswith('CONTIG_')
-            assert following_segment.startswith('CONTIG_')
-
-            self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
-            self.add_link(pos_merged_seg_name, following_segment, 0, 0)
-
-            for path_seg in path:
-                self.remove_segment(get_unsigned_seg_name(path_seg))
-
-    def get_simple_read_path(self, starting_seg):
-        """
-        Starting from the given segment, this simple paths consisting only of reads (not contigs).
-        """
-        if self.segments[get_unsigned_seg_name(starting_seg)].contig:
-            return []
-        simple_path = [starting_seg]
-
-        # Extend path forward as much as possible.
-        current_seg_name = starting_seg
-        while True:
-            following_segments = self.get_following_segments(current_seg_name)
-            if len(following_segments) != 1:
-                break
-            current_seg_name = following_segments[0]
-            if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-                break
-            simple_path.append(current_seg_name)
-
-        # Extend path backward as much as possible.
-        current_seg_name = starting_seg
-        while True:
-            preceding_segments = self.get_preceding_segments(current_seg_name)
-            if len(preceding_segments) != 1:
-                break
-            current_seg_name = preceding_segments[0]
-            if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-                break
-            simple_path = [current_seg_name] + simple_path
-
-        return simple_path
-
-    def seq_from_signed_seg_name(self, signed_name):
-        assert(signed_name.endswith('+') or signed_name.endswith('-'))
-        unsigned_seg_name = get_unsigned_seg_name(signed_name)
-        if signed_name.endswith('+'):
-            return self.segments[unsigned_seg_name].forward_sequence
-        else:
-            return self.segments[unsigned_seg_name].reverse_sequence
+    # def merge_reads(self):
+    #     """
+    #     This function takes any reads in a simple path and merges them together. It assumes that
+    #     the graph is now overlap-free.
+    #     """
+    #     segments_in_paths = set()
+    #     paths_to_merge = []
+    #     for seg_name in self.segments.keys():
+    #         if seg_name in segments_in_paths:
+    #             continue
+    #         path = self.get_simple_read_path(seg_name + '+')
+    #         if path:
+    #             segments_in_paths.update(get_unsigned_seg_name(x) for x in path)
+    #         if len(path) > 1:
+    #             paths_to_merge.append(path)
+    #
+    #     print('\n\nPATHS TO MERGE:')  # TEMP
+    #     for path in paths_to_merge:
+    #         print(path)  # TEMP
+    #         merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
+    #         merged_seg_seq = ''
+    #         merged_seq_quals = []
+    #         for path_seg in path:
+    #             seq = self.seq_from_signed_seg_name(path_seg)
+    #             merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
+    #             merged_seg_seq += seq
+    #         merged_seq_qual = statistics.mean(merged_seq_quals)
+    #         print('')  # TEMP
+    #         self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
+    #         self.segments[merged_seg_name].qual = merged_seq_qual
+    #         pos_merged_seg_name = merged_seg_name + '+'
+    #
+    #         preceding_segments = self.get_preceding_segments(path[0])
+    #         following_segments = self.get_following_segments(path[-1])
+    #         assert len(preceding_segments) == 1
+    #         assert len(following_segments) == 1
+    #         preceding_segment = preceding_segments[0]
+    #         following_segment = following_segments[0]
+    #         assert preceding_segment.startswith('CONTIG_')
+    #         assert following_segment.startswith('CONTIG_')
+    #
+    #         self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
+    #         self.add_link(pos_merged_seg_name, following_segment, 0, 0)
+    #
+    #         for path_seg in path:
+    #             self.remove_segment(get_unsigned_seg_name(path_seg))
+    #
+    # def get_simple_read_path(self, starting_seg):
+    #     """
+    #     Starting from the given segment, this simple paths consisting only of reads (not contigs).
+    #     """
+    #     if self.segments[get_unsigned_seg_name(starting_seg)].contig:
+    #         return []
+    #     simple_path = [starting_seg]
+    #
+    #     # Extend path forward as much as possible.
+    #     current_seg_name = starting_seg
+    #     while True:
+    #         following_segments = self.get_following_segments(current_seg_name)
+    #         if len(following_segments) != 1:
+    #             break
+    #         current_seg_name = following_segments[0]
+    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
+    #             break
+    #         simple_path.append(current_seg_name)
+    #
+    #     # Extend path backward as much as possible.
+    #     current_seg_name = starting_seg
+    #     while True:
+    #         preceding_segments = self.get_preceding_segments(current_seg_name)
+    #         if len(preceding_segments) != 1:
+    #             break
+    #         current_seg_name = preceding_segments[0]
+    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
+    #             break
+    #         simple_path = [current_seg_name] + simple_path
+    #
+    #     return simple_path
+    #
+    # def seq_from_signed_seg_name(self, signed_name):
+    #     assert(signed_name.endswith('+') or signed_name.endswith('-'))
+    #     unsigned_seg_name = get_unsigned_seg_name(signed_name)
+    #     if signed_name.endswith('+'):
+    #         return self.segments[unsigned_seg_name].forward_sequence
+    #     else:
+    #         return self.segments[unsigned_seg_name].reverse_sequence
 
 
 class StringGraphSegment(object):
