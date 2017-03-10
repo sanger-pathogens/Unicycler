@@ -39,6 +39,7 @@ asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t con
         uint32_t qn = h->qns>>32;
         int ql = sub? sub[qn].e - sub[qn].s : read_dict->seq[qn].len;
         int tl = sub? sub[h->tn].e - sub[h->tn].s : read_dict->seq[h->tn].len;
+
         r = ma_hit2arc(h, ql, tl, max_hang, int_frac, min_ovlp, &t);
         if (r >= 0) {
             if (qn == h->tn) { // self match
@@ -48,7 +49,9 @@ asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t con
             }
             p = asg_arc_pushp(g);
             *p = t;
-        } else if (r == MA_HT_QCONT) g->seq[qn].del = 1;
+        }
+        else if (r == MA_HT_QCONT)
+            g->seq[qn].del = 1;
     }
     asg_cleanup(g);
     std::cerr << "[M::" << __func__ << "] read " << g->n_arc << " arcs\n";

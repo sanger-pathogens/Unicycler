@@ -337,7 +337,6 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
         }
     }
     free(c[0].a); free(c[1].a);
-//    fprintf(stderr, "[M::%s::%s] identified %ld chimeric reads\n", __func__, sys_timestamp(), n_chi);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] identified " << n_chi << " chimeric reads\n";
     return n_chi;
 }
@@ -377,8 +376,10 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
 
     ma_hit_mark_unused(read_dict, n, a);
     map = sd_squeeze(read_dict);
-    for (i = 0; i < old_n_seq; ++i)
-        if (map[i] >= 0) subreads[map[i]] = subreads[i];
+    for (i = 0; i < old_n_seq; ++i) {
+        if (map[i] >= 0)
+            subreads[map[i]] = subreads[i];
+    }
     for (i = m = 0; i < n; ++i) {
         ma_hit_t *h = &a[i];
         int32_t qn = map[h->qns>>32], tn = map[h->tn];

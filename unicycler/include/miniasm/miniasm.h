@@ -68,6 +68,7 @@ void merge_subreads(size_t n_sub, ma_sub_t *a, const ma_sub_t *b);
 size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *d, ma_sub_t *sub);
 size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *d, ma_sub_t *sub, size_t n, ma_hit_t *a);
 bool is_read_illumina_contig(const sdict_t *read_dict, int id);
+void ma_hit_mark_unused(sdict_t *read_dict, int n, const ma_hit_t *a);
 
 asg_t *make_string_graph(int max_hang, float int_frac, int min_ovlp, sdict_t const *d, ma_sub_t const *sub, unsigned long n_hits, ma_hit_t const *hit);
 void save_string_graph(const asg_t *g, const sdict_t *d, const ma_sub_t *sub, std::string graph_filename, const char *reads_filename);
@@ -85,17 +86,29 @@ static inline int ma_hit2arc(const ma_hit_t *h, int ql, int tl, int max_hang, fl
 {
 	int32_t tl5, tl3, ext5, ext3, qs = (int32_t)h->qns;
 	uint32_t u, v, l; // u: query end; v: target end; l: length from u to v
-	if (h->rev) tl5 = tl - h->te, tl3 = h->ts; // tl5: 5'-end overhang (on the query strand); tl3: similar
-	else tl5 = h->ts, tl3 = tl - h->te;
+
+    // tl5: 5'-end overhang (on the query strand); tl3: similar
+	if (h->rev)
+        tl5 = tl - h->te, tl3 = h->ts;
+	else
+        tl5 = h->ts, tl3 = tl - h->te;
+
 	ext5 = qs < tl5? qs : tl5;
 	ext3 = ql - h->qe < tl3? ql - h->qe : tl3;
+
 	if (ext5 > max_hang || ext3 > max_hang || h->qe - qs < (h->qe - qs + ext5 + ext3) * int_frac)
 		return MA_HT_INT;
-	if (qs <= tl5 && ql - h->qe <= tl3) return MA_HT_QCONT; // query contained
-	else if (qs >= tl5 && ql - h->qe >= tl3) return MA_HT_TCONT; // target contained
-	else if (qs > tl5) u = 0, v = !!h->rev, l = qs - tl5;
-	else u = 1, v = !h->rev, l = (ql - h->qe) - tl3;
-	if (h->qe - qs + ext5 + ext3 < min_ovlp || h->te - h->ts + ext5 + ext3 < min_ovlp) return MA_HT_SHORT_OVLP; // short overlap
+	if (qs <= tl5 && ql - h->qe <= tl3) // query contained
+        return MA_HT_QCONT;
+	else if (qs >= tl5 && ql - h->qe >= tl3) // target contained
+        return MA_HT_TCONT;
+	else if (qs > tl5)
+        u = 0, v = !!h->rev, l = qs - tl5;
+	else
+        u = 1, v = !h->rev, l = (ql - h->qe) - tl3;
+
+	if (h->qe - qs + ext5 + ext3 < min_ovlp || h->te - h->ts + ext5 + ext3 < min_ovlp) // short overlap
+        return MA_HT_SHORT_OVLP;
 	u |= h->qns>>32<<1, v |= h->tn<<1;
 	p->ul = (uint64_t)u<<32 | l, p->v = v, p->ol = ql - l, p->del = 0, p->ml = h->ml, p->mr = (float)h->ml / h->bl;
 	return l;
