@@ -326,8 +326,8 @@ class StringGraph(object):
                     print('  LENGTH AFTER:', len(seg.forward_sequence))  # TEMP
 
                 # If the start and end overlap are more than the length of the segment, then we can
-                # try to remove the segment entirely (because the preceding and following segments
-                # will still overlap).
+                # remove the segment entirely (because the preceding and following segments will
+                # still overlap).
                 else:
                     print('REMOVE WHOLE SEGMENT')  # TEMP
                     print('  NEW LINK: ' + preceding_seg_name + ' -> ' + following_seg_name)  # TEMP
@@ -342,7 +342,7 @@ class StringGraph(object):
                     print('  GUESS OVERLAP 1: ', overlap_1)  # TEMP
                     print('  GUESS OVERLAP 2: ', overlap_2)  # TEMP
 
-                    # We can look for the link in the before transitive reduction graph to find the
+                    # Look for the link in the before transitive reduction graph to find the
                     # exact overlaps, they are available.
                     link_tuple = (preceding_seg_name, following_seg_name)
                     if link_tuple in before_transitive_reduction.links:
@@ -351,8 +351,20 @@ class StringGraph(object):
                         overlap_2 = exact_link.seg_2_overlap
                         print('  EXACT OVERLAP 1: ', exact_link.seg_1_overlap)  # TEMP
                         print('  EXACT OVERLAP 2: ', exact_link.seg_2_overlap)  # TEMP
-                        self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
-                        self.remove_segment(seg_name)
+
+                    # If we failed to find the link in the graph, we can go directly to the
+                    # overlaps file and look there.
+                    else:
+                        # TO DO
+                        # TO DO
+                        # TO DO
+                        # TO DO
+                        a = 5  # TEMP
+                        a += 1  # TEMP
+
+                    self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
+                    self.remove_segment(seg_name)
+
             print('')  # TEMP
 
         # We should now hopefully have an overlap-free graph!

@@ -157,7 +157,7 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
         # TO DO: I'm not sure if this value should be 2 (only taking reads which span all the way
         # from one contig to the next) or 1 (also taking reads which overlap one contig but do not
         # reach the next). I should test each option and analyse.
-        if overlap_count >= 2:
+        if overlap_count >= 1:
             miniasm_assembly_reads.append(read_name)
     return sorted(miniasm_assembly_reads)
 

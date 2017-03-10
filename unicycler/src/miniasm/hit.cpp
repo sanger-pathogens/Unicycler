@@ -167,8 +167,8 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
                             min_start = std::min(read_start, min_start);
                         }
                     }
-                    subreads[qid].s = min_start;
-                    subreads[qid].e = max_end;
+                    subreads[qid].s = min_start - end_clip;
+                    subreads[qid].e = max_end + end_clip;
                 }
                 subreads[qid].del = 0;
                 ++n_remained;
