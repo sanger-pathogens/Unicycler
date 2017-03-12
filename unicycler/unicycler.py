@@ -114,7 +114,8 @@ def main():
 
     # Try assembling the contigs along with the long reads using a modified miniasm+racon. If
     # successful, we extract bridges from the assembly and apply them to the graph.
-    build_miniasm_bridges(graph, args.out, args.keep, args.threads, read_dict, long_read_filename)
+    build_miniasm_bridges(graph, args.out, args.keep, args.threads, read_dict, long_read_filename,
+                          scoring_scheme)
 
     # CONDUCT 'CLASSIC' LONG READ BRIDGING ON REMAINING PARTS?
     # * May be necessary because the miniasm assembly will fail in cases of short alignments.

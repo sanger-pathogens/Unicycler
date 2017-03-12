@@ -109,6 +109,7 @@ static inline int ma_hit2arc(const ma_hit_t *h, int ql, int tl, int max_hang, fl
 
 	if (h->qe - qs + ext5 + ext3 < min_ovlp || h->te - h->ts + ext5 + ext3 < min_ovlp) // short overlap
         return MA_HT_SHORT_OVLP;
+
 	u |= h->qns>>32<<1, v |= h->tn<<1;
 	p->ul = (uint64_t)u<<32 | l, p->v = v, p->ol = ql - l, p->del = 0, p->ml = h->ml, p->mr = (float)h->ml / h->bl;
 	return l;

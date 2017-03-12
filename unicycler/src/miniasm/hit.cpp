@@ -66,7 +66,6 @@ sdict_t *prefilter_contained_reads(const char *fn, int min_span, int min_match, 
         }
     }
     paf_close(fp);
-//    fprintf(stderr, "[M::%s::%s] dropped %d contained reads\n", __func__, sys_timestamp(), d->n_seq);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] dropped " << d->n_seq << " contained reads\n";
     return d;
 }
@@ -100,7 +99,6 @@ ma_hit_t *read_hits_file(const char *fn, int min_span, int min_match, sdict_t *r
     paf_close(fp);
     for (i = 0; i < read_dict->n_seq; ++i)
         tot_len += read_dict->seq[i].len;
-//    fprintf(stderr, "[M::%s::%s] read %ld hits; stored %ld hits and %d sequences (%ld bp)\n", __func__, sys_timestamp(), tot, h.n, read_dict->n_seq, tot_len);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] read " << tot << " hits; stored " << h.n << " hits and " << read_dict->n_seq << " sequences (" << tot_len << " bp)\n";
     ma_hit_sort(h.n, h.a);
     *n = h.n;
@@ -207,7 +205,6 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
         }
     }
     free(b.a);
-//    fprintf(stderr, "[M::%s::%s] %ld query sequences remain after sub\n", __func__, sys_timestamp(), n_remained);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] " << n_remained << " query sequences remain after sub\n";
     return subreads;
 }
@@ -243,7 +240,6 @@ size_t filter_hits_using_span(const ma_sub_t *subreads, int min_span, size_t n, 
             a[m++] = *p;
         }
     }
-//    fprintf(stderr, "[M::%s::%s] %ld hits remain after cut\n", __func__, sys_timestamp(), m);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] " << m << " hits remain after cut\n";
     return m;
 }
@@ -266,7 +262,6 @@ size_t filter_hits_using_overhang(const ma_sub_t *subreads, int max_hang, int mi
         if (i == m || a[i].qns>>32 != a[i-1].qns>>32)
             tot_len += subreads[a[i-1].qns>>32].e - subreads[a[i-1].qns>>32].s;
     *cov = (double)tot_dp / tot_len;
-//    fprintf(stderr, "[M::%s::%s] %ld hits remain after filtering; crude coverage after filtering: %.2f\n", __func__, sys_timestamp(), m, *cov);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] " << m << " hits remain after filtering; crude coverage after filtering: " << *cov << "\n";
     return m;
 }
@@ -390,7 +385,6 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
         }
     }
     free(map);
-//    fprintf(stderr, "[M::%s::%s] %d sequences and %ld hits remain after containment removal\n", __func__, sys_timestamp(), read_dict->n_seq, m);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] " << read_dict->n_seq << " sequences and " << m << " hits remain after containment removal\n";
     return m;
 }

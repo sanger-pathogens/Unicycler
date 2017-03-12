@@ -16,8 +16,9 @@ not, see <http://www.gnu.org/licenses/>.
 
 import statistics
 from collections import defaultdict
-from .misc import reverse_complement, get_num_agreement
+from .misc import reverse_complement
 from .assembly_graph import build_reverse_links
+from .cpp_wrappers import overlap_alignment
 from . import settings
 from . import log
 
@@ -253,7 +254,7 @@ class StringGraph(object):
                                   link_2.seg_1_overlap, link_2.seg_2_overlap)
 
 
-    def remove_overlaps(self, before_transitive_reduction):
+    def remove_overlaps(self, before_transitive_reduction, scoring_scheme):
         """
         Removes reads and trims reads to get rid of graph overlap:
           * Selectively removes overlaps from lower quality sequences first.
@@ -352,14 +353,20 @@ class StringGraph(object):
                         print('  EXACT OVERLAP 1: ', exact_link.seg_1_overlap)  # TEMP
                         print('  EXACT OVERLAP 2: ', exact_link.seg_2_overlap)  # TEMP
 
-                    # If we failed to find the link in the graph, we can go directly to the
-                    # overlaps file and look there.
+                    # If we failed to find the link in the graph, we will align the reads
+                    # using to get an exact overlap.
                     else:
-                        # TO DO
-                        # TO DO
-                        # TO DO
-                        # TO DO
-                        print('  FAILED TO FIND EXACT OVERLAP IN GRAPH')  # TEMP
+                        preceding_segment_seq = self.seq_from_signed_seg_name(preceding_seg_name)
+                        following_segment_seq = self.seq_from_signed_seg_name(following_seg_name)
+                        guess_overlap = max(overlap_1, overlap_2)
+                        new_overlap_1, new_overlap_2 = overlap_alignment(preceding_segment_seq,
+                                                                         following_segment_seq,
+                                                                         scoring_scheme,
+                                                                         guess_overlap)
+                        if new_overlap_1 != -1 and new_overlap_2 != 1:
+                            overlap_1, overlap_2 = new_overlap_1, new_overlap_2
+                        else:  # TEMP
+                            print('FAILED TO FIND EXACT OVERLAP')  # TEMP
 
                     self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
                     self.remove_segment(seg_name)
@@ -367,33 +374,30 @@ class StringGraph(object):
             print('')  # TEMP
 
         # We should now hopefully have an overlap-free graph!
-        try:
-            for seg_name in self.segments.keys():
-                pos_seg_name = seg_name + '+'
-                neg_seg_name = seg_name + '-'
-                preceding_segments = self.get_preceding_segments(pos_seg_name)
-                following_segments = self.get_following_segments(pos_seg_name)
-                assert len(preceding_segments) < 2
-                assert len(following_segments) < 2
-                if len(preceding_segments) == 1:
-                    preceding_seg_name = preceding_segments[0]
-                    start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                    rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
-                    assert start_link.seg_1_overlap == 0
-                    assert start_link.seg_2_overlap == 0
-                    assert rev_start_link.seg_1_overlap == 0
-                    assert rev_start_link.seg_2_overlap == 0
-                if len(following_segments) == 1:
-                    following_seg_name = following_segments[0]
-                    end_link = self.links[(pos_seg_name, following_seg_name)]
-                    rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
-                    assert end_link.seg_1_overlap == 0
-                    assert end_link.seg_2_overlap == 0
-                    assert rev_end_link.seg_1_overlap == 0
-                    assert rev_end_link.seg_2_overlap == 0
-            print('GRAPH IS OVERLAP FREE!!!!!')  # TEMP
-        except AssertionError:
-            print('GRAPH STILL HAS OVERLAPS - BOOOOOOOOOO')  # TEMP
+        for seg_name in self.segments.keys():
+            pos_seg_name = seg_name + '+'
+            neg_seg_name = seg_name + '-'
+            preceding_segments = self.get_preceding_segments(pos_seg_name)
+            following_segments = self.get_following_segments(pos_seg_name)
+            assert len(preceding_segments) < 2
+            assert len(following_segments) < 2
+            if len(preceding_segments) == 1:
+                preceding_seg_name = preceding_segments[0]
+                start_link = self.links[(preceding_seg_name, pos_seg_name)]
+                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
+                assert start_link.seg_1_overlap == 0
+                assert start_link.seg_2_overlap == 0
+                assert rev_start_link.seg_1_overlap == 0
+                assert rev_start_link.seg_2_overlap == 0
+            if len(following_segments) == 1:
+                following_seg_name = following_segments[0]
+                end_link = self.links[(pos_seg_name, following_seg_name)]
+                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
+                assert end_link.seg_1_overlap == 0
+                assert end_link.seg_2_overlap == 0
+                assert rev_end_link.seg_1_overlap == 0
+                assert rev_end_link.seg_2_overlap == 0
+        print('GRAPH IS OVERLAP FREE!!!!!')  # TEMP
 
     def merge_reads(self):
         """
@@ -547,6 +551,7 @@ def flip_segment_name(seg_name):
         return get_unsigned_seg_name(seg_name) + '-'
     else:
         return get_unsigned_seg_name(seg_name) + '+'
+
 
 def get_unsigned_seg_name(seg_name):
     assert(seg_name.endswith('+') or seg_name.endswith('-'))

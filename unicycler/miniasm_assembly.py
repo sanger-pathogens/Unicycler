@@ -17,10 +17,12 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import statistics
-from .minimap_alignment import align_long_reads_to_assembly_graph, load_minimap_alignments_basic, \
-    build_start_end_overlap_sets, MinimapAlignment
+from collections import defaultdict
+from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets,\
+    MinimapAlignment
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
+from .misc import line_iterator
 from . import log
 from . import settings
 
@@ -33,7 +35,8 @@ class MiniasmFailure(Exception):
         return repr(self.message)
 
 
-def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename):
+def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
+                          scoring_scheme):
     """
     EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     * Take all single copy contigs over a certain length and get reads which overlap two or more.
@@ -102,7 +105,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))
     string_graph.simplify_bridges(before_transitive_reduction)
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_simplified_bridges.gfa'))
-    string_graph.remove_overlaps(before_transitive_reduction)
+    string_graph.remove_overlaps(before_transitive_reduction, scoring_scheme)
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_overlaps_removed.gfa'))
     string_graph.merge_reads()
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '15_reads_merged.gfa'))
