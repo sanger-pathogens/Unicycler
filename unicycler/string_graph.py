@@ -209,8 +209,6 @@ class StringGraph(object):
         """
         paths = self.get_bridging_paths()
         for path in paths:
-            print('')  # TEMP
-            print('SIMPLIFY BRIDGE:', path)  # TEMP
             assert len(path) >= 3
             contig_1 = path[0]
             contig_2 = path[-1]
@@ -226,15 +224,12 @@ class StringGraph(object):
             single_bridge_read = None
             reads_by_qual = sorted([x for x in middle], reverse=True,
                                key=lambda x: self.segments[get_unsigned_seg_name(x)].qual)
-            for read in reads_by_qual:  # TEMP
-                print(read + ':', self.segments[get_unsigned_seg_name(read)].qual)  # TEMP
             for read in reads_by_qual:
                 if (contig_1, read) in before_transitive_reduction.links and \
                         (read, contig_2) in before_transitive_reduction.links:
                     single_bridge_read = read
                     break
 
-            print('SINGLE BRIDGE READ:', single_bridge_read)  # TEMP
             if single_bridge_read is not None:
 
                 # Delete all of the other segments in the bridge.
@@ -267,7 +262,6 @@ class StringGraph(object):
         """
         segments_by_quality = sorted([x for x in self.segments],
                                      key=lambda x: self.segments[x].qual)
-        print('\n\n\n')  # TEMP
         for seg_name in segments_by_quality:
             seg = self.segments[seg_name]
 
@@ -278,9 +272,6 @@ class StringGraph(object):
             seg_len = seg.get_length()
             pos_seg_name = seg_name + '+'
             neg_seg_name = seg_name + '-'
-
-            print('')  # TEMP
-            print('REMOVE OVERLAPS:', pos_seg_name)  # TEMP
 
             preceding_segments = self.get_preceding_segments(pos_seg_name)
             following_segments = self.get_following_segments(pos_seg_name)
@@ -298,19 +289,14 @@ class StringGraph(object):
 
                 start_overlap = start_link.seg_2_overlap
                 end_overlap = end_link.seg_1_overlap
-                print('start_overlap:', start_overlap)  # TEMP
-                print('end_overlap:  ', end_overlap)  # TEMP
 
                 # If there aren't any overlaps, then we've nothing to do!
                 if start_overlap == 0 and end_overlap == 0:
-                    print('NO OVERLAPS')  # TEMP
                     continue
 
                 # If the start and end overlap sum to less than the length of the segment, then we
                 # trim off the overlaps and leave the segment in the middle.
                 if start_overlap + end_overlap < seg_len:
-                    print('TRIM ENDS')  # TEMP
-                    print('  LENGTH BEFORE:', len(seg.forward_sequence))  # TEMP
                     if end_overlap > 0:
                         seg.forward_sequence = seg.forward_sequence[start_overlap:-end_overlap]
                     else:
@@ -324,15 +310,11 @@ class StringGraph(object):
                     end_link.seg_2_overlap = 0
                     rev_end_link.seg_1_overlap = 0
                     rev_end_link.seg_2_overlap = 0
-                    print('  LENGTH AFTER:', len(seg.forward_sequence))  # TEMP
 
                 # If the start and end overlap are more than the length of the segment, then we can
                 # remove the segment entirely (because the preceding and following segments will
                 # still overlap).
                 else:
-                    print('REMOVE WHOLE SEGMENT')  # TEMP
-                    print('  NEW LINK: ' + preceding_seg_name + ' -> ' + following_seg_name)  # TEMP
-
                     start_overlap_ratio = start_link.seg_1_overlap / start_link.seg_2_overlap
                     end_overlap_ratio = end_link.seg_2_overlap / end_link.seg_1_overlap
 
@@ -340,8 +322,6 @@ class StringGraph(object):
                     new_link_overlap = -(seg_len - start_overlap - end_overlap)
                     overlap_1 = int(round(new_link_overlap * start_overlap_ratio))
                     overlap_2 = int(round(new_link_overlap * end_overlap_ratio))
-                    print('  GUESS OVERLAP 1: ', overlap_1)  # TEMP
-                    print('  GUESS OVERLAP 2: ', overlap_2)  # TEMP
 
                     # Look for the link in the before transitive reduction graph to find the
                     # exact overlaps, they are available.
@@ -350,8 +330,6 @@ class StringGraph(object):
                         exact_link = before_transitive_reduction.links[link_tuple]
                         overlap_1 = exact_link.seg_1_overlap
                         overlap_2 = exact_link.seg_2_overlap
-                        print('  EXACT OVERLAP 1: ', exact_link.seg_1_overlap)  # TEMP
-                        print('  EXACT OVERLAP 2: ', exact_link.seg_2_overlap)  # TEMP
 
                     # If we failed to find the link in the graph, we will align the reads
                     # using to get an exact overlap.
@@ -365,15 +343,11 @@ class StringGraph(object):
                                                                          guess_overlap)
                         if new_overlap_1 != -1 and new_overlap_2 != 1:
                             overlap_1, overlap_2 = new_overlap_1, new_overlap_2
-                        else:  # TEMP
-                            print('FAILED TO FIND EXACT OVERLAP')  # TEMP
 
                     self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
                     self.remove_segment(seg_name)
 
-            print('')  # TEMP
-
-        # We should now hopefully have an overlap-free graph!
+        # We should now have an overlap-free graph!
         for seg_name in self.segments.keys():
             pos_seg_name = seg_name + '+'
             neg_seg_name = seg_name + '-'
@@ -397,7 +371,6 @@ class StringGraph(object):
                 assert end_link.seg_2_overlap == 0
                 assert rev_end_link.seg_1_overlap == 0
                 assert rev_end_link.seg_2_overlap == 0
-        print('GRAPH IS OVERLAP FREE!!!!!')  # TEMP
 
     def merge_reads(self):
         """
@@ -415,9 +388,7 @@ class StringGraph(object):
             if len(path) > 1:
                 paths_to_merge.append(path)
 
-        print('\n\nPATHS TO MERGE:')  # TEMP
         for path in paths_to_merge:
-            print(path)  # TEMP
             merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
             merged_seg_seq = ''
             merged_seq_quals = []
@@ -426,7 +397,6 @@ class StringGraph(object):
                 merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
                 merged_seg_seq += seq
             merged_seq_qual = statistics.mean(merged_seq_quals)
-            print('')  # TEMP
             self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
             self.segments[merged_seg_name].qual = merged_seq_qual
             pos_merged_seg_name = merged_seg_name + '+'
