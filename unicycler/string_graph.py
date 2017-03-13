@@ -147,12 +147,25 @@ class StringGraph(object):
         Removes any segments from the graph which are not on a simple path between two contigs, as
         these are not useful for bridging.
         """
+        log.log('', verbosity=2)
+        log.log_explanation('Unicycler removes any segments from the string graph which are not on '
+                            'a simple path between two single-copy contigs, as these will not be '
+                            'useful for creating unambiguous bridges.',
+                            verbosity=2)
+
         segments_to_remove = []
         for seg_name, segment in self.segments.items():
             if not self.segment_leads_directly_to_contig_in_both_directions(seg_name):
                 segments_to_remove.append(seg_name)
+
         for seg_name in segments_to_remove:
             self.remove_segment(seg_name)
+
+        if segments_to_remove:
+            log.log('Removed segments: ' + ', '.join(segments_to_remove), verbosity=2)
+        else:
+            log.log('No segments needed removal', verbosity=2)
+
 
     def segment_leads_directly_to_contig_in_both_directions(self, seg_name):
         if self.segments[seg_name].contig:
@@ -209,6 +222,14 @@ class StringGraph(object):
         This function takes cases where there is a simple path from one contig to the next, and it
         replaces it with a single spanning read.
         """
+        log.log('', verbosity=2)
+        log.log_explanation('The path between two contigs may contain many reads. If any one of '
+                            'those reads spans the entire gap between the two contigs, then '
+                            'Unicycler simplifies the graph by using only a single read to connect '
+                            'the contigs. When multiple reads are available, it chooses the one '
+                            'with the highest average qscore.',
+                            verbosity=2)
+
         paths = self.get_bridging_paths()
         for path in paths:
             assert len(path) >= 3
@@ -262,6 +283,13 @@ class StringGraph(object):
         This function assumes that remove_non_bridging_paths has been run and we only have simple,
         unbranching paths to deal with.
         """
+        log.log('', verbosity=2)
+        log.log_explanation('At this point, the graph still contains overlaps - perhaps very long '
+                            'overlaps. Unicycler now removes those from the graph by throwing out '
+                            'redundant sequences and trimming sequence ends. As with the previous '
+                            'step, sequences with higher average qscores are preferentially kept.',
+                            verbosity=2)
+
         segments_by_quality = sorted([x for x in self.segments],
                                      key=lambda x: self.segments[x].qual)
         for seg_name in segments_by_quality:
@@ -376,6 +404,13 @@ class StringGraph(object):
         This function takes any reads in a simple path and merges them together. It assumes that
         the graph is now overlap-free.
         """
+        log.log('', verbosity=2)
+        log.log_explanation('Simple paths in the graph which contain only long read sequences can '
+                            'now be merged together. This results in a graph with two distinct '
+                            'types of segments: contigs (from the short read assembly) and long '
+                            'read sequences.',
+                            verbosity=2)
+
         segments_in_paths = set()
         paths_to_merge = []
         for seg_name in sorted(self.segments.keys(), reverse=True,
@@ -419,7 +454,7 @@ class StringGraph(object):
     def get_next_available_merged_segment_name(self):
         n = 1
         while True:
-            name = 'MERGED_' + str(n)
+            name = 'merged_reads_' + str(n)
             if name not in self.segments:
                 return name
             n += 1
@@ -536,8 +571,8 @@ class StringGraph(object):
 
         log.log_explanation('Now graph segments which contain single copy contigs are chopped into '
                             'pieces with the contigs replacing their corresponding sequence. This '
-                            'will ideally result in a string graph that contains all single copy '
-                            'contigs.',
+                            'makes a string graph which contains as many of the single copy '
+                            'contigs as possible (ideally all of them).',
                             verbosity=2)
         for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
                                key=lambda x: self.segments[x].get_length()):

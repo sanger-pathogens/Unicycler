@@ -17,6 +17,7 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import statistics
+from .misc import green, red
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
@@ -88,15 +89,20 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     #        default is 3, so perhaps use 3 if the depth is high enough, 2 if it's lower and 1 if
     #        it's very low. I'm not yet sure what the risks are (if any) with using a min_ovlp of
     #        1 when the depth is high.
-    log.log('Assembling reads with miniasm')
+    log.log('Assembling reads with miniasm... ', end='')
     miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir)
     before_transitive_reduction_filename = os.path.join(miniasm_dir, '03_raw_string_graph.gfa')
     string_graph_filename = os.path.join(miniasm_dir, '10_final_string_graph.gfa')
     if not (os.path.isfile(string_graph_filename) and
             os.path.isfile(before_transitive_reduction_filename)):
+        log.log(red('failed'))
         raise MiniasmFailure('miniasm failed to generate a string graph')
     string_graph = StringGraph(string_graph_filename, mean_read_quals)
     before_transitive_reduction = StringGraph(before_transitive_reduction_filename, mean_read_quals)
+
+    log.log(green('success'))
+    log.log('  ' + str(len(string_graph.segments)) + ' segments', verbosity=2)
+    log.log('  ' + str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
     string_graph.remove_non_bridging_paths()
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))

@@ -735,10 +735,10 @@ def print_intro_message(args, full_command, out_dir_message):
     """
     log.log_section_header('Starting Unicycler', single_newline=True)
 
-    intro_message = 'Welcome to Unicycler, an assembly pipeline for bacterial genomes.'
+    intro_message = 'Welcome to Unicycler, an assembly pipeline for bacterial genomes. '
     if args.long:
         intro_message += ('Since you provided both short and long reads, Unicycler will perform a '
-                          'hybrid assembly. It will first use SPAdes to produce a short read '
+                          'hybrid assembly. It will first use SPAdes to make a short read '
                           'assembly graph, and then it will use various approaches to scaffold '
                           'that graph using information from the long reads.')
     else:
