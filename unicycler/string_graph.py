@@ -17,7 +17,8 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import statistics
 from collections import defaultdict
-from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red
+from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red, \
+    get_right_arrow
 from .assembly_graph import build_reverse_links
 from .cpp_wrappers import overlap_alignment, minimap_align_reads
 from .minimap_alignment import load_minimap_alignments
@@ -256,8 +257,15 @@ class StringGraph(object):
             if single_bridge_read is not None:
 
                 # Delete all of the other segments in the bridge.
+                removed_segments = []
                 for read in [x for x in middle if x != single_bridge_read]:
-                    self.remove_segment(get_unsigned_seg_name(read))
+                    unsigned_read = get_unsigned_seg_name(read)
+                    self.remove_segment(unsigned_read)
+                    removed_segments.append(unsigned_read)
+                log.log('Removed segments:  ' + ', '.join(removed_segments), verbosity=2)
+                log.log('Surviving segment: ' + get_unsigned_seg_name(single_bridge_read),
+                        verbosity=2)
+                log.log('', verbosity=2)
 
                 # Create links between the surviving segment and the contigs.
                 link_1_tuple = (contig_1, single_bridge_read)
@@ -337,6 +345,8 @@ class StringGraph(object):
                     end_link.seg_2_overlap = 0
                     rev_end_link.seg_1_overlap = 0
                     rev_end_link.seg_2_overlap = 0
+                    log.log('trimmed ' + str(start_overlap) + ' bp from start and ' +
+                            str(end_overlap) + ' bp from end of ' + seg_name, verbosity=2)
 
                 # If the start and end overlap are more than the length of the segment, then we can
                 # remove the segment entirely (because the preceding and following segments will
@@ -373,6 +383,7 @@ class StringGraph(object):
 
                     self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
                     self.remove_segment(seg_name)
+                    log.log('removed ' + seg_name, verbosity=2)
 
         # We should now have an overlap-free graph!
         for seg_name in self.segments.keys():
@@ -398,6 +409,7 @@ class StringGraph(object):
                 assert end_link.seg_2_overlap == 0
                 assert rev_end_link.seg_1_overlap == 0
                 assert rev_end_link.seg_2_overlap == 0
+        log.log('', verbosity=2)
 
     def merge_reads(self):
         """
@@ -448,8 +460,12 @@ class StringGraph(object):
             self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
             self.add_link(pos_merged_seg_name, following_segment, 0, 0)
 
+            log.log((' ' + get_right_arrow() + ' ').join(path) + ' merged into ' + merged_seg_name,
+                    verbosity=2)
+
             for path_seg in path:
                 self.remove_segment(get_unsigned_seg_name(path_seg))
+        log.log('', verbosity=2)
 
     def get_next_available_merged_segment_name(self):
         n = 1
