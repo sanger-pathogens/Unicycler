@@ -17,7 +17,7 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import statistics
 from collections import defaultdict
-from .misc import reverse_complement, add_line_breaks_to_sequence
+from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap
 from .assembly_graph import build_reverse_links
 from .cpp_wrappers import overlap_alignment, minimap_align_reads
 from .minimap_alignment import load_minimap_alignments
@@ -474,8 +474,7 @@ class StringGraph(object):
                                   key=lambda x: x.get_length()):
                 if segment.contig or segment.get_length() < min_length:
                     continue
-                fasta.write(segment.pos_fasta_record())
-                fasta.write(segment.neg_fasta_record())
+                fasta.write(segment.fasta_record())
 
     def save_isolated_contigs_to_file(self, filename):
         """
@@ -504,7 +503,7 @@ class StringGraph(object):
         self.save_isolated_contigs_to_file(isolated_contigs_file)
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
-                                              settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
+                                      settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
         contig_to_read_alignments = \
             load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
                                                         threads, 3, 'find contigs'))
@@ -512,21 +511,55 @@ class StringGraph(object):
         isolated_contig_names = sorted(contig_to_read_alignments.keys(), reverse=True,
                                        key=lambda x: self.segments[x].get_length())
         for contig_name in isolated_contig_names:
-            alignments = [x for x in contig_to_read_alignments[contig_name] if x.read_strand == '+']
+            alignments = contig_to_read_alignments[contig_name]
             if not alignments:
                 continue
             best = sorted(alignments, key=lambda x: x.matching_bases)[-1]
             if best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
-                contig_alignments_by_segment[get_unsigned_seg_name(best.ref_name)].append(best)
+                contig_alignments_by_segment[best.ref_name].append(best)
 
         for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
                                key=lambda x: self.segments[x].get_length()):
-            alignments = contig_alignments_by_segment[seg_name]
 
-            print()  # TEMP
+            # Make sure none of the alignments overlap on the segment.
+            alignments = []
+            for a in sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.matching_bases):
+                if not any(range_overlap(a.ref_start, a.ref_end, b.ref_start, b.ref_end)
+                           for b in alignments):
+                    alignments.append(a)
+            alignments = sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.ref_start)
+
+            print('\n')  # TEMP
             print(seg_name)  # TEMP
             print(alignments)  # TEMP
-            print()  # TEMP
+
+            piece_names, piece_seqs = [], []
+            full_seg_seq = self.segments[seg_name].forward_sequence
+            current_pos = 0
+            for i, a in enumerate(alignments):
+
+                # First get the piece of the read segment.
+                piece_names.append(seg_name + '_' + str(i))
+                piece_seqs.append(full_seg_seq[current_pos:a.ref_start])
+
+                # Now put in the contig segment.
+                signed_full_seq_name = a.read_name + a.read_strand
+                full_contig_seq = self.seq_from_signed_seg_name(signed_full_seq_name)
+                contig_name, contig_seq = \
+                    get_adjusted_contig_name_and_seq(signed_full_seq_name, full_contig_seq,
+                                                     a.read_start, a.read_end)
+                piece_names.append(contig_name)
+                piece_seqs.append(contig_seq)
+                current_pos = a.ref_end
+
+            piece_names.append(seg_name + '_' + str(len(alignments)))
+            piece_seqs.append(full_seg_seq[current_pos:])
+
+
+            for i, name in enumerate(piece_names):  # TEMP
+                print('>' + name)  # TEMP
+                print(piece_seqs[i])  # TEMP
+            print('\n')  # TEMP
 
 
 class StringGraphSegment(object):
@@ -574,14 +607,6 @@ class StringGraphSegment(object):
         return ''.join(['>', self.full_name, '\n',
                         add_line_breaks_to_sequence(self.forward_sequence, 70)])
 
-    def pos_fasta_record(self):
-        return ''.join(['>', self.full_name + '+', '\n',
-                        add_line_breaks_to_sequence(self.forward_sequence, 70)])
-
-    def neg_fasta_record(self):
-        return ''.join(['>', self.full_name + '-', '\n',
-                        add_line_breaks_to_sequence(self.reverse_sequence, 70)])
-
 
 class StringGraphLink(object):
 
@@ -615,3 +640,25 @@ def flip_segment_name(seg_name):
 def get_unsigned_seg_name(seg_name):
     assert(seg_name.endswith('+') or seg_name.endswith('-'))
     return seg_name[:-1]
+
+
+def get_adjusted_contig_name_and_seq(contig_name, full_seq, start_pos, end_pos):
+    """
+    This function adjusts the start/end positions in the contig name. It's used when a partial
+    contig (from miniasm) has a partial alignment (from minimap).
+    """
+    sign = contig_name[-1]
+    name_parts = contig_name[:-1].rsplit(':', 1)
+    base_name = name_parts[0]
+    old_start, _ = (int(x) for x in name_parts[1].split('-'))
+    new_start = old_start + start_pos
+    new_end = (end_pos - start_pos) + new_start - 1
+
+    if sign == '-':
+        new_start_pos = len(full_seq) - end_pos
+        new_end_pos = len(full_seq) - start_pos
+        start_pos, end_pos = new_start_pos, new_end_pos
+    adjusted_name = base_name + ':' + str(new_start) + '-' + str(new_end) + sign
+    adjusted_seq = full_seq[start_pos:end_pos]
+
+    return adjusted_name, adjusted_seq

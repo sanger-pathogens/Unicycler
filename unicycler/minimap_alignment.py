@@ -16,7 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 from collections import defaultdict
-from .misc import get_nice_header, dim, line_iterator
+from .misc import get_nice_header, dim, line_iterator, range_overlap
 from .cpp_wrappers import minimap_align_reads
 from . import log
 from . import settings
@@ -144,13 +144,6 @@ def load_minimap_alignments(minimap_alignments_str, filter_by_minimisers=False,
         except (IndexError, ValueError):
             pass
     return alignments
-
-
-def range_overlap(x1, x2, y1, y2):
-    """
-    Returns true if the range (x1, x2) overlaps with the range (y1, y2).
-    """
-    return x1 < y2 and y1 < x2
 
 
 def alignments_overlap(a, other, allowed_overlap):

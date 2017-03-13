@@ -987,3 +987,10 @@ def line_iterator(string_with_line_breaks):
             break
         yield string_with_line_breaks[prev_newline + 1:next_newline]
         prev_newline = next_newline
+
+
+def range_overlap(x1, x2, y1, y2):
+    """
+    Returns true if the range (x1, x2) overlaps with the range (y1, y2).
+    """
+    return x1 < y2 and y1 < x2
