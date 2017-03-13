@@ -14,11 +14,13 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
+import os
 import statistics
 from collections import defaultdict
-from .misc import reverse_complement
+from .misc import reverse_complement, add_line_breaks_to_sequence
 from .assembly_graph import build_reverse_links
-from .cpp_wrappers import overlap_alignment
+from .cpp_wrappers import overlap_alignment, minimap_align_reads
+from .minimap_alignment import load_minimap_alignments
 from . import settings
 from . import log
 
@@ -276,9 +278,6 @@ class StringGraph(object):
             preceding_segments = self.get_preceding_segments(pos_seg_name)
             following_segments = self.get_following_segments(pos_seg_name)
 
-            print('  PRECEDING SEGMENTS:', preceding_segments)
-            print('  FOLLOWING SEGMENTS:', following_segments)
-
             if len(preceding_segments) == 1 and len(following_segments) == 1:
                 preceding_seg_name = preceding_segments[0]
                 following_seg_name = following_segments[0]
@@ -379,7 +378,8 @@ class StringGraph(object):
         """
         segments_in_paths = set()
         paths_to_merge = []
-        for seg_name in self.segments.keys():
+        for seg_name in sorted(self.segments.keys(), reverse=True,
+                               key=lambda x: self.segments[x].get_length()):
             if seg_name in segments_in_paths:
                 continue
             path = self.get_simple_read_path(seg_name + '+')
@@ -389,7 +389,7 @@ class StringGraph(object):
                 paths_to_merge.append(path)
 
         for path in paths_to_merge:
-            merged_seg_name = 'MERGED_' + '_'.join(get_unsigned_seg_name(x) for x in path)
+            merged_seg_name = self.get_next_available_merged_segment_name()
             merged_seg_seq = ''
             merged_seq_quals = []
             for path_seg in path:
@@ -415,6 +415,14 @@ class StringGraph(object):
 
             for path_seg in path:
                 self.remove_segment(get_unsigned_seg_name(path_seg))
+
+    def get_next_available_merged_segment_name(self):
+        n = 1
+        while True:
+            name = 'MERGED_' + str(n)
+            if name not in self.segments:
+                return name
+            n += 1
 
     def get_simple_read_path(self, starting_seg):
         """
@@ -456,20 +464,87 @@ class StringGraph(object):
         else:
             return self.segments[unsigned_seg_name].reverse_sequence
 
+    def save_non_contigs_to_file(self, filename, min_length):
+        """
+        Saves all graph segments which are not short read contigs to a FASTA file.
+        """
+        log.log('Saving ' + filename, 1)
+        with open(filename, 'w') as fasta:
+            for segment in sorted(self.segments.values(), reverse=True,
+                                  key=lambda x: x.get_length()):
+                if segment.contig or segment.get_length() < min_length:
+                    continue
+                fasta.write(segment.pos_fasta_record())
+                fasta.write(segment.neg_fasta_record())
+
+    def save_isolated_contigs_to_file(self, filename):
+        """
+        Saves all graph segments which are contigs but with no connections to a FASTA file.
+        Saves both strands as separate FASTA entries.
+        """
+        log.log('Saving ' + filename, 1)
+        with open(filename, 'w') as fasta:
+            for segment in sorted(self.segments.values(), reverse=True,
+                                  key=lambda x: x.get_length()):
+                if not segment.contig:
+                    continue
+                pos_seg_name = segment.full_name + '+'
+                if len(self.get_preceding_segments(pos_seg_name)) > 0 or \
+                        len(self.get_following_segments(pos_seg_name)) > 0:
+                    continue
+                fasta.write(segment.fasta_record())
+
+    def place_isolated_contigs(self, working_dir, threads):
+        """
+        This function takes contigs which are isolated in the graph and tries to place them back
+        into read sequences. This is to counteract the fact that when a real read contains a
+        contig, miniasm will drop the contig from the string graph.
+        """
+        isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
+        self.save_isolated_contigs_to_file(isolated_contigs_file)
+        non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
+        self.save_non_contigs_to_file(non_contigs_file,
+                                              settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
+        contig_to_read_alignments = \
+            load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
+                                                        threads, 3, 'find contigs'))
+        contig_alignments_by_segment = defaultdict(list)
+        isolated_contig_names = sorted(contig_to_read_alignments.keys(), reverse=True,
+                                       key=lambda x: self.segments[x].get_length())
+        for contig_name in isolated_contig_names:
+            alignments = [x for x in contig_to_read_alignments[contig_name] if x.read_strand == '+']
+            if not alignments:
+                continue
+            best = sorted(alignments, key=lambda x: x.matching_bases)[-1]
+            if best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
+                contig_alignments_by_segment[get_unsigned_seg_name(best.ref_name)].append(best)
+
+        for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
+                               key=lambda x: self.segments[x].get_length()):
+            alignments = contig_alignments_by_segment[seg_name]
+
+            print()  # TEMP
+            print(seg_name)  # TEMP
+            print(alignments)  # TEMP
+            print()  # TEMP
+
 
 class StringGraphSegment(object):
 
     def __init__(self, full_name, sequence, mean_read_quals=None):
-        self.full_name = full_name  # Has range at the end
+        self.full_name = full_name
         self.forward_sequence = sequence
         self.reverse_sequence = reverse_complement(sequence)
 
         # Miniasm trims reads and puts the start/end positions in the name.
         name_parts = full_name.rsplit(':', 1)
-        assert(len(name_parts) == 2)
-        self.short_name = name_parts[0]
-        range = name_parts[1][:-1]
-        self.start_pos, self.end_pos = (int(x) for x in range.split('-'))
+        if len(name_parts) == 2:
+            self.short_name = name_parts[0]
+            range = name_parts[1][:-1]
+            self.start_pos, self.end_pos = (int(x) for x in range.split('-'))
+        else:
+            self.short_name = self.full_name
+            self.start_pos, self.end_pos = 0, len(self.forward_sequence)
 
         if self.short_name.startswith('CONTIG_'):
             self.contig = True
@@ -478,6 +553,8 @@ class StringGraphSegment(object):
             assert(self.short_name in mean_read_quals)  # if not a contig, it should be a real long read
             self.contig = False
             self.qual = mean_read_quals[self.short_name]
+        else:
+            self.contig = False
 
     def __repr__(self):
         if len(self.forward_sequence) > 6:
@@ -492,6 +569,18 @@ class StringGraphSegment(object):
 
     def gfa_segment_line(self):
         return '\t'.join(['S', self.full_name, self.forward_sequence]) + '\n'
+
+    def fasta_record(self):
+        return ''.join(['>', self.full_name, '\n',
+                        add_line_breaks_to_sequence(self.forward_sequence, 70)])
+
+    def pos_fasta_record(self):
+        return ''.join(['>', self.full_name + '+', '\n',
+                        add_line_breaks_to_sequence(self.forward_sequence, 70)])
+
+    def neg_fasta_record(self):
+        return ''.join(['>', self.full_name + '-', '\n',
+                        add_line_breaks_to_sequence(self.reverse_sequence, 70)])
 
 
 class StringGraphLink(object):

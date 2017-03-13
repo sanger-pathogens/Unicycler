@@ -235,12 +235,18 @@ C_LIB.minimapAlignReads.argtypes = [c_char_p,  # Reference FASTA filename
                                     c_char_p,  # Reads FASTQ filename
                                     c_int,     # Threads
                                     c_int,     # Sensitivity level
-                                    c_bool]    # Read vs read mappings
+                                    c_int]     # Settings preset
 C_LIB.minimapAlignReads.restype = c_void_p     # String describing alignments
 
-def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level, read_vs_read):
+def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level,
+                        preset_name='default'):
+    preset = 0  # default
+    if preset_name == 'read vs read':
+        preset = 1
+    if preset_name == 'find contigs':
+        preset = 2
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
-                                  threads, sensitivity_level, read_vs_read)
+                                  threads, sensitivity_level, preset)
     return c_string_to_python_string(ptr)
 
 

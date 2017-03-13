@@ -17,12 +17,9 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import statistics
-from collections import defaultdict
-from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets,\
-    MinimapAlignment
+from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
-from .misc import line_iterator
 from . import log
 from . import settings
 
@@ -81,8 +78,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                                                   read_dict, graph)
 
     # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
-    minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
-                                                 assembly_reads_filename, threads, 0, True)
+    minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
+                                                 threads, 0, 'read vs read')
     with open(mappings_filename, 'wt') as mappings:
         mappings.write(minimap_alignments_str)
 
@@ -110,13 +107,11 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     string_graph.merge_reads()
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '15_reads_merged.gfa'))
 
+    # If any single copy contigs were completely contained in long reads, then they might be
+    # isolated from the main part of the graph. We now need to place them back in by aligning to
+    # the non-contig graph segments.
+    string_graph.place_isolated_contigs(miniasm_dir, threads)
 
-
-
-
-
-    # EXTRACT ALL CONTIG-CONTIG BRIDGE SEQUENCES.
-    # * Any two single copy contigs connected by an unbranching path that contains no other contigs.
 
     # POLISH EACH BRIDGE SEQUENCE.
     # * For this we use the set of long reads which overlap the two single copy contigs on the
@@ -125,6 +120,11 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # * Use only the long read sequences, not the Illumina contigs. Since the Illumina contigs may
     #   not have been used all the way to their ends (slightly trimmed), this means a bit of contig
     #   sequence may be replaced by long read consensus.
+
+
+
+
+
 
     # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
     # * Goal 1: if we can find a short read version of the bridge, we should use that because it

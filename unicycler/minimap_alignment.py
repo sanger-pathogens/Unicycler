@@ -53,7 +53,8 @@ class MinimapAlignment(object):
     def __repr__(self):
         return str(self.read_start) + '-' + str(self.read_end) + '(' + self.read_strand + '):' + \
             self.ref_name + ':' + str(self.ref_start) + '-' + str(self.ref_end) + \
-            '(' + str(self.minimiser_count) + ')'
+            '(' + str(self.matching_bases) + '/' + str(self.num_bases) + ',' + \
+            str(self.minimiser_count) + ')'
 
     def get_signed_ref_name(self):
         """
@@ -96,6 +97,9 @@ class MinimapAlignment(object):
         adjusted_read_start = strand_specific_read_start - self.ref_start
         adjusted_read_end = strand_specific_read_end + self.ref_end_gap
         return adjusted_read_start < 0 and adjusted_read_end >= self.read_length
+
+    def fraction_read_aligned(self):
+        return (self.read_end - self.read_start) / self.read_length
 
 
 def load_minimap_alignments_basic(minimap_alignments_str):
@@ -163,7 +167,7 @@ def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, t
     log.log('Aligning long reads to graph using minimap', 1)
     graph.save_to_fasta(segments_fasta, verbosity=2)
     minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0,
-                                                 False)
+                                                 'default')
     minimap_alignments = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
                                                  allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
                                                  filter_by_minimisers=True,

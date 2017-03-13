@@ -25,7 +25,7 @@ KSEQ_INIT(gzFile, gzread)
 
 
 char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
-                         int sensitivityLevel, bool readVsRead) {
+                         int sensitivityLevel, int preset) {
     // The k-mer size depends on the sensitivity level.
     int k = LEVEL_0_MINIMAP_KMER_SIZE;
     if (sensitivityLevel == 1)
@@ -37,8 +37,6 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
 
     // Set up some options and parameters.
     int w = int(.6666667 * k + .499);  // 2/3 of k
-    if (readVsRead)
-        w = 5;
     mm_verbose = 0;
     mm_mapopt_t opt;
     mm_mapopt_init(&opt);
@@ -46,11 +44,20 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
 	uint64_t ibatch_size = 4000000000ULL;
 	float f = 0.001;
 
-    // When mapping reads against themselves, use the recommended settings: -Sw5 -L100 -m0
-    if (readVsRead) {
+    // preset of 0 is default settings.
+
+    // preset of 1 is for mapping reads against themselves: -Sw5 -L100 -m0
+    if (preset == 1) {
         opt.flag |= MM_F_AVA | MM_F_NO_SELF;
         opt.min_match = 100;
         opt.merge_frac = 0.0;
+        w = 5;
+    }
+    // preset of 2 is for finding contigs in the string graph: -w5 -L100 -m0
+    else if (preset == 2) {
+        opt.min_match = 100;
+        opt.merge_frac = 0.0;
+        w = 5;
     }
 
     // Redirect minimap's output to a stringstream, instead of outputting it to stdout.
