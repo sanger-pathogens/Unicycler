@@ -111,6 +111,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # isolated from the main part of the graph. We now need to place them back in by aligning to
     # the non-contig graph segments.
     string_graph.place_isolated_contigs(miniasm_dir, threads)
+    string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
 
 
     # POLISH EACH BRIDGE SEQUENCE.

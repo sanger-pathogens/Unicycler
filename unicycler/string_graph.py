@@ -17,7 +17,7 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import statistics
 from collections import defaultdict
-from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap
+from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red
 from .assembly_graph import build_reverse_links
 from .cpp_wrappers import overlap_alignment, minimap_align_reads
 from .minimap_alignment import load_minimap_alignments
@@ -494,30 +494,51 @@ class StringGraph(object):
                 fasta.write(segment.fasta_record())
 
     def place_isolated_contigs(self, working_dir, threads):
-        """
-        This function takes contigs which are isolated in the graph and tries to place them back
-        into read sequences. This is to counteract the fact that when a real read contains a
-        contig, miniasm will drop the contig from the string graph.
-        """
+        log.log('', verbosity=2)
+        log.log_explanation('Single copy contigs which are contained in long reads (i.e. the read '
+                            'overlaps both ends of the contig) are excluded from the main graph '
+                            'because miniasm filters out contained segments. These will be '
+                            'isolated in the graph with no connections. Unicycler now tries to '
+                            'find their corresponding sequence in a long read graph segment to '
+                            'place these contigs back into the main graph.',
+                            verbosity=2)
+
         isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
         self.save_isolated_contigs_to_file(isolated_contigs_file)
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
                                       settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
+
+        log.log('Searching for isolated contigs with minimap')
         contig_to_read_alignments = \
             load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
                                                         threads, 3, 'find contigs'))
         contig_alignments_by_segment = defaultdict(list)
         isolated_contig_names = sorted(contig_to_read_alignments.keys(), reverse=True,
                                        key=lambda x: self.segments[x].get_length())
+        log.log('\n' + 'Isolated contigs: ', verbosity=2)
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]
-            if not alignments:
-                continue
-            best = sorted(alignments, key=lambda x: x.matching_bases)[-1]
-            if best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
-                contig_alignments_by_segment[best.ref_name].append(best)
+            found = False
+            if alignments:
+                best = sorted(alignments, key=lambda x: x.matching_bases)[-1]
+                if best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
+                    contig_alignments_by_segment[best.ref_name].append(best)
+                    found = True
+                    log.log('  ' + contig_name + ': ' + green('found in ' + best.ref_name))
+            if not found:
+                    log.log('  ' + contig_name + ': ' + red('not found'))
 
+        log.log('', verbosity=2)
+        if len(contig_alignments_by_segment) == 0:
+            log.log(red('No isolated contigs could be placed in the graph.'), verbosity=2)
+            return
+
+        log.log_explanation('Now graph segments which contain single copy contigs are chopped into '
+                            'pieces with the contigs replacing their corresponding sequence. This '
+                            'will ideally result in a string graph that contains all single copy '
+                            'contigs.',
+                            verbosity=2)
         for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
                                key=lambda x: self.segments[x].get_length()):
 
@@ -529,18 +550,27 @@ class StringGraph(object):
                     alignments.append(a)
             alignments = sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.ref_start)
 
-            print('\n')  # TEMP
-            print(seg_name)  # TEMP
-            print(alignments)  # TEMP
+            log.log('Old segment:  ' + seg_name, verbosity=2)
 
-            piece_names, piece_seqs = [], []
+            # Get the neighbouring segments for later when we make the links.
+            preceding_segments = self.get_preceding_segments(seg_name + '+')
+            following_segments = self.get_following_segments(seg_name + '+')
+            assert len(preceding_segments) == 1
+            assert len(following_segments) == 1
+            preceding_segment = preceding_segments[0]
+            following_segment = following_segments[0]
+
+            piece_names, signed_piece_names, piece_seqs, piece_reverse = [], [], [], []
             full_seg_seq = self.segments[seg_name].forward_sequence
             current_pos = 0
             for i, a in enumerate(alignments):
 
                 # First get the piece of the read segment.
-                piece_names.append(seg_name + '_' + str(i))
+                piece_name = seg_name + '_' + str(i)
+                piece_names.append(piece_name)
+                signed_piece_names.append(piece_name + '+')
                 piece_seqs.append(full_seg_seq[current_pos:a.ref_start])
+                piece_reverse.append(False)
 
                 # Now put in the contig segment.
                 signed_full_seq_name = a.read_name + a.read_strand
@@ -548,18 +578,48 @@ class StringGraph(object):
                 contig_name, contig_seq = \
                     get_adjusted_contig_name_and_seq(signed_full_seq_name, full_contig_seq,
                                                      a.read_start, a.read_end)
+                reverse = contig_name.endswith('-')
+                if reverse:
+                    contig_seq = reverse_complement(contig_seq)
+                contig_name = contig_name[:-1]  # Remove sign from name
+
+                # Delete the isolated contig from the graph.
+                self.remove_segment(a.read_name)
+
                 piece_names.append(contig_name)
+                signed_piece_names.append(contig_name + ('-' if reverse else '+'))
                 piece_seqs.append(contig_seq)
+                piece_reverse.append(reverse)
+
                 current_pos = a.ref_end
 
-            piece_names.append(seg_name + '_' + str(len(alignments)))
+            piece_name = seg_name + '_' + str(len(alignments))
+            piece_names.append(piece_name)
+            signed_piece_names.append(piece_name + '+')
             piece_seqs.append(full_seg_seq[current_pos:])
+            piece_reverse.append(False)
 
+            log.log('New segments: ' + ', '.join(signed_piece_names), verbosity=2)
 
-            for i, name in enumerate(piece_names):  # TEMP
-                print('>' + name)  # TEMP
-                print(piece_seqs[i])  # TEMP
-            print('\n')  # TEMP
+            # Create the segments and link them together.
+            for i, name in enumerate(piece_names):
+                seq = piece_seqs[i]
+                sign = '-' if piece_reverse[i] else '+'
+                self.segments[name] = StringGraphSegment(name, seq)
+
+                if i == 0:  # if first piece
+                    self.add_link(preceding_segment, name + sign, 0, 0)
+                else:
+                    prev_name = piece_names[i-1]
+                    prev_sign = '-' if piece_reverse[i-1] else '+'
+                    self.add_link(prev_name + prev_sign, name + sign, 0, 0)
+                if i == len(piece_names) - 1:  # if last piece
+                    self.add_link(name + sign, following_segment, 0, 0)
+
+            # Delete the old read segment
+            self.remove_segment(seg_name)
+
+            log.log('', verbosity=2)
 
 
 class StringGraphSegment(object):
@@ -571,11 +631,11 @@ class StringGraphSegment(object):
 
         # Miniasm trims reads and puts the start/end positions in the name.
         name_parts = full_name.rsplit(':', 1)
-        if len(name_parts) == 2:
+        try:
             self.short_name = name_parts[0]
             range = name_parts[1][:-1]
             self.start_pos, self.end_pos = (int(x) for x in range.split('-'))
-        else:
+        except (IndexError, ValueError):
             self.short_name = self.full_name
             self.start_pos, self.end_pos = 0, len(self.forward_sequence)
 
