@@ -299,17 +299,11 @@ class StringGraph(object):
                             verbosity=2)
 
         segments_by_quality = sorted([x for x in self.segments],
-                                     key=lambda x: self.segments[x].qual)
+                                     key=lambda x: (self.segments[x].qual, self.segments[x].get_length()))
         for seg_name in segments_by_quality:
             seg = self.segments[seg_name]
-
-            # We don't trim or remove contigs.
-            if seg.contig:
-                continue
-
             seg_len = seg.get_length()
             pos_seg_name = seg_name + '+'
-            neg_seg_name = seg_name + '-'
 
             preceding_segments = self.get_preceding_segments(pos_seg_name)
             following_segments = self.get_following_segments(pos_seg_name)
@@ -318,10 +312,7 @@ class StringGraph(object):
                 preceding_seg_name = preceding_segments[0]
                 following_seg_name = following_segments[0]
                 start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
                 end_link = self.links[(pos_seg_name, following_seg_name)]
-                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
-
                 start_overlap = start_link.seg_2_overlap
                 end_overlap = end_link.seg_1_overlap
 
@@ -330,23 +321,27 @@ class StringGraph(object):
                     continue
 
                 # If the start and end overlap sum to less than the length of the segment, then we
-                # trim off the overlaps and leave the segment in the middle.
+                # trim off the overlaps and leave the segment in the middle. We do this by actually
+                # removing the segment and creating a new one with a different start/end range.
                 if start_overlap + end_overlap < seg_len:
+                    new_start_pos = seg.start_pos + start_overlap
+                    new_end_pos = seg.end_pos - end_overlap
+                    new_name = seg.short_name + ':' + str(new_start_pos) + '-' + str(new_end_pos)
+                    new_pos_name = new_name + '+'
                     if end_overlap > 0:
-                        seg.forward_sequence = seg.forward_sequence[start_overlap:-end_overlap]
+                        new_seq = seg.forward_sequence[start_overlap:-end_overlap]
                     else:
-                        seg.forward_sequence = seg.forward_sequence[start_overlap:]
-                    seg.reverse_sequence = reverse_complement(seg.forward_sequence)
-                    start_link.seg_1_overlap = 0
-                    start_link.seg_2_overlap = 0
-                    rev_start_link.seg_1_overlap = 0
-                    rev_start_link.seg_2_overlap = 0
-                    end_link.seg_1_overlap = 0
-                    end_link.seg_2_overlap = 0
-                    rev_end_link.seg_1_overlap = 0
-                    rev_end_link.seg_2_overlap = 0
+                        new_seq = seg.forward_sequence[start_overlap:]
+                    new_qual = seg.qual
+
+                    # Out with the old and in with the new!
+                    self.remove_segment(seg_name)
+                    self.segments[new_name] = StringGraphSegment(new_name, new_seq, qual=new_qual)
+                    self.add_link(preceding_seg_name, new_pos_name, 0, 0)
+                    self.add_link(new_pos_name, following_seg_name, 0, 0)
+
                     log.log('trimmed ' + str(start_overlap) + ' bp from start and ' +
-                            str(end_overlap) + ' bp from end of ' + seg_name, verbosity=2)
+                            str(end_overlap) + ' bp from end of ' + seg.short_name, verbosity=2)
 
                 # If the start and end overlap are more than the length of the segment, then we can
                 # remove the segment entirely (because the preceding and following segments will
@@ -386,29 +381,7 @@ class StringGraph(object):
                     log.log('removed ' + seg_name, verbosity=2)
 
         # We should now have an overlap-free graph!
-        for seg_name in self.segments.keys():
-            pos_seg_name = seg_name + '+'
-            neg_seg_name = seg_name + '-'
-            preceding_segments = self.get_preceding_segments(pos_seg_name)
-            following_segments = self.get_following_segments(pos_seg_name)
-            assert len(preceding_segments) < 2
-            assert len(following_segments) < 2
-            if len(preceding_segments) == 1:
-                preceding_seg_name = preceding_segments[0]
-                start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
-                assert start_link.seg_1_overlap == 0
-                assert start_link.seg_2_overlap == 0
-                assert rev_start_link.seg_1_overlap == 0
-                assert rev_start_link.seg_2_overlap == 0
-            if len(following_segments) == 1:
-                following_seg_name = following_segments[0]
-                end_link = self.links[(pos_seg_name, following_seg_name)]
-                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
-                assert end_link.seg_1_overlap == 0
-                assert end_link.seg_2_overlap == 0
-                assert rev_end_link.seg_1_overlap == 0
-                assert rev_end_link.seg_2_overlap == 0
+        self.check_graph_has_no_overlaps()
         log.log('', verbosity=2)
 
     def merge_reads(self):
@@ -444,8 +417,8 @@ class StringGraph(object):
                 merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
                 merged_seg_seq += seq
             merged_seq_qual = statistics.mean(merged_seq_quals)
-            self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq)
-            self.segments[merged_seg_name].qual = merged_seq_qual
+            self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq,
+                                                                qual=merged_seq_qual)
             pos_merged_seg_name = merged_seg_name + '+'
 
             preceding_segments = self.get_preceding_segments(path[0])
@@ -600,6 +573,7 @@ class StringGraph(object):
                             verbosity=2)
         for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
                                key=lambda x: self.segments[x].get_length()):
+            seg = self.segments[seg_name]
 
             # Make sure none of the alignments overlap on the segment.
             alignments = []
@@ -620,12 +594,14 @@ class StringGraph(object):
             following_segment = following_segments[0]
 
             piece_names, signed_piece_names, piece_seqs, piece_reverse = [], [], [], []
-            full_seg_seq = self.segments[seg_name].forward_sequence
+            full_seg_seq = seg.forward_sequence
             current_pos = 0
             for i, a in enumerate(alignments):
 
                 # First get the piece of the read segment.
-                piece_name = seg_name + '_' + str(i)
+                piece_start_pos = seg.start_pos + current_pos
+                piece_end_pos = seg.start_pos + a.ref_start - 1
+                piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(piece_end_pos)
                 piece_names.append(piece_name)
                 signed_piece_names.append(piece_name + '+')
                 piece_seqs.append(full_seg_seq[current_pos:a.ref_start])
@@ -652,7 +628,8 @@ class StringGraph(object):
 
                 current_pos = a.ref_end
 
-            piece_name = seg_name + '_' + str(len(alignments))
+            piece_start_pos = seg.start_pos + current_pos
+            piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(seg.end_pos)
             piece_names.append(piece_name)
             signed_piece_names.append(piece_name + '+')
             piece_seqs.append(full_seg_seq[current_pos:])
@@ -664,7 +641,7 @@ class StringGraph(object):
             for i, name in enumerate(piece_names):
                 seq = piece_seqs[i]
                 sign = '-' if piece_reverse[i] else '+'
-                self.segments[name] = StringGraphSegment(name, seq)
+                self.segments[name] = StringGraphSegment(name, seq, qual=seg.qual)
 
                 if i == 0:  # if first piece
                     self.add_link(preceding_segment, name + sign, 0, 0)
@@ -680,23 +657,87 @@ class StringGraph(object):
 
             log.log('', verbosity=2)
 
+    def check_graph_has_no_overlaps(self):
+        """
+        Asserts that the graph has no branching structures and no overlaps.
+        """
+        for seg_name in self.segments.keys():
+            pos_seg_name = seg_name + '+'
+            neg_seg_name = seg_name + '-'
+            preceding_segments = self.get_preceding_segments(pos_seg_name)
+            following_segments = self.get_following_segments(pos_seg_name)
+            assert len(preceding_segments) < 2
+            assert len(following_segments) < 2
+            if len(preceding_segments) == 1:
+                preceding_seg_name = preceding_segments[0]
+                start_link = self.links[(preceding_seg_name, pos_seg_name)]
+                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
+                assert start_link.seg_1_overlap == 0
+                assert start_link.seg_2_overlap == 0
+                assert rev_start_link.seg_1_overlap == 0
+                assert rev_start_link.seg_2_overlap == 0
+            if len(following_segments) == 1:
+                following_seg_name = following_segments[0]
+                end_link = self.links[(pos_seg_name, following_seg_name)]
+                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
+                assert end_link.seg_1_overlap == 0
+                assert end_link.seg_2_overlap == 0
+                assert rev_end_link.seg_1_overlap == 0
+                assert rev_end_link.seg_2_overlap == 0
+
+    def check_segment_names_and_ranges(self, read_dict, assembly_graph):
+        """
+        This function looks at the string graph segment names and makes sure that their ranges
+        match up with the original sequences. It is to ensure that we haven't screwed anything up
+        in the various string graph manipulations we've done.
+        """
+        for seg_name, seg in self.segments.items():
+            assert seg_name == seg.full_name
+
+            # If the string graph segment name contains a range, make sure it matches up with the
+            # range in the object.
+            try:
+                range_in_name = [int(x) for x in seg_name.rsplit(':', 1)[1].split('-')]
+            except (IndexError, ValueError):
+                range_in_name = [None, None]
+            if range_in_name[0] is None:
+                assert seg.short_name == seg.full_name
+            else:
+                assert range_in_name[0] == seg.start_pos
+                assert range_in_name[1] == seg.end_pos
+                assert seg.short_name == seg_name.rsplit(':', 1)[0]
+
+            # We can't really check merged reads, so skip them.
+            if seg_name.startswith('merged_reads_'):
+                continue
+
+            if seg_name.startswith('CONTIG_'):
+                seg_num = int(seg_name[7:].split(':')[0])
+                full_seq = assembly_graph.seq_from_signed_seg_num(seg_num)
+            else:  # the segment is a long read
+                full_seq = read_dict[seg.short_name].sequence
+
+            # Miniasm uses 1-based inclusive ranges
+            assert seg.forward_sequence == full_seq[seg.start_pos-1:seg.end_pos]
+
 
 class StringGraphSegment(object):
 
-    def __init__(self, full_name, sequence, mean_read_quals=None):
+    def __init__(self, full_name, sequence, mean_read_quals=None, qual=None):
         self.full_name = full_name
         self.forward_sequence = sequence
         self.reverse_sequence = reverse_complement(sequence)
 
-        # Miniasm trims reads and puts the start/end positions in the name.
-        name_parts = full_name.rsplit(':', 1)
+        # Miniasm trims reads and puts the start/end positions in the name...
         try:
+            name_parts = full_name.rsplit(':', 1)
             self.short_name = name_parts[0]
-            range = name_parts[1][:-1]
-            self.start_pos, self.end_pos = (int(x) for x in range.split('-'))
+            self.start_pos, self.end_pos = (int(x) for x in name_parts[1].split('-'))
+
+        # ..but ranges don't apply to some graph segments, like 'merged_reads' segments.
         except (IndexError, ValueError):
             self.short_name = self.full_name
-            self.start_pos, self.end_pos = 0, len(self.forward_sequence)
+            self.start_pos, self.end_pos = 1, len(self.forward_sequence)
 
         if self.short_name.startswith('CONTIG_'):
             self.contig = True
@@ -707,6 +748,11 @@ class StringGraphSegment(object):
             self.qual = mean_read_quals[self.short_name]
         else:
             self.contig = False
+            self.qual = None
+
+        # If the construct gave an explicit quality, we'll use that.
+        if qual is not None:
+            self.qual = qual
 
     def __repr__(self):
         if len(self.forward_sequence) > 6:

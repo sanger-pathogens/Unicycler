@@ -120,6 +120,9 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                                         os.path.join(miniasm_dir, 'contained_reads.txt'))
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
 
+    # TO DO: I can probably remove this line later, for efficiency. It's just a sanity check that
+    # none of the graph manipulations screwed up the sequence ranges.
+    string_graph.check_segment_names_and_ranges(read_dict, graph)
 
     # POLISH EACH BRIDGE SEQUENCE.
     # * For this we use the set of long reads which overlap the two single copy contigs on the
