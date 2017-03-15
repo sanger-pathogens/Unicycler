@@ -105,20 +105,28 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     log.log('  ' + str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
     string_graph.remove_non_bridging_paths()
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))
+    if keep >= 3:
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))
+
     string_graph.simplify_bridges(before_transitive_reduction)
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_simplified_bridges.gfa'))
+    if keep >= 3:
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_simplified_bridges.gfa'))
+
     string_graph.remove_overlaps(before_transitive_reduction, scoring_scheme)
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_overlaps_removed.gfa'))
+    if keep >= 3:
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_overlaps_removed.gfa'))
+
     string_graph.merge_reads()
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '15_reads_merged.gfa'))
+    if keep >= 3:
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '15_reads_merged.gfa'))
 
     # If any single copy contigs were completely contained in long reads, then they might be
     # isolated from the main part of the graph. We now need to place them back in by aligning to
     # the non-contig graph segments.
     string_graph.place_isolated_contigs(miniasm_dir, threads,
                                         os.path.join(miniasm_dir, 'contained_reads.txt'))
-    string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
+    if keep >= 3:
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
 
     # TO DO: I can probably remove this line later, for efficiency. It's just a sanity check that
     # none of the graph manipulations screwed up the sequence ranges.
