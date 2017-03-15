@@ -29,37 +29,6 @@
 //
 //using namespace TCLAP;
 using namespace std;
-//
-//static void print_subs(const sdict_t *d, const ma_sub_t *sub)
-//{
-//    uint32_t i;
-//    for (i = 0; i < d->n_seq; ++i)
-//        if (!d->seq[i].del && sub[i].s != sub[i].e)
-//            printf("%s\t%d\t%d\n", d->seq[i].name, sub[i].s, sub[i].e);
-//}
-//
-//static void print_hits(size_t n_hits, const ma_hit_t *hit, const sdict_t *d, const ma_sub_t *sub)
-//{
-//    size_t i;
-//    for (i = 0; i < n_hits; ++i) {
-//        const ma_hit_t *p = &hit[i];
-//        const ma_sub_t *rq = &sub[p->qns>>32], *rt = &sub[p->tn];
-//        printf("%s:%d-%d\t%d\t%d\t%d\t%c\t%s:%d-%d\t%d\t%d\t%d\t%d\t%d\t255\n", d->seq[p->qns>>32].name, rq->s + 1, rq->e, rq->e - rq->s, (uint32_t)p->qns, p->qe,
-//                "+-"[p->rev], d->seq[p->tn].name, rt->s + 1, rt->e, rt->e - rt->s, p->ts, p->te, p->ml, p->bl);
-//    }
-//}
-
-void print_used_reads(const sdict_t *read_dict, ma_sub_t *subreads)
-{
-    size_t num_reads = read_dict->n_seq;
-    for (size_t i = 0; i < num_reads; ++i) {
-        if (subreads[i].del == 0) {
-            string read_name = read_dict->seq[i].name;
-            if (read_name.find("CONTIG_") == 0)
-                cout << read_name << "\n";
-        }
-    }
-}
 
 
 void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
@@ -97,6 +66,8 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     string final_string_graph = outdir + "/10_final_string_graph.gfa";
     string final_unitig_graph = outdir + "/11_unitig_graph.gfa";
     string miniasm_output = outdir + "/miniasm.out";
+    string chimeric_read_list = outdir + "/chimeric_reads.txt";
+    string contained_read_list = outdir + "/contained_reads.txt";
 
     // Redirect miniasm's output to a stringstream, instead of outputting it to stderr.
     // http://stackoverflow.com/questions/5419356/redirect-stdout-stderr-to-a-string
@@ -156,21 +127,13 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     free(subreads_2);
 
     // Toss out chimeric reads.
-    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads);
+    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads, chimeric_read_list);
 
     // Toss out contained reads (this is a big one and gets rid of a lot).
-    num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits);
+    num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits, contained_read_list);
     std::cerr << "\n";
 
-
     hits = (ma_hit_t*)realloc(hits, num_hits * sizeof(ma_hit_t));
-
-//    if (outfmt == "bed") {
-//        print_subs(read_dict, subreads);
-//    }
-//    else if (outfmt == "paf") {
-//        print_hits(num_hits, hits, read_dict, subreads);
-//    }
     asg_t * string_graph = 0;
 
     cerr << "===> Step 4: graph cleaning <===\n";
@@ -236,8 +199,6 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     if (excluded_reads)
         destroy_seq_dict(excluded_reads);
 
-//    cerr << "Version: " << VERSION << "\n";
-//    cerr << "CMD:"; for (int i = 0; i < argc; ++i) cerr << " " << argv[i]; cerr << "\n";
     cerr << "Real time: " << sys_realtime() << " sec; CPU: " << sys_cputime() << " sec\n";
 
 	// Return the stderr buffer to its original state.

@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <iostream>
+#include <fstream>
+#include <set>
 #include <limits>
 
 #pragma GCC diagnostic ignored "-Wvla-extension"
@@ -313,8 +315,10 @@ static inline int is_chimeric(int max_hang, int min_dp, size_t st, size_t en, co
     return (chi[0] > 0 || chi[1] > 0);
 }
 
-size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads)
+size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads, string chimeric_read_list)
 {
+    set<string> chimeric_read_names;
+
     size_t i, start = 0, n_chi = 0;
     uint32_v c[2] = {{0,0,0}, {0,0,0}};
     for (i = 1; i <= n; ++i) {
@@ -326,6 +330,7 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
                 if (!is_read_illumina_contig(read_dict, id)) {
                     subreads[id].del = 1;
                     ++n_chi;
+                    chimeric_read_names.insert(get_read_name(read_dict, id));
                 }
             }
             start = i;
@@ -333,11 +338,20 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
     }
     free(c[0].a); free(c[1].a);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] identified " << n_chi << " chimeric reads\n";
+
+    ofstream list_file;
+    list_file.open(chimeric_read_list);
+    for (set<string>::iterator it = chimeric_read_names.begin(); it != chimeric_read_names.end(); ++it)
+        list_file << *it << "\n";
+    list_file.close();
+
     return n_chi;
 }
 
-size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *read_dict, ma_sub_t *subreads, size_t n, ma_hit_t *a)
+size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *read_dict, ma_sub_t *subreads, size_t n, ma_hit_t *a, string contained_read_list)
 {
+    set<string> contained_read_names;
+
     int32_t *map, r;
     size_t i, m, old_n_seq = read_dict->n_seq;
     asg_arc_t t;
@@ -353,9 +367,11 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
 
         if (r == MA_HT_QCONT) {  // If the query is contained in the target
             query_subread->del = 1;
+            contained_read_names.insert(get_read_name(read_dict, query_i));
         }
         else if (r == MA_HT_TCONT) {  // If the target is contained in the query
             target_subread->del = 1;
+            contained_read_names.insert(get_read_name(read_dict, target_i));
         }
     }
 
@@ -386,5 +402,12 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
     }
     free(map);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] " << read_dict->n_seq << " sequences and " << m << " hits remain after containment removal\n";
+
+    ofstream list_file;
+    list_file.open(contained_read_list);
+    for (set<string>::iterator it = contained_read_names.begin(); it != contained_read_names.end(); ++it)
+        list_file << *it << "\n";
+    list_file.close();
+
     return m;
 }

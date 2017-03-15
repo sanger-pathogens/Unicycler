@@ -527,11 +527,18 @@ class StringGraph(object):
                     continue
                 fasta.write(segment.fasta_record())
 
-    def save_isolated_contigs_to_file(self, filename):
+    def save_isolated_contigs_to_file(self, filename, contained_reads_filename):
         """
         Saves all graph segments which are contigs but with no connections to a FASTA file.
-        Saves both strands as separate FASTA entries.
+        Specifically, it only saves contigs which have been excluded by miniasm because they were
+        contained (a list of such reads is in contained_reads.txt).
         """
+        contained_contig_names = set()
+        with open(contained_reads_filename, 'rt') as contained_reads_file:
+            for line in contained_reads_file:
+                if line.startswith('CONTIG_'):
+                    contained_contig_names.add(line.strip())
+
         log.log('Saving ' + filename, 1)
         with open(filename, 'w') as fasta:
             for segment in sorted(self.segments.values(), reverse=True,
@@ -542,9 +549,10 @@ class StringGraph(object):
                 if len(self.get_preceding_segments(pos_seg_name)) > 0 or \
                         len(self.get_following_segments(pos_seg_name)) > 0:
                     continue
-                fasta.write(segment.fasta_record())
+                if segment.short_name in contained_contig_names:
+                    fasta.write(segment.fasta_record())
 
-    def place_isolated_contigs(self, working_dir, threads):
+    def place_isolated_contigs(self, working_dir, threads, contained_reads_filename):
         log.log('', verbosity=2)
         log.log_explanation('Single copy contigs which are contained in long reads (i.e. the read '
                             'overlaps both ends of the contig) are excluded from the main graph '
@@ -555,7 +563,7 @@ class StringGraph(object):
                             verbosity=2)
 
         isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
-        self.save_isolated_contigs_to_file(isolated_contigs_file)
+        self.save_isolated_contigs_to_file(isolated_contigs_file, contained_reads_filename)
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
                                       settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
