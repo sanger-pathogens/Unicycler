@@ -143,29 +143,50 @@ class StringGraph(object):
         remove_signed_segment(self, seg_name_to_remove + '-')
         self.segments.pop(seg_name_to_remove, None)
 
-    def remove_non_bridging_paths(self):
-        """
-        Removes any segments from the graph which are not on a simple path between two contigs, as
-        these are not useful for bridging.
-        """
+    def remove_branching_paths(self):
         log.log('', verbosity=2)
-        log.log_explanation('Unicycler removes any segments from the string graph which are not on '
-                            'a simple path between two single-copy contigs, as these will not be '
-                            'useful for creating unambiguous bridges.',
-                            verbosity=2)
-
-        segments_to_remove = []
+        log.log_explanation('Unicycler removes any links from the string graph which create '
+                            'branches. I.e. if any segment has two or more links connected to one '
+                            'end, those links are removed. This will result in a graph with only '
+                            'simple linear paths that is suitable for creating unambiguous '
+                            'bridges.', verbosity=2)
+        # Put together a set of all links to be deleted.
+        links_to_delete = set()
         for seg_name, segment in self.segments.items():
-            if not self.segment_leads_directly_to_contig_in_both_directions(seg_name):
-                segments_to_remove.append(seg_name)
+            pos_seg_name = seg_name + '+'
+            neg_seg_name = seg_name + '-'
+            following_segments = self.get_following_segments(pos_seg_name)
+            preceding_segments = self.get_preceding_segments(pos_seg_name)
+            if len(following_segments) > 1:
+                for f in following_segments:
+                    links_to_delete.add((pos_seg_name, f))
+                    links_to_delete.add((flip_segment_name(f), neg_seg_name))
+            if len(preceding_segments) > 1:
+                for p in preceding_segments:
+                    links_to_delete.add((p, pos_seg_name))
+                    links_to_delete.add((neg_seg_name, flip_segment_name(p)))
 
-        for seg_name in segments_to_remove:
-            self.remove_segment(seg_name)
+        # Delete all links in the set in each possible way.
+        deleted_links = []
+        for link in sorted(list(links_to_delete)):
+            if link in self.links:
+                deleted_links.append(link)
+                seg_1, seg_2 = link
+                rev_seg_1 = flip_segment_name(seg_1)
+                rev_seg_2 = flip_segment_name(seg_2)
+                del self.links[(seg_1, seg_2)]
+                self.forward_links[seg_1].remove(seg_2)
+                self.reverse_links[seg_2].remove(seg_1)
+                del self.links[(rev_seg_2, rev_seg_1)]
+                self.forward_links[rev_seg_2].remove(rev_seg_1)
+                self.reverse_links[rev_seg_1].remove(rev_seg_2)
 
-        if segments_to_remove:
-            log.log('Removed segments: ' + ', '.join(segments_to_remove), verbosity=2)
+        if deleted_links:
+            log.log('Removed links:', verbosity=2)
+            for seg_1, seg_2 in deleted_links:
+                log.log('  ' + seg_1 + ' ' + get_right_arrow() + ' ' + seg_2, verbosity=2)
         else:
-            log.log('No segments needed removal', verbosity=2)
+            log.log('No links needed removal', verbosity=2)
 
 
     def segment_leads_directly_to_contig_in_both_directions(self, seg_name):
@@ -288,7 +309,7 @@ class StringGraph(object):
 
         before_transitive_reduction is the string graph at an earlier state where there are still
         transitive links. This helps us to find the correct overlaps when removing segments.
-        This function assumes that remove_non_bridging_paths has been run and we only have simple,
+        This function assumes that remove_branching_paths has been run and we only have simple,
         unbranching paths to deal with.
         """
         log.log('', verbosity=2)
@@ -307,78 +328,99 @@ class StringGraph(object):
 
             preceding_segments = self.get_preceding_segments(pos_seg_name)
             following_segments = self.get_following_segments(pos_seg_name)
+            assert len(preceding_segments) <= 1
+            assert len(following_segments) <= 1
 
-            if len(preceding_segments) == 1 and len(following_segments) == 1:
+            if len(preceding_segments) == 1:
                 preceding_seg_name = preceding_segments[0]
-                following_seg_name = following_segments[0]
                 start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                end_link = self.links[(pos_seg_name, following_seg_name)]
                 start_overlap = start_link.seg_2_overlap
+            else:
+                preceding_seg_name = None
+                start_link = None
+                start_overlap = 0
+
+            if len(following_segments) == 1:
+                following_seg_name = following_segments[0]
+                end_link = self.links[(pos_seg_name, following_seg_name)]
                 end_overlap = end_link.seg_1_overlap
+            else:
+                following_seg_name = None
+                end_link = None
+                end_overlap = 0
 
-                # If there aren't any overlaps, then we've nothing to do!
-                if start_overlap == 0 and end_overlap == 0:
-                    continue
+            # If there aren't any overlaps, then we've nothing to do!
+            if start_overlap == 0 and end_overlap == 0:
+                continue
 
-                # If the start and end overlap sum to less than the length of the segment, then we
-                # trim off the overlaps and leave the segment in the middle. We do this by actually
-                # removing the segment and creating a new one with a different start/end range.
-                if start_overlap + end_overlap < seg_len:
-                    new_start_pos = seg.start_pos + start_overlap
-                    new_end_pos = seg.end_pos - end_overlap
-                    new_name = seg.short_name + ':' + str(new_start_pos) + '-' + str(new_end_pos)
-                    new_pos_name = new_name + '+'
-                    if end_overlap > 0:
-                        new_seq = seg.forward_sequence[start_overlap:-end_overlap]
-                    else:
-                        new_seq = seg.forward_sequence[start_overlap:]
-                    new_qual = seg.qual
+            # If the start and end overlap sum to less than the length of the segment, then we
+            # trim off the overlaps and leave the segment in the middle. We do this by actually
+            # removing the segment and creating a new one with a different start/end range.
+            if start_overlap + end_overlap < seg_len:
+                new_start_pos = seg.start_pos + start_overlap
+                new_end_pos = seg.end_pos - end_overlap
+                new_name = seg.short_name + ':' + str(new_start_pos) + '-' + str(new_end_pos)
+                new_pos_name = new_name + '+'
+                if end_overlap > 0:
+                    new_seq = seg.forward_sequence[start_overlap:-end_overlap]
+                else:
+                    new_seq = seg.forward_sequence[start_overlap:]
+                new_qual = seg.qual
 
-                    # Out with the old and in with the new!
-                    self.remove_segment(seg_name)
-                    self.segments[new_name] = StringGraphSegment(new_name, new_seq, qual=new_qual)
+                # Out with the old and in with the new!
+                self.remove_segment(seg_name)
+                self.segments[new_name] = StringGraphSegment(new_name, new_seq, qual=new_qual)
+                if preceding_seg_name is not None:
                     self.add_link(preceding_seg_name, new_pos_name, 0, 0)
+                if following_seg_name is not None:
                     self.add_link(new_pos_name, following_seg_name, 0, 0)
 
-                    log.log('trimmed ' + str(start_overlap) + ' bp from start and ' +
-                            str(end_overlap) + ' bp from end of ' + seg.short_name, verbosity=2)
+                log.log('trimmed ' + str(start_overlap) + ' bp from start and ' +
+                        str(end_overlap) + ' bp from end of ' + seg_name, verbosity=2)
 
-                # If the start and end overlap are more than the length of the segment, then we can
-                # remove the segment entirely (because the preceding and following segments will
-                # still overlap).
+            # If the start and end overlap are more than the length of the segment, then we can
+            # remove the segment entirely (because the preceding and following segments will
+            # still overlap).
+            elif start_link is not None and end_link is not None:
+                start_overlap_ratio = start_link.seg_1_overlap / start_link.seg_2_overlap
+                end_overlap_ratio = end_link.seg_2_overlap / end_link.seg_1_overlap
+
+                # Make a guess for the new link overlaps.
+                new_link_overlap = -(seg_len - start_overlap - end_overlap)
+                overlap_1 = int(round(new_link_overlap * start_overlap_ratio))
+                overlap_2 = int(round(new_link_overlap * end_overlap_ratio))
+
+                # Look for the link in the before transitive reduction graph to find the
+                # exact overlaps, they are available.
+                link_tuple = (preceding_seg_name, following_seg_name)
+                if link_tuple in before_transitive_reduction.links:
+                    exact_link = before_transitive_reduction.links[link_tuple]
+                    overlap_1 = exact_link.seg_1_overlap
+                    overlap_2 = exact_link.seg_2_overlap
+
+                # If we failed to find the link in the graph, we will align the reads
+                # using to get an exact overlap.
                 else:
-                    start_overlap_ratio = start_link.seg_1_overlap / start_link.seg_2_overlap
-                    end_overlap_ratio = end_link.seg_2_overlap / end_link.seg_1_overlap
+                    preceding_segment_seq = self.seq_from_signed_seg_name(preceding_seg_name)
+                    following_segment_seq = self.seq_from_signed_seg_name(following_seg_name)
+                    guess_overlap = max(overlap_1, overlap_2)
+                    new_overlap_1, new_overlap_2 = overlap_alignment(preceding_segment_seq,
+                                                                     following_segment_seq,
+                                                                     scoring_scheme,
+                                                                     guess_overlap)
+                    if new_overlap_1 != -1 and new_overlap_2 != 1:
+                        overlap_1, overlap_2 = new_overlap_1, new_overlap_2
 
-                    # Make a guess for the new link overlaps.
-                    new_link_overlap = -(seg_len - start_overlap - end_overlap)
-                    overlap_1 = int(round(new_link_overlap * start_overlap_ratio))
-                    overlap_2 = int(round(new_link_overlap * end_overlap_ratio))
+                self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
+                self.remove_segment(seg_name)
+                log.log('removed ' + seg_name, verbosity=2)
 
-                    # Look for the link in the before transitive reduction graph to find the
-                    # exact overlaps, they are available.
-                    link_tuple = (preceding_seg_name, following_seg_name)
-                    if link_tuple in before_transitive_reduction.links:
-                        exact_link = before_transitive_reduction.links[link_tuple]
-                        overlap_1 = exact_link.seg_1_overlap
-                        overlap_2 = exact_link.seg_2_overlap
-
-                    # If we failed to find the link in the graph, we will align the reads
-                    # using to get an exact overlap.
-                    else:
-                        preceding_segment_seq = self.seq_from_signed_seg_name(preceding_seg_name)
-                        following_segment_seq = self.seq_from_signed_seg_name(following_seg_name)
-                        guess_overlap = max(overlap_1, overlap_2)
-                        new_overlap_1, new_overlap_2 = overlap_alignment(preceding_segment_seq,
-                                                                         following_segment_seq,
-                                                                         scoring_scheme,
-                                                                         guess_overlap)
-                        if new_overlap_1 != -1 and new_overlap_2 != 1:
-                            overlap_1, overlap_2 = new_overlap_1, new_overlap_2
-
-                    self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
-                    self.remove_segment(seg_name)
-                    log.log('removed ' + seg_name, verbosity=2)
+            # We should never fail both of the above conditions. I.e. either we can trim the ends
+            # or there is a link on both sides. Neither shouldn't be true (a link on one side
+            # which covers the whole read) because that would imply that the read is contained,
+            # something that miniasm filters out.
+            else:
+                assert False
 
         # We should now have an overlap-free graph!
         self.check_graph_has_no_overlaps()
@@ -422,16 +464,18 @@ class StringGraph(object):
             pos_merged_seg_name = merged_seg_name + '+'
 
             preceding_segments = self.get_preceding_segments(path[0])
-            following_segments = self.get_following_segments(path[-1])
-            assert len(preceding_segments) == 1
-            assert len(following_segments) == 1
-            preceding_segment = preceding_segments[0]
-            following_segment = following_segments[0]
-            assert preceding_segment.startswith('CONTIG_')
-            assert following_segment.startswith('CONTIG_')
+            assert len(preceding_segments) <= 1
+            if len(preceding_segments) == 1:
+                preceding_segment = preceding_segments[0]
+                assert preceding_segment.startswith('CONTIG_')
+                self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
 
-            self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
-            self.add_link(pos_merged_seg_name, following_segment, 0, 0)
+            following_segments = self.get_following_segments(path[-1])
+            assert len(following_segments) <= 1
+            if len(following_segments) == 1:
+                following_segment = following_segments[0]
+                assert following_segment.startswith('CONTIG_')
+                self.add_link(pos_merged_seg_name, following_segment, 0, 0)
 
             log.log((' ' + get_right_arrow() + ' ').join(path) + ' merged into ' + merged_seg_name,
                     verbosity=2)
@@ -553,8 +597,19 @@ class StringGraph(object):
             alignments = contig_to_read_alignments[contig_name]
             found = False
             if alignments:
-                best = sorted(alignments, key=lambda x: x.matching_bases)[-1]
-                if best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
+                alignments = sorted(alignments, key=lambda x: x.matching_bases)
+                best = alignments[-1]
+
+                # If there are multiple possible places to put the contig, we check to see if the
+                # second-best option is too close to the best. If so, we don't place it.
+                if len(alignments) > 1:
+                    second_best_matching_bases = alignments[-2].matching_bases
+                else:
+                    second_best_matching_bases = 0
+                second_to_first = second_best_matching_bases / best.matching_bases
+
+                if second_to_first < settings.FOUND_CONTIG_SECOND_BEST_THRESHOLD and \
+                        best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
                     contig_alignments_by_segment[best.ref_name].append(best)
                     found = True
                     log.log('  ' + contig_name + ': ' + green('found in ' + best.ref_name))
@@ -588,10 +643,16 @@ class StringGraph(object):
             # Get the neighbouring segments for later when we make the links.
             preceding_segments = self.get_preceding_segments(seg_name + '+')
             following_segments = self.get_following_segments(seg_name + '+')
-            assert len(preceding_segments) == 1
-            assert len(following_segments) == 1
-            preceding_segment = preceding_segments[0]
-            following_segment = following_segments[0]
+            assert len(preceding_segments) <= 1
+            assert len(following_segments) <= 1
+            if len(preceding_segments) == 1:
+                preceding_segment = preceding_segments[0]
+            else:
+                preceding_segment = None
+            if len(following_segments) == 1:
+                following_segment = following_segments[0]
+            else:
+                following_segment = None
 
             piece_names, signed_piece_names, piece_seqs, piece_reverse = [], [], [], []
             full_seg_seq = seg.forward_sequence
@@ -643,14 +704,16 @@ class StringGraph(object):
                 sign = '-' if piece_reverse[i] else '+'
                 self.segments[name] = StringGraphSegment(name, seq, qual=seg.qual)
 
-                if i == 0:  # if first piece
-                    self.add_link(preceding_segment, name + sign, 0, 0)
+                if i == 0:  # first piece
+                    if preceding_segment is not None:
+                        self.add_link(preceding_segment, name + sign, 0, 0)
                 else:
                     prev_name = piece_names[i-1]
                     prev_sign = '-' if piece_reverse[i-1] else '+'
                     self.add_link(prev_name + prev_sign, name + sign, 0, 0)
-                if i == len(piece_names) - 1:  # if last piece
-                    self.add_link(name + sign, following_segment, 0, 0)
+
+                if i == len(piece_names) - 1 and following_segment is not None:  # last piece
+                        self.add_link(name + sign, following_segment, 0, 0)
 
             # Delete the old read segment
             self.remove_segment(seg_name)

@@ -38,8 +38,11 @@ MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
 CONTIG_READ_QSCORE = 40
 
 # After a miniasm assembly, Unicycler tries to place single copy contigs back into the string
-# graph. It must align at least this much the contig to be successful.
+# graph. It must align at least MIN_FOUND_CONTIG_FRACTION of the contig to be successful. And if
+# the second best placement has more than FOUND_CONTIG_SECOND_BEST_THRESHOLD times the matching
+# bases of the best, we say they are too close and don't place the contig.
 MIN_FOUND_CONTIG_FRACTION = 0.9
+FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.5
 
 
 

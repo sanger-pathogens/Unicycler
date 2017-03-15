@@ -104,9 +104,9 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     log.log('  ' + str(len(string_graph.segments)) + ' segments', verbosity=2)
     log.log('  ' + str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
-    string_graph.remove_non_bridging_paths()
+    string_graph.remove_branching_paths()
     if keep >= 3:
-        string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_non_bridging_paths_removed.gfa'))
+        string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_branching_paths_removed.gfa'))
 
     string_graph.simplify_bridges(before_transitive_reduction)
     if keep >= 3:
