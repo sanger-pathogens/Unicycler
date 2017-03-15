@@ -42,7 +42,7 @@ CONTIG_READ_QSCORE = 40
 # the second best placement has more than FOUND_CONTIG_SECOND_BEST_THRESHOLD times the matching
 # bases of the best, we say they are too close and don't place the contig.
 MIN_FOUND_CONTIG_FRACTION = 0.9
-FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.5
+FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.75
 
 
 

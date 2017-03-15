@@ -595,6 +595,14 @@ class StringGraph(object):
         log.log('\n' + 'Isolated contigs: ', verbosity=2)
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]
+
+
+            # TO DO: see if I can chain alignments together here. I.e. if an alignment is broken
+            # into pieces, but they are all in order in the same segment, then we can combine them,
+            # assuming that the length discrepancy is below some threshold. This will catch contigs
+            # that I'm currently missing because they didn't get a single alignment.
+
+
             found = False
             if alignments:
                 alignments = sorted(alignments, key=lambda x: x.matching_bases)

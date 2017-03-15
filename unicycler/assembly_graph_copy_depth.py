@@ -25,6 +25,19 @@ def determine_copy_depth(graph):
     # Reset any existing copy depths.
     graph.copy_depths = {}
 
+    log.log('', verbosity=2)
+    log.log_explanation('Multiplicity is the number of times a '
+                        'sequence occurs in the underlying sequence. Single-copy segments '
+                        '(those with a multiplicity of one, occurring only once in the underlying '
+                        'sequence) are particularly useful. These are the segments that Unicycler '
+                        'will attempt to connect via "bridges" through repeat sequences.',
+                        verbosity=2)
+
+    log.log_explanation('Multiplicity determination begins by identifying segments which are '
+                        'clearly single-copy because they are of low depth and do not have more '
+                        'than one link per side.',
+                        verbosity=2)
+
     single_copy_depth = graph.get_single_copy_depth()
 
     # Assign single copy status to segments within the tolerance of the single copy depth.
@@ -42,8 +55,19 @@ def determine_copy_depth(graph):
         log.log('Initial single copy segments: none', 2)
     log.log('', 2)
 
+
+    log.log('', verbosity=2)
+    log.log_explanation('Unicycler now uses a greedy algorithm to propagate multiplicity '
+                        'through the graph. For example, if two single-copy segments merge '
+                        'together, the resulting segment will get a multiplicity of two. '
+                        'When no more propagation is possible, additional single copy segments '
+                        'are added. This allows for multiplicity to be correctly assigned to '
+                        'plasmid segments, even when the plasmids are at a higher depth than the '
+                        'chromosome.',
+                        verbosity=2)
+
     # Propagate copy depth as possible using those initial assignments.
-    log.log('Propagating copy depth:', 2)
+    log.log('Propagating multiplicity:', 2)
     copy_depth_table = [['Input', '', 'Output']]
     determine_copy_depth_part_2(graph, settings.COPY_PROPAGATION_TOLERANCE, copy_depth_table)
 
