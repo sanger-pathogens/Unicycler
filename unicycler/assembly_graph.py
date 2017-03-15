@@ -225,7 +225,7 @@ class AssemblyGraph(object):
         depth down to half the median.
         """
         median_depth = self.get_median_read_depth()
-        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2)
+        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2, end='')
         bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
                                                                     median_depth * 0.6)
         bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
@@ -238,7 +238,7 @@ class AssemblyGraph(object):
             single_copy_depth = median_depth / 2.0
         else:
             single_copy_depth = median_depth
-        log.log('Single copy depth:  ' + float_to_str(median_depth, 2), 2)
+        log.log(', single copy depth: ' + float_to_str(median_depth, 2), 2)
         return single_copy_depth
 
     def get_base_count_in_depth_range(self, min_depth, max_depth):
@@ -448,6 +448,9 @@ class AssemblyGraph(object):
             if all_segments_are_one_base(component_segments):
                 segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
+        if segment_nums_to_remove:
+            log.log('\nRemoved homopolymer_loops:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_segments(self, nums_to_remove):
         """
@@ -509,8 +512,8 @@ class AssemblyGraph(object):
             segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
         if segment_nums_to_remove:
-            log.log('Removed small components:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+            log.log('\nRemoved small components:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_small_dead_ends(self, min_dead_end_size):
         """
@@ -529,7 +532,8 @@ class AssemblyGraph(object):
             else:
                 break
         if removed_segments:
-            log.log('\nRemoved small dead ends:  ' + ', '.join(str(x) for x in removed_segments), 2)
+            log.log('\nRemoved small dead ends:', 2)
+            log.log_number_list(removed_segments, 2)
 
     def merge_all_possible(self, single_copy_segments, bridging_mode):
         """
@@ -1376,8 +1380,8 @@ class AssemblyGraph(object):
 
         if removed_segments:
             removed_segments = sorted(list(set(removed_segments)))
-            log.log('Removed segments used in bridges:\n' +
-                    ', '.join(str(x) for x in removed_segments), 2)
+            log.log('Removed segments used in bridges:', 2)
+            log.log_number_list(removed_segments, 2)
 
         # Now that clean up is finished, we no longer want to allow depths below zero.
         for segment in self.segments.values():
@@ -1403,8 +1407,8 @@ class AssemblyGraph(object):
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components with no single copy segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components with no single copy segments:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges):
@@ -1420,8 +1424,8 @@ class AssemblyGraph(object):
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components used in bridges:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components used in bridges:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_unbridging_segments(self, single_copy_seg_nums):
@@ -1436,8 +1440,8 @@ class AssemblyGraph(object):
                     self.search(-seg_num, single_copy_seg_nums)):
                 segment_nums_to_remove.append(seg_num)
         if segment_nums_to_remove:
-            log.log('Removed unbridging segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed unbridging segments:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
         self.remove_segments(segment_nums_to_remove)
 
     def get_usedupness_score(self, seg_num, unbridged_graph):
@@ -2038,7 +2042,8 @@ class AssemblyGraph(object):
 
         self.remove_segments(segs_to_remove)
         if segs_to_remove and not suppress_log:
-            log.log('Removed zero-length segments: ' + ', '.join(str(x) for x in segs_to_remove))
+            log.log('\nRemoved zero-length segments:')
+            log.log_number_list(segs_to_remove)
 
     def merge_small_segments(self, max_merge_size):
         """
@@ -2089,7 +2094,8 @@ class AssemblyGraph(object):
             self.remove_zero_length_segs(suppress_log=True)
 
         if merged_seg_nums:
-            log.log('Merged small segments: ' + ', '.join(str(x) for x in merged_seg_nums))
+            log.log('\nMerged small segments:')
+            log.log_number_list(merged_seg_nums)
 
     def starts_with_dead_end(self, signed_seg_num):
         """

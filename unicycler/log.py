@@ -124,6 +124,21 @@ def log_explanation(text, verbosity=1, print_to_screen=True, write_to_log_file=T
             write_to_log_file=write_to_log_file)
 
 
+def log_number_list(numbers, verbosity=1, print_to_screen=True, write_to_log_file=True,
+                    indent_size=4):
+    """
+    Some lists of numbers are long, so this function makes them wrap nicely when displayed on
+    stdout.
+    """
+    text = ' ' * indent_size + ', '.join(str(x) for x in numbers)
+    if print_to_screen:
+        terminal_width = shutil.get_terminal_size().columns
+        for line in textwrap.wrap(text, width=terminal_width - 1):
+            log(line, verbosity=verbosity, print_to_screen=True, write_to_log_file=False)
+    if write_to_log_file:
+        log(text, verbosity=verbosity, print_to_screen=False, write_to_log_file=True)
+
+
 def int_to_str(num, max_num=0):
     if num is None:
         num_str = 'n/a'

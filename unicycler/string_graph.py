@@ -21,7 +21,7 @@ from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap
     get_right_arrow
 from .assembly_graph import build_reverse_links
 from .cpp_wrappers import overlap_alignment, minimap_align_reads
-from .minimap_alignment import load_minimap_alignments
+from .minimap_alignment import load_minimap_alignments, combine_close_hits
 from . import settings
 from . import log
 
@@ -595,14 +595,8 @@ class StringGraph(object):
         log.log('\n' + 'Isolated contigs: ', verbosity=2)
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]
-
-
-            # TO DO: see if I can chain alignments together here. I.e. if an alignment is broken
-            # into pieces, but they are all in order in the same segment, then we can combine them,
-            # assuming that the length discrepancy is below some threshold. This will catch contigs
-            # that I'm currently missing because they didn't get a single alignment.
-
-
+            alignments = combine_close_hits(alignments, settings.FOUND_CONTIG_MIN_RATIO,
+                                            settings.FOUND_CONTIG_MAX_RATIO)
             found = False
             if alignments:
                 alignments = sorted(alignments, key=lambda x: x.matching_bases)

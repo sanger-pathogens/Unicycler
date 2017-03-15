@@ -196,3 +196,53 @@ def build_start_end_overlap_sets(minimap_alignments):
             if adjusted_seg_end > a.ref_length + min_overlap_amount:
                 end_overlap_reads[seg_num].add(read_name)
     return start_overlap_reads, end_overlap_reads
+
+
+def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
+    """
+    This function takes a list of alignments and it combines alignments if doing so would stay
+    within the allowed ratio range.
+    """
+    # If there's just one alignment, no grouping is necessary.
+    if len(alignments) == 1:
+        return alignments
+
+    # Group alignments by read/ref/strand.
+    alignment_groups = defaultdict(list)
+    for a in alignments:
+        alignment_groups[(a.read_name, a.ref_name, a.read_strand)].append(a)
+
+    # For each potentially mergeable group of hits...
+    merged_alignments = []
+    for grouped_alignments in alignment_groups.values():
+        grouped_alignments = sorted(grouped_alignments, key=lambda x: x.read_start)
+
+        current = grouped_alignments[0]
+        for i in range(1, len(grouped_alignments)):
+            a = grouped_alignments[i]
+            potential_merge_read_range = a.read_end - current.read_start
+            potential_merge_ref_range = a.ref_end - current.ref_start
+            read_ref_ratio = abs(potential_merge_read_range) / abs(potential_merge_ref_range)
+
+            merge_would_extend = (current.read_start < a.read_start and
+                                  current.read_end < a.read_end)
+            ratio_okay = (min_read_ref_ratio <= read_ref_ratio <= max_read_ref_ratio)
+
+            if merge_would_extend and ratio_okay:
+                current.read_end = a.read_end
+                current.ref_end = a.ref_end
+                current.matching_bases += a.matching_bases
+                current.minimiser_count += a.minimiser_count
+                current.read_end_gap = current.read_length - current.read_end
+                current.ref_end_gap = current.ref_length - current.ref_end
+                current.num_bases = max(current.ref_end - current.ref_start,
+                                        current.read_end - current.read_start)
+            # If not, make a new alignment.
+            else:
+                merged_alignments.append(current)
+                current = a
+        merged_alignments.append(current)
+
+    return merged_alignments
+
+
