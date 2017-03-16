@@ -204,7 +204,7 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
     within the allowed ratio range.
     """
     # If there's just one alignment, no grouping is necessary.
-    if len(alignments) == 1:
+    if len(alignments) <= 1:
         return alignments
 
     # Group alignments by read/ref/strand.
@@ -214,14 +214,18 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
 
     # For each potentially mergeable group of hits...
     merged_alignments = []
-    for grouped_alignments in alignment_groups.values():
+    for read_ref_strand, grouped_alignments in alignment_groups.items():
+        _, _, strand = read_ref_strand
         grouped_alignments = sorted(grouped_alignments, key=lambda x: x.read_start)
 
         current = grouped_alignments[0]
         for i in range(1, len(grouped_alignments)):
             a = grouped_alignments[i]
             potential_merge_read_range = a.read_end - current.read_start
-            potential_merge_ref_range = a.ref_end - current.ref_start
+            if strand == '+':
+                potential_merge_ref_range = a.ref_end - current.ref_start
+            else:  # strand == '-'
+                potential_merge_ref_range = current.ref_end - a.ref_start
             read_ref_ratio = abs(potential_merge_read_range) / abs(potential_merge_ref_range)
 
             merge_would_extend = (current.read_start < a.read_start and
@@ -229,8 +233,10 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
             ratio_okay = (min_read_ref_ratio <= read_ref_ratio <= max_read_ref_ratio)
 
             if merge_would_extend and ratio_okay:
-                current.read_end = a.read_end
-                current.ref_end = a.ref_end
+                current.read_start = min(current.read_start, a.read_start)
+                current.read_end = max(current.read_end, a.read_end)
+                current.ref_start = min(current.ref_start, a.ref_start)
+                current.ref_end = max(current.ref_end, a.ref_end)
                 current.matching_bases += a.matching_bases
                 current.minimiser_count += a.minimiser_count
                 current.read_end_gap = current.read_length - current.read_end
