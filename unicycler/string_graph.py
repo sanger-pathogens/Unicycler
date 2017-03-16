@@ -200,6 +200,7 @@ class StringGraph(object):
         Tests whether a given segment leads to a contig via a simple unbranching path. Only tests
         in a single direction.
         """
+        starting_seg_name = signed_seg_name
         current_seg_name = signed_seg_name
         while True:
             following_segments = self.get_following_segments(current_seg_name)
@@ -209,6 +210,8 @@ class StringGraph(object):
             if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
                 return True
             current_seg_name = following_segments[0]
+            if current_seg_name == starting_seg_name:  # Check if we've looped back to the start!
+                return False
 
     def get_bridging_paths(self):
         """
@@ -464,21 +467,30 @@ class StringGraph(object):
             pos_merged_seg_name = merged_seg_name + '+'
 
             preceding_segments = self.get_preceding_segments(path[0])
-            assert len(preceding_segments) <= 1
-            if len(preceding_segments) == 1:
-                preceding_segment = preceding_segments[0]
-                assert preceding_segment.startswith('CONTIG_')
-                self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
-
             following_segments = self.get_following_segments(path[-1])
+            assert len(preceding_segments) <= 1
             assert len(following_segments) <= 1
-            if len(following_segments) == 1:
-                following_segment = following_segments[0]
-                assert following_segment.startswith('CONTIG_')
-                self.add_link(pos_merged_seg_name, following_segment, 0, 0)
 
-            log.log((' ' + get_right_arrow() + ' ').join(path) + ' merged into ' + merged_seg_name,
-                    verbosity=2)
+            # If the path is circular, then we just need to make one new link: start to end.
+            if (len(preceding_segments) == 1 and len(following_segments) == 1 and
+                    preceding_segments[0] == path[-1] and following_segments[0] == path[0]):
+                self.add_link(pos_merged_seg_name, pos_merged_seg_name, 0, 0)
+
+            # If the path isn't circular, then we need to link it up to any neighbours it might
+            # have (which must be contigs).
+            else:
+                if len(preceding_segments) == 1:
+                    preceding_segment = preceding_segments[0]
+                    assert preceding_segment.startswith('CONTIG_')
+                    self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
+                if len(following_segments) == 1:
+                    following_segment = following_segments[0]
+                    assert following_segment.startswith('CONTIG_')
+                    self.add_link(pos_merged_seg_name, following_segment, 0, 0)
+
+            log.log((' ' + get_right_arrow() + ' ').join(path), verbosity=2)
+            log.log('merged into ' + merged_seg_name, verbosity=2)
+            log.log('', verbosity=2)
 
             for path_seg in path:
                 self.remove_segment(get_unsigned_seg_name(path_seg))
@@ -509,6 +521,8 @@ class StringGraph(object):
             current_seg_name = following_segments[0]
             if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
                 break
+            if current_seg_name == starting_seg:  # Check for looping in a circle
+                return simple_path
             simple_path.append(current_seg_name)
 
         # Extend path backward as much as possible.
