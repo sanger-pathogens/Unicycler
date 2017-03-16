@@ -544,17 +544,28 @@ class StringGraph(object):
                     continue
                 fasta.write(segment.fasta_record())
 
-    def save_isolated_contigs_to_file(self, filename, contained_reads_filename):
+    def save_isolated_contigs_to_file(self, filename, contained_reads_filename,
+                                      before_transitive_reduction):
         """
         Saves all graph segments which are contigs but with no connections to a FASTA file.
-        Specifically, it only saves contigs which have been excluded by miniasm because they were
-        contained (a list of such reads is in contained_reads.txt).
+        Specifically, it only saves contigs which:
+          1) have been excluded by miniasm because they were contained (a list of such reads is in
+             contained_reads.txt)
+          2) were connected in the graph before transitive reduction but are no longer (implying
+             that they fell out in some part of the graph simplification process).
         """
         contained_contig_names = set()
         with open(contained_reads_filename, 'rt') as contained_reads_file:
             for line in contained_reads_file:
                 if line.startswith('CONTIG_'):
                     contained_contig_names.add(line.strip())
+
+        has_connections_before_transitive_reduction = set()
+        for seg_name, segment in before_transitive_reduction.segments.items():
+            pos_seg_name = seg_name + '+'
+            if (len(before_transitive_reduction.get_preceding_segments(pos_seg_name)) > 0 or
+                    len(before_transitive_reduction.get_following_segments(pos_seg_name)) > 0):
+                has_connections_before_transitive_reduction.add(segment.short_name)
 
         log.log('Saving ' + filename, 1)
         with open(filename, 'w') as fasta:
@@ -566,21 +577,25 @@ class StringGraph(object):
                 if len(self.get_preceding_segments(pos_seg_name)) > 0 or \
                         len(self.get_following_segments(pos_seg_name)) > 0:
                     continue
-                if segment.short_name in contained_contig_names:
+                if (segment.short_name in contained_contig_names or
+                        segment.short_name in has_connections_before_transitive_reduction):
                     fasta.write(segment.fasta_record())
 
-    def place_isolated_contigs(self, working_dir, threads, contained_reads_filename):
+    def place_isolated_contigs(self, working_dir, threads, before_transitive_reduction,
+                               contained_reads_filename):
         log.log('', verbosity=2)
-        log.log_explanation('Single copy contigs which are contained in long reads (i.e. the read '
-                            'overlaps both ends of the contig) are excluded from the main graph '
-                            'because miniasm filters out contained segments. These will be '
-                            'isolated in the graph with no connections. Unicycler now tries to '
+        log.log_explanation('Some single copy contigs may be isolated in the graph because they '
+                            'were contained in long reads (because miniasm filters out contained '
+                            'sequences). Others may be isolated due to some part of the graph '
+                            'simplification (e.g. lost in bubble popping). Since single copy '
+                            'contigs definitely belong in the assembly, Unicycler now tries to '
                             'find their corresponding sequence in a long read graph segment to '
                             'place these contigs back into the main graph.',
                             verbosity=2)
 
         isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
-        self.save_isolated_contigs_to_file(isolated_contigs_file, contained_reads_filename)
+        self.save_isolated_contigs_to_file(isolated_contigs_file, contained_reads_filename,
+                                           before_transitive_reduction)
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
                                       settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
@@ -604,11 +619,8 @@ class StringGraph(object):
 
                 # If there are multiple possible places to put the contig, we check to see if the
                 # second-best option is too close to the best. If so, we don't place it.
-                if len(alignments) > 1:
-                    second_best_matching_bases = alignments[-2].matching_bases
-                else:
-                    second_best_matching_bases = 0
-                second_to_first = second_best_matching_bases / best.matching_bases
+                second_best_bases = alignments[-2].matching_bases if len(alignments) > 1 else 0
+                second_to_first = second_best_bases / best.matching_bases
 
                 if second_to_first < settings.FOUND_CONTIG_SECOND_BEST_THRESHOLD and \
                         best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
