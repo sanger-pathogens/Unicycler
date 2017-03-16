@@ -659,6 +659,10 @@ class StringGraph(object):
                                key=lambda x: self.segments[x].get_length()):
             seg = self.segments[seg_name]
 
+            # Check to see if this segment is circular, because if so we'll need to create a
+            # circularising link later.
+            circular = self.segment_is_circular(seg_name)
+
             # Make sure none of the alignments overlap on the segment.
             alignments = []
             for a in sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.matching_bases):
@@ -728,12 +732,14 @@ class StringGraph(object):
             log.log('New segments: ' + ', '.join(signed_piece_names), verbosity=2)
 
             # Create the segments and link them together.
+            first_piece, last_piece = None, None
             for i, name in enumerate(piece_names):
                 seq = piece_seqs[i]
                 sign = '-' if piece_reverse[i] else '+'
                 self.segments[name] = StringGraphSegment(name, seq, qual=seg.qual)
 
-                if i == 0:  # first piece
+                if i == 0:
+                    first_piece = name + sign
                     if preceding_segment is not None:
                         self.add_link(preceding_segment, name + sign, 0, 0)
                 else:
@@ -742,9 +748,13 @@ class StringGraph(object):
                     self.add_link(prev_name + prev_sign, name + sign, 0, 0)
 
                 if i == len(piece_names) - 1 and following_segment is not None:  # last piece
-                        self.add_link(name + sign, following_segment, 0, 0)
+                    last_piece = name + sign
+                    self.add_link(name + sign, following_segment, 0, 0)
 
-            # Delete the old read segment
+            if circular:
+                self.add_link(last_piece, first_piece, 0, 0)
+
+            # Delete the old read segment which we've replaced.
             self.remove_segment(seg_name)
 
             log.log('', verbosity=2)
@@ -811,6 +821,19 @@ class StringGraph(object):
 
             # Miniasm uses 1-based inclusive ranges
             assert seg.forward_sequence == full_seq[seg.start_pos-1:seg.end_pos]
+
+    def segment_is_circular(self, seg_name):
+        """
+        Returns whether or not the segment has a circularising link.
+        """
+        pos_seg_name = seg_name + '+'
+        preceding_segments = self.get_preceding_segments(pos_seg_name)
+        following_segments = self.get_following_segments(pos_seg_name)
+        if len(preceding_segments) != 1 or len(following_segments) != 1:
+            return False
+        preceding_seg_name = preceding_segments[0]
+        following_seg_name = following_segments[0]
+        return preceding_seg_name == pos_seg_name and following_seg_name == pos_seg_name
 
 
 class StringGraphSegment(object):
