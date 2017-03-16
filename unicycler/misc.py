@@ -29,6 +29,19 @@ from . import settings
 from . import log
 
 
+REV_COMP_DICT = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G',
+                 'a': 't', 't': 'a', 'g': 'c', 'c': 'g',
+                 'R': 'Y', 'Y': 'R', 'S': 'S', 'W': 'W',
+                 'K': 'M', 'M': 'K', 'B': 'V', 'V': 'B',
+                 'D': 'H', 'H': 'D', 'N': 'N',
+                 'r': 'y', 'y': 'r', 's': 's', 'w': 'w',
+                 'k': 'm', 'm': 'k', 'b': 'v', 'v': 'b',
+                 'd': 'h', 'h': 'd', 'n': 'n',
+                 '.': '.', '-': '-', '?': '?'}
+
+RANDOM_SEQ_DICT = {0: 'A', 1: 'C', 2: 'G', 3: 'T'}
+
+
 def float_to_str(num, decimals, max_num=0):
     """
     Converts a number to a string. Will add left padding based on the max value to ensure numbers
@@ -204,50 +217,24 @@ def complement_base(base):
     """
     Given a DNA base, this returns the complement.
     """
-    if base == 'A':
-        return 'T'
-    if base == 'T':
-        return 'A'
-    if base == 'G':
-        return 'C'
-    if base == 'C':
-        return 'G'
-    if base == 'a':
-        return 't'
-    if base == 't':
-        return 'a'
-    if base == 'g':
-        return 'c'
-    if base == 'c':
-        return 'g'
-    forward = 'RYSWKMryswkmBDHVbdhvNn.-?'
-    reverse = 'YRSWMKyrswmkVHDBvhdbNn.-?N'
-    return reverse[forward.find(base)]
+    try:
+        return REV_COMP_DICT[base]
+    except KeyError:
+        return 'N'
 
 
 def get_random_base():
     """
     Returns a random base with 25% probability of each.
     """
-    rand_int = random.randint(0, 3)
-    if rand_int == 0:
-        return 'A'
-    elif rand_int == 1:
-        return 'C'
-    elif rand_int == 2:
-        return 'G'
-    elif rand_int == 3:
-        return 'T'
+    return RANDOM_SEQ_DICT[random.randint(0, 3)]
 
 
 def get_random_sequence(length):
     """
     Returns a random sequence of the given length.
     """
-    sequence = ''
-    for _ in range(length):
-        sequence += get_random_base()
-    return sequence
+    return ''.join([get_random_base() for _ in range(length)])
 
 
 def get_percentile(unsorted_list, percentile):
