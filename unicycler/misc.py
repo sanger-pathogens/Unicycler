@@ -210,7 +210,7 @@ def reverse_complement(seq):
     """
     Given a DNA sequences, this function returns the reverse complement sequence.
     """
-    return ''.join([complement_base(seq[i]) for i in range(len(seq) - 1, -1, -1)])
+    return ''.join([complement_base(x) for x in seq][::-1])
 
 
 def complement_base(base):
