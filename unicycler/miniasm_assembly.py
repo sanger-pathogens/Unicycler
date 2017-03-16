@@ -132,7 +132,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # none of the graph manipulations screwed up the sequence ranges.
     string_graph.check_segment_names_and_ranges(read_dict, graph)
 
-    # REMOVE NON-BRIDGING PATHS
+    # REMOVE NON-BRIDGING PATHS?
 
     # POLISH EACH BRIDGE SEQUENCE.
     # * For this we use the set of long reads which overlap the two single copy contigs on the

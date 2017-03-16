@@ -612,7 +612,6 @@ class StringGraph(object):
             alignments = contig_to_read_alignments[contig_name]
             alignments = combine_close_hits(alignments, settings.FOUND_CONTIG_MIN_RATIO,
                                             settings.FOUND_CONTIG_MAX_RATIO)
-            found = False
             if alignments:
                 alignments = sorted(alignments, key=lambda x: x.matching_bases)
                 best = alignments[-1]
@@ -622,13 +621,15 @@ class StringGraph(object):
                 second_best_bases = alignments[-2].matching_bases if len(alignments) > 1 else 0
                 second_to_first = second_best_bases / best.matching_bases
 
-                if second_to_first < settings.FOUND_CONTIG_SECOND_BEST_THRESHOLD and \
-                        best.fraction_read_aligned() >= settings.MIN_FOUND_CONTIG_FRACTION:
-                    contig_alignments_by_segment[best.ref_name].append(best)
-                    found = True
-                    log.log('  ' + contig_name + ': ' + green('found in ' + best.ref_name))
-            if not found:
+                if best.fraction_read_aligned() < settings.MIN_FOUND_CONTIG_FRACTION:
                     log.log('  ' + contig_name + ': ' + red('not found'))
+                elif second_to_first >= settings.FOUND_CONTIG_SECOND_BEST_THRESHOLD:
+                    log.log('  ' + contig_name + ': ' + red('found in multiple places'))
+                else:
+                    contig_alignments_by_segment[best.ref_name].append(best)
+                    log.log('  ' + contig_name + ': ' + green('found in ' + best.ref_name))
+            else:
+                log.log('  ' + contig_name + ': ' + red('not found'))
 
         log.log('', verbosity=2)
         if len(contig_alignments_by_segment) == 0:
