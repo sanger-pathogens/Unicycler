@@ -128,7 +128,12 @@ def load_long_reads(filename):
     if file_type == 'FASTQ':
         with open_func(filename, 'rt') as fastq:
             for line in fastq:
-                original_name = line.strip()[1:].split()[0]
+                stripped_line = line.strip()
+                if len(stripped_line) == 0:
+                    continue
+                if not stripped_line.startswith('@'):
+                    continue
+                original_name = stripped_line[1:].split()[0]
                 sequence = next(fastq).strip()
                 _ = next(fastq)
                 qualities = next(fastq).strip()

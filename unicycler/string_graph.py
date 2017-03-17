@@ -625,7 +625,7 @@ class StringGraph(object):
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]
             alignments = combine_close_hits(alignments, settings.FOUND_CONTIG_MIN_RATIO,
-                                            settings.FOUND_CONTIG_MAX_RATIO)
+                                            settings.FOUND_CONTIG_MAX_RATIO, self)
             if alignments:
                 alignments = sorted(alignments, key=lambda x: x.matching_bases)
                 best = alignments[-1]
@@ -692,6 +692,12 @@ class StringGraph(object):
             current_pos = 0
             for i, a in enumerate(alignments):
 
+                # TO DO: check to see if the first contig begins at position 0 of the read segment.
+                #        If so, we can skip this first piece.
+
+                # TO DO: check to see if the last alignment loops around in a circle (as indicated
+                #        by a negative ref_end_gap. If so, skip this first piece.
+
                 # First get the piece of the read segment.
                 piece_start_pos = seg.start_pos + current_pos
                 piece_end_pos = seg.start_pos + a.ref_start - 1
@@ -721,6 +727,9 @@ class StringGraph(object):
                 piece_reverse.append(reverse)
 
                 current_pos = a.ref_end
+
+            # TO DO: check to see if the last contig goes to the end of the read segment.
+            #        If so, we can skip this last piece.
 
             piece_start_pos = seg.start_pos + current_pos
             piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(seg.end_pos)

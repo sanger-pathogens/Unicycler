@@ -198,7 +198,7 @@ def build_start_end_overlap_sets(minimap_alignments):
     return start_overlap_reads, end_overlap_reads
 
 
-def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
+def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio, string_graph):
     """
     This function takes a list of alignments and it combines alignments if doing so would stay
     within the allowed ratio range.
@@ -215,28 +215,44 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
     # For each potentially mergeable group of hits...
     merged_alignments = []
     for read_ref_strand, grouped_alignments in alignment_groups.items():
-        _, _, strand = read_ref_strand
+        _, seg_name, strand = read_ref_strand
         grouped_alignments = sorted(grouped_alignments, key=lambda x: x.read_start)
+        circular = string_graph.segment_is_circular(seg_name)
 
         current = grouped_alignments[0]
         for i in range(1, len(grouped_alignments)):
             a = grouped_alignments[i]
+            a_ref_start = a.ref_start
+            a_ref_end = a.ref_end
+
+            # 'read' in this context is the contig were are trying to place.
             potential_merge_read_range = a.read_end - current.read_start
             if strand == '+':
-                potential_merge_ref_range = a.ref_end - current.ref_start
+                potential_merge_ref_range = a_ref_end - current.ref_start
             else:  # strand == '-'
-                potential_merge_ref_range = current.ref_end - a.ref_start
-            read_ref_ratio = abs(potential_merge_read_range) / abs(potential_merge_ref_range)
+                potential_merge_ref_range = current.ref_end - a_ref_start
+
+            # If the segment is circular, then we need to allow the merging to loop around the link.
+            if circular and potential_merge_ref_range < 0:
+                if strand == '+':
+                    a_ref_start += a.ref_length
+                    a_ref_end += a.ref_length
+                    potential_merge_ref_range = a_ref_end - current.ref_start
+                else:  # strand == '-'
+                    a_ref_start -= a.ref_length
+                    a_ref_end -= a.ref_length
+                    potential_merge_ref_range = current.ref_end - a_ref_start
 
             merge_would_extend = (current.read_start < a.read_start and
                                   current.read_end < a.read_end)
+            read_ref_ratio = abs(potential_merge_read_range) / abs(potential_merge_ref_range)
             ratio_okay = (min_read_ref_ratio <= read_ref_ratio <= max_read_ref_ratio)
 
             if merge_would_extend and ratio_okay:
                 current.read_start = min(current.read_start, a.read_start)
                 current.read_end = max(current.read_end, a.read_end)
-                current.ref_start = min(current.ref_start, a.ref_start)
-                current.ref_end = max(current.ref_end, a.ref_end)
+                current.ref_start = min(current.ref_start, a_ref_start)
+                current.ref_end = max(current.ref_end, a_ref_end)
                 current.matching_bases += a.matching_bases
                 current.minimiser_count += a.minimiser_count
                 current.read_end_gap = current.read_length - current.read_end
