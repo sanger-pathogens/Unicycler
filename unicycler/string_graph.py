@@ -692,20 +692,22 @@ class StringGraph(object):
             current_pos = 0
             for i, a in enumerate(alignments):
 
-                # TO DO: check to see if the first contig begins at position 0 of the read segment.
-                #        If so, we can skip this first piece.
-
-                # TO DO: check to see if the last alignment loops around in a circle (as indicated
-                #        by a negative ref_end_gap. If so, skip this first piece.
+                # TO DO: if this segment is circular, then check to see if any alignments loop
+                #        around the link (as indicated by a negative ref_start or a negative
+                #        ref_end_gap). If so, make sure there is only one (i.e. we don't have two
+                #        overlapping alignments that loop, one start and one end) and deal with it
+                #        accordingly.
 
                 # First get the piece of the read segment.
                 piece_start_pos = seg.start_pos + current_pos
                 piece_end_pos = seg.start_pos + a.ref_start - 1
                 piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(piece_end_pos)
-                piece_names.append(piece_name)
-                signed_piece_names.append(piece_name + '+')
-                piece_seqs.append(full_seg_seq[current_pos:a.ref_start])
-                piece_reverse.append(False)
+                piece_seq = full_seg_seq[current_pos:a.ref_start]
+                if len(piece_seq) > 0:
+                    piece_names.append(piece_name)
+                    signed_piece_names.append(piece_name + '+')
+                    piece_seqs.append(piece_seq)
+                    piece_reverse.append(False)
 
                 # Now put in the contig segment.
                 signed_full_seq_name = a.read_name + a.read_strand
@@ -728,15 +730,15 @@ class StringGraph(object):
 
                 current_pos = a.ref_end
 
-            # TO DO: check to see if the last contig goes to the end of the read segment.
-            #        If so, we can skip this last piece.
-
+            # Make a segment for the read segment piece after the last contig.
             piece_start_pos = seg.start_pos + current_pos
             piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(seg.end_pos)
-            piece_names.append(piece_name)
-            signed_piece_names.append(piece_name + '+')
-            piece_seqs.append(full_seg_seq[current_pos:])
-            piece_reverse.append(False)
+            piece_seq = full_seg_seq[current_pos:]
+            if len(piece_seq) > 0:
+                piece_names.append(piece_name)
+                signed_piece_names.append(piece_name + '+')
+                piece_seqs.append(piece_seq)
+                piece_reverse.append(False)
 
             log.log('New segments: ' + ', '.join(signed_piece_names), verbosity=2)
 
