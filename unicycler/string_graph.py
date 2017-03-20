@@ -168,7 +168,7 @@ class StringGraph(object):
 
         # Delete all links in the set in each possible way.
         deleted_links = []
-        for link in sorted(list(links_to_delete)):
+        for link in sorted(links_to_delete):
             if link in self.links:
                 deleted_links.append(link)
                 seg_1, seg_2 = link
@@ -220,7 +220,8 @@ class StringGraph(object):
         """
         paths = []
         used_segments = set()
-        for seg_name, segment in self.segments.items():
+        for seg_name in sorted(self.segments.keys()):
+            segment = self.segments[seg_name]
             if not segment.contig and seg_name not in used_segments and \
                     self.segment_leads_directly_to_contig_in_both_directions(seg_name):
                 starting_seg = seg_name + '+'
@@ -255,8 +256,7 @@ class StringGraph(object):
                             'with the highest average qscore.',
                             verbosity=2)
 
-        paths = self.get_bridging_paths()
-        for path in paths:
+        for path in sorted(self.get_bridging_paths()):
             assert len(path) >= 3
             contig_1 = path[0]
             contig_2 = path[-1]
@@ -558,8 +558,7 @@ class StringGraph(object):
                     continue
                 fasta.write(segment.fasta_record())
 
-    def save_isolated_contigs_to_file(self, filename, contained_reads_filename,
-                                      before_transitive_reduction):
+    def save_isolated_contigs_to_file(self, filename):
         """
         Saves all graph segments which are contigs but with no connections to a FASTA file.
         Specifically, it only saves contigs which:
@@ -568,20 +567,8 @@ class StringGraph(object):
           2) were connected in the graph before transitive reduction but are no longer (implying
              that they fell out in some part of the graph simplification process).
         """
-        contained_contig_names = set()
-        with open(contained_reads_filename, 'rt') as contained_reads_file:
-            for line in contained_reads_file:
-                if line.startswith('CONTIG_'):
-                    contained_contig_names.add(line.strip())
-
-        has_connections_before_transitive_reduction = set()
-        for seg_name, segment in before_transitive_reduction.segments.items():
-            pos_seg_name = seg_name + '+'
-            if (len(before_transitive_reduction.get_preceding_segments(pos_seg_name)) > 0 or
-                    len(before_transitive_reduction.get_following_segments(pos_seg_name)) > 0):
-                has_connections_before_transitive_reduction.add(segment.short_name)
-
         log.log('Saving ' + filename, 1)
+        contig_names = []
         with open(filename, 'w') as fasta:
             for segment in sorted(self.segments.values(), reverse=True,
                                   key=lambda x: x.get_length()):
@@ -591,25 +578,21 @@ class StringGraph(object):
                 if len(self.get_preceding_segments(pos_seg_name)) > 0 or \
                         len(self.get_following_segments(pos_seg_name)) > 0:
                     continue
-                if (segment.short_name in contained_contig_names or
-                        segment.short_name in has_connections_before_transitive_reduction):
-                    fasta.write(segment.fasta_record())
+                fasta.write(segment.fasta_record())
+                contig_names.append(segment.full_name)
+        return sorted(contig_names, reverse=True, key=lambda x: self.segments[x].get_length())
 
-    def place_isolated_contigs(self, working_dir, threads, before_transitive_reduction,
-                               contained_reads_filename):
+    def place_isolated_contigs(self, working_dir, threads):
         log.log('', verbosity=2)
-        log.log_explanation('Some single copy contigs may be isolated in the graph because they '
-                            'were contained in long reads (because miniasm filters out contained '
-                            'sequences). Others may be isolated due to some part of the graph '
-                            'simplification (e.g. lost in bubble popping). Since single copy '
+        log.log_explanation('Some single copy contigs may be isolated due to some part of the '
+                            'graph simplification (e.g. bubble popping). Since single copy '
                             'contigs definitely belong in the assembly, Unicycler now tries to '
                             'find their corresponding sequence in a long read graph segment to '
                             'place these contigs back into the main graph.',
                             verbosity=2)
 
         isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
-        self.save_isolated_contigs_to_file(isolated_contigs_file, contained_reads_filename,
-                                           before_transitive_reduction)
+        isolated_contig_names = self.save_isolated_contigs_to_file(isolated_contigs_file)
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
                                       settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
@@ -619,8 +602,6 @@ class StringGraph(object):
             load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
                                                         threads, 3, 'find contigs'))
         contig_alignments_by_segment = defaultdict(list)
-        isolated_contig_names = sorted(contig_to_read_alignments.keys(), reverse=True,
-                                       key=lambda x: self.segments[x].get_length())
         if not isolated_contig_names:
             return
         log.log('\n' + 'Isolated contigs: ', verbosity=2)

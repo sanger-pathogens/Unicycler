@@ -87,7 +87,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # The miniasm assembly may be done multiple times. It reports whether a contig was contained in
     # a read, and if so, we will split the read and try again.
     read_break_points = defaultdict(set)
-    while True:
+    for _ in range(20):  # limit to 20 iterations to prevent unforeseen infinite loop
         mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
                                                       read_dict, graph, read_break_points)
 
@@ -103,10 +103,6 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                     mappings.write('\n')
 
         # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
-        # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The
-        #        miniasm default is 3, so perhaps use 3 if the depth is high enough, 2 if it's
-        #        lower and 1 if it's very low. I'm not yet sure what the risks are (if any) with
-        #        using a min_ovlp of 1 when the depth is high.
         log.log('Assembling reads with miniasm... ', end='')
         min_depth = 3
         miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir, min_depth)
@@ -165,16 +161,13 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # Some single copy contigs might be isolated from the main part of the graph (due to contained
     # read filtered or some graph simplification step, like bubble popping). We now need to place
     # them back in by aligning to the non-contig graph segments.
-    string_graph.place_isolated_contigs(miniasm_dir, threads, before_transitive_reduction,
-                                        os.path.join(miniasm_dir, 'contained_reads.txt'))
+    string_graph.place_isolated_contigs(miniasm_dir, threads)
     if keep >= 3:
         string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
 
     # TO DO: I can probably remove this line later, for efficiency. It's just a sanity check that
     # none of the graph manipulations screwed up the sequence ranges.
     string_graph.check_segment_names_and_ranges(read_dict, graph)
-
-    # REMOVE NON-BRIDGING PATHS?
 
     # POLISH EACH BRIDGE SEQUENCE.
     # * For this we use the set of long reads which overlap the two single copy contigs on the
@@ -250,7 +243,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
             if read_name not in read_break_points:
                 breaks = [0, len(read.sequence)]
             else:
-                breaks = [0] + sorted(list(read_break_points[read_name])) + [len(read.sequence)]
+                breaks = [0] + sorted(read_break_points[read_name]) + [len(read.sequence)]
             read_ranges = [(breaks[i-1], breaks[i]) for i in range(1, len(breaks))]
 
             for i, read_range in enumerate(read_ranges):
