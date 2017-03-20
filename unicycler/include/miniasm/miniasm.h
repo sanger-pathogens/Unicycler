@@ -31,6 +31,8 @@ typedef struct {
 } ma_opt_t;
 
 typedef struct {
+    // qns stores the query start in the least significant 32 bits: (int32_t)h->qns)
+    // and the query number in the most significant 32 bits: h->qns>>32
 	uint64_t qns;
 	uint32_t qe, tn, ts, te;
 	uint32_t ml:31, rev:1;

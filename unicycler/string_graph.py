@@ -820,18 +820,17 @@ class StringGraph(object):
                 assert range_in_name[1] == seg.end_pos
                 assert seg.short_name == seg_name.rsplit(':', 1)[0]
 
-            # We can't really check merged reads, so skip them.
-            if seg_name.startswith('merged_reads_'):
-                continue
-
             if seg_name.startswith('CONTIG_'):
                 seg_num = int(seg_name[7:].split(':')[0])
                 full_seq = assembly_graph.seq_from_signed_seg_num(seg_num)
-            else:  # the segment is a long read
+            elif seg.short_name in read_dict:  # the segment is a long read
                 full_seq = read_dict[seg.short_name].sequence
+            else:  # We can't check split or merged reads, so they are skipped.
+                full_seq = None
 
-            # Miniasm uses 1-based inclusive ranges
-            assert seg.forward_sequence == full_seq[seg.start_pos-1:seg.end_pos]
+            if full_seq is not None:
+                # Miniasm uses 1-based inclusive ranges
+                assert seg.forward_sequence == full_seq[seg.start_pos-1:seg.end_pos]
 
     def segment_is_circular(self, seg_name):
         """

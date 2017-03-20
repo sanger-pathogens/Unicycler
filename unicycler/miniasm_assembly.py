@@ -17,6 +17,7 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import statistics
+from collections import defaultdict
 from .misc import green, red
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
@@ -59,7 +60,12 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                         'sufficiently long single-copy short read contigs and actual long reads '
                         'which overlap two or more of these contigs. It then assembles them with '
                         'a modified version of miniasm which gives precedence to the contigs over '
-                        'the real long reads.')
+                        'the real long reads.', extra_empty_lines_after=0)
+    log.log_explanation('Miniasm removes sequences which are contained in another sequence, and '
+                        'this can result in short read contigs being lost in the string graph '
+                        '(particularly common if the long reads are very long). If this happens, '
+                        'the reads will be split in where they contain a contig and Unicycler '
+                        'will repeat the miniasm assembly until no contigs are lost.')
 
     miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
@@ -74,25 +80,57 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
 
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
-
-    mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
-                                                  read_dict, graph)
-
-    # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
-    minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
-                                                 threads, 0, 'read vs read')
-    with open(mappings_filename, 'wt') as mappings:
-        mappings.write(minimap_alignments_str)
-
-    # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
-    # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The miniasm
-    #        default is 3, so perhaps use 3 if the depth is high enough, 2 if it's lower and 1 if
-    #        it's very low. I'm not yet sure what the risks are (if any) with using a min_ovlp of
-    #        1 when the depth is high.
-    log.log('Assembling reads with miniasm... ', end='')
-    miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir)
     before_transitive_reduction_filename = os.path.join(miniasm_dir, '03_raw_string_graph.gfa')
     string_graph_filename = os.path.join(miniasm_dir, '10_final_string_graph.gfa')
+    miniasm_output_filename = os.path.join(miniasm_dir, 'miniasm.out')
+
+    # The miniasm assembly may be done multiple times. It reports whether a contig was contained in
+    # a read, and if so, we will split the read and try again.
+    read_break_points = defaultdict(set)
+    while True:
+        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
+                                                      read_dict, graph, read_break_points)
+
+        # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
+        minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
+                                                     threads, 0, 'read vs read')
+        with open(mappings_filename, 'wt') as mappings:
+            mappings.write(minimap_alignments_str)
+
+        # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
+        # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The
+        #        miniasm default is 3, so perhaps use 3 if the depth is high enough, 2 if it's
+        #        lower and 1 if it's very low. I'm not yet sure what the risks are (if any) with
+        #        using a min_ovlp of 1 when the depth is high.
+        log.log('Assembling reads with miniasm... ', end='')
+        miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir)
+
+        contained_contig_count = 0
+        with open(miniasm_output_filename, 'rt') as miniasm_out:
+            for line in miniasm_out:
+                line = line.strip()
+                if line.startswith('CONTAINED CONTIG'):
+                    line_parts = line.split('\t')
+                    read_name = line_parts[2]
+                    read_offset = 0
+                    if '_range_' in read_name:
+                        name_parts = read_name.split('_range_')
+                        assert len(name_parts) == 2
+                        read_name = name_parts[0]
+                        read_offset = int(name_parts[1].split('-')[0])
+                    read_start, read_end = int(line_parts[3]), int(line_parts[4])
+                    read_break_points[read_name].add(read_offset + ((read_start + read_end) // 2))
+                    contained_contig_count += 1
+
+        # If the assembly finished without any contained contigs, then we're good to continue!
+        if contained_contig_count == 0:
+            break
+        else:
+            log.log(red('contigs lost in miniasm assembly'))
+            log.log('Breaking reads and trying again\n')
+
+            print(read_break_points)  # TEMP
+
     if not (os.path.isfile(string_graph_filename) and
             os.path.isfile(before_transitive_reduction_filename)):
         log.log(red('failed'))
@@ -101,8 +139,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     before_transitive_reduction = StringGraph(before_transitive_reduction_filename, mean_read_quals)
 
     log.log(green('success'))
-    log.log('  ' + str(len(string_graph.segments)) + ' segments', verbosity=2)
-    log.log('  ' + str(len(string_graph.links) // 2) + ' links', verbosity=2)
+    log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
+            str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
     string_graph.remove_branching_paths()
     if keep >= 3:
@@ -189,7 +227,7 @@ def get_miniasm_assembly_reads(minimap_alignments, graph):
     return sorted(miniasm_assembly_reads)
 
 
-def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph):
+def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, read_break_points):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
     mean_read_quals = {}
@@ -212,18 +250,40 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph):
                 str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer')
 
         # Now save the actual long reads.
+        piece_count = 0
         for read_name in read_names:
             read = read_dict[read_name]
-            fastq.write('@')
-            fastq.write(read_name)
-            fastq.write('\n')
-            fastq.write(read.sequence)
-            fastq.write('\n+\n')
-            fastq.write(read.qualities)
-            fastq.write('\n')
-            mean_read_quals[read_name] = statistics.mean(ord(x)-33 for x in read.qualities)
+
+            if read_name not in read_break_points:
+                breaks = [0, len(read.sequence)]
+            else:
+                breaks = [0] + sorted(list(read_break_points[read_name])) + [len(read.sequence)]
+            read_ranges = [(breaks[i-1], breaks[i]) for i in range(1, len(breaks))]
+
+            for i, read_range in enumerate(read_ranges):
+                s, e = read_range
+                if len(read_ranges) == 1:
+                    read_range_name = read_name
+                else:
+                    read_range_name = read_name + '_range_' + str(s) + '-' + str(e)
+                seq = read.sequence[s:e]
+                quals = read.qualities[s:e]
+                fastq.write('@')
+                fastq.write(read_range_name)
+                fastq.write('\n')
+                fastq.write(seq)
+                fastq.write('\n+\n')
+                fastq.write(quals)
+                fastq.write('\n')
+                mean_read_quals[read_range_name] = statistics.mean(ord(x)-33 for x in quals)
+                piece_count += 1
+
+        break_string = ''
+        if piece_count > len(read_names):
+            break_string = ' broken into ' + str(piece_count) + ' pieces'
+
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
-                str(len(read_dict)) + ' total long reads)')
+                str(len(read_dict)) + ' total long reads)' + break_string)
     log.log('')
     return mean_read_quals
 

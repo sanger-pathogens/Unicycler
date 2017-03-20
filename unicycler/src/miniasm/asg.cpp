@@ -195,7 +195,6 @@ int asg_arc_del_trans(asg_t *g, int fuzz)
         }
     }
     free(mark);
-//    fprintf(stderr, "[M::%s] transitively reduced %d arcs\n", __func__, n_reduced);
     std::cerr << "[M::" << __func__ << "] transitively reduced " << n_reduced << " arcs\n";
     if (n_reduced) {
         asg_cleanup(g);
