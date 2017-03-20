@@ -17,7 +17,7 @@
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
 extern "C" {
 
-    void miniasmAssembly(char * reads, char * overlaps, char * outputDir);
+    void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp);
 }
 
 #endif // MINIASM_ASSEMBLY_H

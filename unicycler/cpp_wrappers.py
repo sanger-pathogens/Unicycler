@@ -254,12 +254,13 @@ def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level
 # This function conducts a miniasm assembly
 C_LIB.miniasmAssembly.argtypes = [c_char_p,  # Reads FASTQ filename
                                   c_char_p,  # Overlaps PAF filename
-                                  c_char_p]  # Output GFA filename
+                                  c_char_p,  # Output GFA filename
+                                  c_int]     # Min depth
 C_LIB.miniasmAssembly.restype = None         # No return value (function creates a GFA)
 
-def miniasm_assembly(reads_fastq, overlaps_paf, output_gfa):
+def miniasm_assembly(reads_fastq, overlaps_paf, output_gfa, min_depth):
     C_LIB.miniasmAssembly(reads_fastq.encode('utf-8'), overlaps_paf.encode('utf-8'),
-                          output_gfa.encode('utf-8'))
+                          output_gfa.encode('utf-8'), min_depth)
 
 
 

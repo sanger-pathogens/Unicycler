@@ -621,6 +621,8 @@ class StringGraph(object):
         contig_alignments_by_segment = defaultdict(list)
         isolated_contig_names = sorted(contig_to_read_alignments.keys(), reverse=True,
                                        key=lambda x: self.segments[x].get_length())
+        if not isolated_contig_names:
+            return
         log.log('\n' + 'Isolated contigs: ', verbosity=2)
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]

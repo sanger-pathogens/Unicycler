@@ -18,7 +18,7 @@ import os
 import shutil
 import statistics
 from collections import defaultdict
-from .misc import green, red
+from .misc import green, red, line_iterator
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph
@@ -52,8 +52,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                         'produces an assembly, Unicycler will extract bridges between '
                         'contigs, improve them with Racon and use them to simplify the assembly '
                         'graph. This method requires decent coverage of long reads and therefore '
-                        'may not be fruitful if long reads are sparse. However, this method does '
-                        'not rely on the short read assembly graph having good connectivity and is '
+                        'may not be fruitful if long reads are sparse. However, it does not '
+                        'rely on the short read assembly graph having good connectivity and is '
                         'able to bridge an assembly graph even when it contains many dead ends.',
                         extra_empty_lines_after=0)
     log.log_explanation('Unicycler uses two types of "reads" as assembly input: '
@@ -76,6 +76,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
                                                             miniasm_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
+    assembly_read_names = get_miniasm_assembly_reads(minimap_alignments)
 
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
@@ -87,14 +88,19 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # a read, and if so, we will split the read and try again.
     read_break_points = defaultdict(set)
     while True:
-        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, read_dict, graph,
-                                                      read_break_points)
+        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
+                                                      read_dict, graph, read_break_points)
 
-        # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
+        # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
+        # alignments are excluded (because single-copy contigs, by definition, should not overlap
+        # each other).
         minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
                                                      threads, 0, 'read vs read')
         with open(mappings_filename, 'wt') as mappings:
-            mappings.write(minimap_alignments_str)
+            for minimap_alignment_str in line_iterator(minimap_alignments_str):
+                if minimap_alignment_str.count('CONTIG_') < 2:
+                    mappings.write(minimap_alignment_str)
+                    mappings.write('\n')
 
         # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
         # TO DO: intelligently set the min_ovlp setting (currently 1) based on the depth? The
@@ -102,14 +108,14 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         #        lower and 1 if it's very low. I'm not yet sure what the risks are (if any) with
         #        using a min_ovlp of 1 when the depth is high.
         log.log('Assembling reads with miniasm... ', end='')
-        miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir)
+        min_depth = 3
+        miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir, min_depth)
 
         contained_contig_count = 0
         with open(miniasm_output_filename, 'rt') as miniasm_out:
             for line in miniasm_out:
                 line = line.strip()
                 if line.startswith('CONTAINED CONTIG'):
-                    print(line)  # TEMP
                     line_parts = line.split('\t')
                     read_name = line_parts[2]
                     read_offset = 0
@@ -121,8 +127,6 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                     read_start, read_end = int(line_parts[3]), int(line_parts[4])
                     read_break_points[read_name].add(read_offset + ((read_start + read_end) // 2))
                     contained_contig_count += 1
-
-        print(sorted(list(read_break_points)))  # TEMP
 
         # If the assembly finished without any contained contigs, then we're good to continue!
         if contained_contig_count == 0:
@@ -206,7 +210,18 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         shutil.rmtree(miniasm_dir)
 
 
-def save_assembly_reads_to_file(read_filename, read_dict, graph, read_break_points):
+def get_miniasm_assembly_reads(minimap_alignments):
+    """
+    Returns a list of read names which overlap at least one single copy graph segment.
+    """
+    miniasm_assembly_reads = []
+    for read_name, alignments in minimap_alignments.items():
+        if any(a.overlaps_reference() for a in alignments):
+            miniasm_assembly_reads.append(read_name)
+    return sorted(miniasm_assembly_reads)
+
+
+def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, read_break_points):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
     mean_read_quals = {}
@@ -216,8 +231,7 @@ def save_assembly_reads_to_file(read_filename, read_dict, graph, read_break_poin
         # reflect our confidence in them.
         seg_count = 0
         for seg in sorted(graph.segments.values(), key=lambda x: x.number):
-            min_length = settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING
-            if segment_suitable_for_miniasm_assembly(graph, seg, min_length):
+            if segment_suitable_for_miniasm_assembly(graph, seg):
                 fastq.write('@CONTIG_')
                 fastq.write(str(seg.number))
                 fastq.write('\n')
@@ -231,7 +245,8 @@ def save_assembly_reads_to_file(read_filename, read_dict, graph, read_break_poin
 
         # Now save the actual long reads.
         piece_count = 0
-        for read_name, read in read_dict.items():
+        for read_name in read_names:
+            read = read_dict[read_name]
             if read_name not in read_break_points:
                 breaks = [0, len(read.sequence)]
             else:
@@ -261,13 +276,13 @@ def save_assembly_reads_to_file(read_filename, read_dict, graph, read_break_poin
         break_string = ''
         if piece_count > len(read_dict):
             break_string = ' broken into ' + str(piece_count) + ' pieces'
-
-        log.log('  ' + str(len(read_dict)) + ' long reads' + break_string)
+        log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
+                str(len(read_dict)) + ' total long reads)' + break_string)
     log.log('')
     return mean_read_quals
 
 
-def segment_suitable_for_miniasm_assembly(graph, segment, min_length):
+def segment_suitable_for_miniasm_assembly(graph, segment):
     """
     Returns True if the segment is:
       1) single copy
@@ -276,6 +291,6 @@ def segment_suitable_for_miniasm_assembly(graph, segment, min_length):
     """
     if graph.get_copy_number(segment) != 1:
         return False
-    if segment.get_length() < min_length:
+    if segment.get_length() < settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
         return False
     return not graph.is_component_complete([segment.number])

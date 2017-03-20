@@ -370,7 +370,7 @@ static void asg_bub_backtrack(asg_t *g, uint32_t v0, buf_t *b)
     } while (v != v0);
 }
 
-// pop bubbles from vertex v0; the graph MJUST BE symmetric: if u->v present, v'->u' must be present as well
+// pop bubbles from vertex v0; the graph MUST BE symmetric: if u->v present, v'->u' must be present as well
 static uint64_t asg_bub_pop1(asg_t *g, uint32_t v0, int max_dist, buf_t *b)
 {
     uint32_t i, n_pending = 0;
@@ -422,7 +422,6 @@ pop_reset:
     return n_pop;
 }
 
-// pop bubbles
 int pop_bubbles(asg_t *g, int max_dist)
 {
     uint32_t v, n_vtx = g->n_seq * 2;
@@ -442,7 +441,6 @@ int pop_bubbles(asg_t *g, int max_dist)
     }
     free(b.a); free(b.S.a); free(b.T.a); free(b.b.a); free(b.e.a);
     if (n_pop) asg_cleanup(g);
-//    fprintf(stderr, "[M::%s] popped %d bubbles and trimmed %d tips\n", __func__, (uint32_t)n_pop, (uint32_t)(n_pop>>32));
     std::cerr << "[M::" << __func__ << "] popped " << (uint32_t)n_pop << " bubbles and trimmed " << (uint32_t)(n_pop>>32) << " tips\n";
     return n_pop;
 }
