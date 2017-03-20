@@ -174,7 +174,7 @@ def build_start_end_overlap_sets(minimap_alignments):
     """
     Build indices of start and end contig overlaps so we can quickly determine which reads
     overlap which end of a particular contig. These dictionaries have a key of a signed segment
-    number and a value of a set of reads names.
+    number and a value of a set of read names.
     """
     start_overlap_reads = defaultdict(set)
     end_overlap_reads = defaultdict(set)

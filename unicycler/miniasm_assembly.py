@@ -21,7 +21,7 @@ from collections import defaultdict
 from .misc import green, red, line_iterator
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .cpp_wrappers import minimap_align_reads, miniasm_assembly
-from .string_graph import StringGraph
+from .string_graph import StringGraph, get_unsigned_seg_name
 from . import log
 from . import settings
 
@@ -87,6 +87,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # The miniasm assembly may be done multiple times. It reports whether a contig was contained in
     # a read, and if so, we will split the read and try again.
     read_break_points = defaultdict(set)
+    mean_read_quals = {}
     for _ in range(20):  # limit to 20 iterations to prevent unforeseen infinite loop
         mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
                                                       read_dict, graph, read_break_points)
@@ -165,17 +166,16 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     if keep >= 3:
         string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
 
-    # TO DO: I can probably remove this line later, for efficiency. It's just a sanity check that
-    # none of the graph manipulations screwed up the sequence ranges.
+    # TO DO: I can probably remove this later, for efficiency. It's just a sanity check that none
+    # of the graph manipulations screwed up the sequence ranges.
     string_graph.check_segment_names_and_ranges(read_dict, graph)
 
-    # POLISH EACH BRIDGE SEQUENCE.
-    # * For this we use the set of long reads which overlap the two single copy contigs on the
-    #   correct side. It is not necessary for reads to overlap both contigs, as this will give us
-    #   better coverage in the intervening repeat region.
-    # * Use only the long read sequences, not the Illumina contigs. Since the Illumina contigs may
-    #   not have been used all the way to their ends (slightly trimmed), this means a bit of contig
-    #   sequence may be replaced by long read consensus.
+    # Polish each bridge sequence using Racon.
+    bridging_paths = string_graph.get_bridging_paths()
+    for bridging_path in bridging_paths:
+        polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
+                      end_overlap_reads)
+
 
     # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS
     # * Use essentially the same process as place_isolated_contigs
@@ -267,7 +267,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
                 piece_count += 1
 
         break_string = ''
-        if piece_count > len(read_dict):
+        if piece_count > len(read_names):
             break_string = ' broken into ' + str(piece_count) + ' pieces'
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
                 str(len(read_dict)) + ' total long reads)' + break_string)
@@ -287,3 +287,43 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
     if segment.get_length() < settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
         return False
     return not graph.is_component_complete([segment.number])
+
+
+def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
+                  end_overlap_reads):
+    first = string_graph.segments[get_unsigned_seg_name(bridging_path[0])]
+    last = string_graph.segments[get_unsigned_seg_name(bridging_path[-1])]
+    first_sign = bridging_path[0][-1]
+    last_sign = bridging_path[-1][-1]
+    first_num = int(first.short_name.split('CONTIG_')[-1]) * (-1 if first_sign == '-' else 1)
+    last_num = int(last.short_name.split('CONTIG_')[-1]) * (-1 if last_sign == '-' else 1)
+
+    bridge_name = 'bridge_' + (first.short_name + '_to_' + last.short_name).replace('CONTIG_', '')
+    bridge_dir = os.path.join(miniasm_dir, bridge_name)
+    os.makedirs(bridge_dir)
+
+    unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
+    margin = settings.RACON_POLISH_MARGIN
+    with open(unpolished_seq, 'wt') as fasta:
+        fasta.write('>bridge\n')
+        fasta.write(string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:])
+        for middle in bridging_path[1:-1]:
+            fasta.write(string_graph.seq_from_signed_seg_name(middle))
+        fasta.write(string_graph.seq_from_signed_seg_name(bridging_path[-1])[:margin])
+        fasta.write('\n')
+
+    polish_reads = os.path.join(bridge_dir, 'reads.fastq')
+    margin_plus = int(margin * 1.5)
+    qual_char = chr(settings.CONTIG_READ_QSCORE + 33)
+    read_names = sorted(end_overlap_reads[first_num] | start_overlap_reads[last_num])
+    with open(polish_reads, 'wt') as fastq:
+        fastq.write('@' + first.short_name + first_sign + '\n')
+        first_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin_plus:]
+        fastq.write(first_read_seq + '\n+\n')
+        fastq.write(qual_char * len(first_read_seq) + '\n')
+        fastq.write('@' + last.short_name + last_sign + '\n')
+        last_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[:margin_plus]
+        fastq.write(last_read_seq + '\n+\n')
+        fastq.write(qual_char * len(last_read_seq) + '\n')
+        for name in read_names:
+            fastq.write(read_dict[name].get_fastq())

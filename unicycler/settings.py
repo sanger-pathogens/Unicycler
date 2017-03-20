@@ -47,6 +47,8 @@ FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.75
 FOUND_CONTIG_MIN_RATIO = 0.6666667
 FOUND_CONTIG_MAX_RATIO = 1.5
 
+RACON_POLISH_MARGIN = 1000
+
 
 
 # Unicycler will only work with read alignments if they are long enough. This values specifies

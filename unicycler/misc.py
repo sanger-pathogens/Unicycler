@@ -831,6 +831,20 @@ def spades_path_and_version(spades_path):
     return spades_path, version, status
 
 
+def racon_path_and_version(racon_path):
+    racon_path = shutil.which(racon_path)
+    if racon_path is None:
+        return '', '', 'not found'
+    command = [racon_path]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    if 'racon [options] <reads.fastq> <overlaps.paf> <raw_contigs.fasta> <out_consensus.fasta>' \
+            in out.decode():
+        return racon_path, '-', 'good'
+    else:
+        return racon_path, '-', 'bad'
+
+
 def makeblastdb_path_and_version(makeblastdb_path):
     makeblastdb_path = shutil.which(makeblastdb_path)
     if makeblastdb_path is None:

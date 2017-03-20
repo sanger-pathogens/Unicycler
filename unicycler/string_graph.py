@@ -880,6 +880,11 @@ class StringGraphSegment(object):
         return ''.join(['>', self.full_name, '\n',
                         add_line_breaks_to_sequence(self.forward_sequence, 70)])
 
+    def fastq_record(self, qual_score):
+        qual_char = chr(qual_score + 33)
+        return ''.join(['@', self.full_name, '\n',  self.forward_sequence, '\n+\n',
+                        qual_char * self.get_length(), '\n'])
+
 
 class StringGraphLink(object):
 

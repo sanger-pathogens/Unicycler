@@ -33,7 +33,8 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     check_input_files, MyHelpFormatter, print_table, get_ascii_art, \
     get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
     tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
-    samtools_path_and_version, java_path_and_version, pilon_path_and_version
+    samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
+    racon_path_and_version
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -541,6 +542,19 @@ def get_arguments():
                               help='Number of k-mer steps to use in SPAdes assembly'
                                    if show_all_args else argparse.SUPPRESS)
 
+    # Miniasm assembly options
+    miniasm_group = parser.add_argument_group('miniasm+Racon assembly',
+                                              'These options control the use of miniasm and Racon'
+                                              'to produce long read bridges.'
+                                              if show_all_args else argparse.SUPPRESS)
+    miniasm_group.add_argument('--no_miniasm', action='store_true',
+                               help='Skip miniasm+Racon bridging (default: use miniasm and Racon '
+                                    'to produce long read bridges)'
+                                    if show_all_args else argparse.SUPPRESS)
+    miniasm_group.add_argument('--racon_path', type=str, default='racon',
+                               help='Path to the Racon executable'
+                                    if show_all_args else argparse.SUPPRESS)
+
     # Rotation options
     rotation_group = parser.add_argument_group('Assembly rotation',
                                                'These options control the rotation of completed '
@@ -793,6 +807,16 @@ def check_dependencies(args):
     program_table.append(spades_row)
 
     # Rotation dependencies
+    if args.no_miniasm:
+        racon_path, racon_version, racon_status = '', '', 'not used'
+    else:
+        racon_path, racon_version, racon_status = racon_path_and_version(args.racon_path)
+    racon_row = ['racon', racon_version, racon_status]
+    if args.verbosity > 1:
+        racon_row.append(racon_path)
+    program_table.append(racon_row)
+
+    # Rotation dependencies
     if args.no_rotate:
         makeblastdb_path, makeblastdb_version, makeblastdb_status = '', '', 'not used'
         tblastn_path, tblastn_version, tblastn_status = '', '', 'not used'
@@ -851,16 +875,17 @@ def check_dependencies(args):
     print_table(program_table, alignments='LLLL', row_colour=row_colours, max_col_width=60,
                 sub_colour={'good': 'green'})
 
-    quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status,
+    quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
                                pilon_status, args)
 
-def quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status,
+def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
                                pilon_status, args):
     if all(x == 'good' or x == 'not used'
-           for x in [spades_status, makeblastdb_status, tblastn_status, bowtie2_build_status,
-                     bowtie2_status, samtools_status, java_status, pilon_status]):
+           for x in [spades_status, racon_status, makeblastdb_status, tblastn_status,
+                     bowtie2_build_status, bowtie2_status, samtools_status, java_status,
+                     pilon_status]):
         return
 
     log.log('')
@@ -896,6 +921,11 @@ def quit_if_dependency_problem(spades_status, makeblastdb_status, tblastn_status
         quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
                         'fix it, specify a different location using --pilon_path or use '
                         '--no_pilon to remove Pilon dependency')
+    if racon_status == 'not found':
+        quit_with_error('could not find racon - either specify its location using --racon_path '
+                        'or use --no_miniasm to remove Racon dependency')
+    if racon_status == 'bad':
+        quit_with_error('Racon was found but does not produce output')
 
     # Code should never get here!
     quit_with_error('Unspecified error with Unicycler dependencies')
