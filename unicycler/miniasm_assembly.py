@@ -109,6 +109,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
             for line in miniasm_out:
                 line = line.strip()
                 if line.startswith('CONTAINED CONTIG'):
+                    print(line)  # TEMP
                     line_parts = line.split('\t')
                     read_name = line_parts[2]
                     read_offset = 0
@@ -120,6 +121,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
                     read_start, read_end = int(line_parts[3]), int(line_parts[4])
                     read_break_points[read_name].add(read_offset + ((read_start + read_end) // 2))
                     contained_contig_count += 1
+
+        print(sorted(list(read_break_points)))  # TEMP
 
         # If the assembly finished without any contained contigs, then we're good to continue!
         if contained_contig_count == 0:
