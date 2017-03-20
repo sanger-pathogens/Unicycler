@@ -64,7 +64,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     log.log_explanation('Miniasm removes sequences which are contained in another sequence, and '
                         'this can result in short read contigs being lost in the string graph '
                         '(particularly common if the long reads are very long). If this happens, '
-                        'the reads will be split in where they contain a contig and Unicycler '
+                        'the reads will be split where they contain a contig and Unicycler '
                         'will repeat the miniasm assembly until no contigs are lost.')
 
     miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
@@ -76,7 +76,6 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
                                                             miniasm_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
-    assembly_read_names = get_miniasm_assembly_reads(minimap_alignments, graph)
 
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
@@ -88,8 +87,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     # a read, and if so, we will split the read and try again.
     read_break_points = defaultdict(set)
     while True:
-        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
-                                                      read_dict, graph, read_break_points)
+        mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, read_dict, graph,
+                                                      read_break_points)
 
         # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input.
         minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
@@ -128,8 +127,6 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         else:
             log.log(red('contigs lost in miniasm assembly'))
             log.log('Breaking reads and trying again\n')
-
-            print(read_break_points)  # TEMP
 
     if not (os.path.isfile(string_graph_filename) and
             os.path.isfile(before_transitive_reduction_filename)):
@@ -206,28 +203,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
         shutil.rmtree(miniasm_dir)
 
 
-def get_miniasm_assembly_reads(minimap_alignments, graph):
-    """
-    Returns a list of read names which overlap at least two different single copy graph segments.
-    """
-    miniasm_assembly_reads = []
-    for read_name, alignments in minimap_alignments.items():
-        overlap_count = 0
-        for a in alignments:
-            if a.overlaps_reference():
-                seg = graph.segments[int(a.ref_name)]
-                if segment_suitable_for_miniasm_assembly(graph, seg):
-                    overlap_count += 1
-
-        # TO DO: I'm not sure if this value should be 2 (only taking reads which span all the way
-        # from one contig to the next) or 1 (also taking reads which overlap one contig but do not
-        # reach the next). I should test each option and analyse.
-        if overlap_count >= 1:
-            miniasm_assembly_reads.append(read_name)
-    return sorted(miniasm_assembly_reads)
-
-
-def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, read_break_points):
+def save_assembly_reads_to_file(read_filename, read_dict, graph, read_break_points):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
     mean_read_quals = {}
@@ -237,7 +213,8 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
         # reflect our confidence in them.
         seg_count = 0
         for seg in sorted(graph.segments.values(), key=lambda x: x.number):
-            if segment_suitable_for_miniasm_assembly(graph, seg):
+            min_length = settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING
+            if segment_suitable_for_miniasm_assembly(graph, seg, min_length):
                 fastq.write('@CONTIG_')
                 fastq.write(str(seg.number))
                 fastq.write('\n')
@@ -251,9 +228,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
 
         # Now save the actual long reads.
         piece_count = 0
-        for read_name in read_names:
-            read = read_dict[read_name]
-
+        for read_name, read in read_dict.items():
             if read_name not in read_break_points:
                 breaks = [0, len(read.sequence)]
             else:
@@ -262,12 +237,14 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
 
             for i, read_range in enumerate(read_ranges):
                 s, e = read_range
+                seq = read.sequence[s:e]
+                if len(seq) < 100:
+                    continue
+                quals = read.qualities[s:e]
                 if len(read_ranges) == 1:
                     read_range_name = read_name
                 else:
                     read_range_name = read_name + '_range_' + str(s) + '-' + str(e)
-                seq = read.sequence[s:e]
-                quals = read.qualities[s:e]
                 fastq.write('@')
                 fastq.write(read_range_name)
                 fastq.write('\n')
@@ -279,16 +256,15 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
                 piece_count += 1
 
         break_string = ''
-        if piece_count > len(read_names):
+        if piece_count > len(read_dict):
             break_string = ' broken into ' + str(piece_count) + ' pieces'
 
-        log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
-                str(len(read_dict)) + ' total long reads)' + break_string)
+        log.log('  ' + str(len(read_dict)) + ' long reads' + break_string)
     log.log('')
     return mean_read_quals
 
 
-def segment_suitable_for_miniasm_assembly(graph, segment):
+def segment_suitable_for_miniasm_assembly(graph, segment, min_length):
     """
     Returns True if the segment is:
       1) single copy
@@ -297,6 +273,6 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
     """
     if graph.get_copy_number(segment) != 1:
         return False
-    if segment.get_length() < settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
+    if segment.get_length() < min_length:
         return False
     return not graph.is_component_complete([segment.number])

@@ -39,7 +39,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir) {
     bool prefilter_contained = false;  // prefilter clearly contained reads (2-pass required)
     int min_match = 100;               // min match length
     int min_span = 2000;               // min span
-    int min_dp = 1;                    // min coverage
+    int min_dp = 3;                    // min coverage
     int min_ovlp = 2000;               //
     int max_hang = 1000;               // max over hang length
     int gap_fuzz = 1000;               // max gap differences between reads for trans-reduction
