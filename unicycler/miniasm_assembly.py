@@ -322,7 +322,7 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
         fastq.write(first_read_seq + '\n+\n')
         fastq.write(qual_char * len(first_read_seq) + '\n')
         fastq.write('@' + last.short_name + last_sign + '\n')
-        last_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[:margin_plus]
+        last_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[-1])[:margin_plus]
         fastq.write(last_read_seq + '\n+\n')
         fastq.write(qual_char * len(last_read_seq) + '\n')
         for name in read_names:
