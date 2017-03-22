@@ -256,7 +256,7 @@ C_LIB.miniasmAssembly.argtypes = [c_char_p,  # Reads FASTQ filename
                                   c_char_p,  # Overlaps PAF filename
                                   c_char_p,  # Output GFA filename
                                   c_int]     # Min depth
-C_LIB.miniasmAssembly.restype = None         # No return value (function creates a GFA)
+C_LIB.miniasmAssembly.restype = None         # No return value (function creates GFA files)
 
 def miniasm_assembly(reads_fastq, overlaps_paf, output_gfa, min_depth):
     C_LIB.miniasmAssembly(reads_fastq.encode('utf-8'), overlaps_paf.encode('utf-8'),
@@ -266,13 +266,13 @@ def miniasm_assembly(reads_fastq, overlaps_paf, output_gfa, min_depth):
 
 # This is the overlap alignment function to see how much sequence 1 and sequence 2 overlap.
 C_LIB.overlapAlignment.argtypes = [c_char_p,  # Sequence 1
-                                       c_char_p,  # Sequence 2
-                                       c_int,  # Match score
-                                       c_int,  # Mismatch score
-                                       c_int,  # Gap open score
-                                       c_int,  # Gap extension score
-                                       c_int]  # Guess overlap
-C_LIB.overlapAlignment.restype = c_void_p  # String describing alignment
+                                   c_char_p,  # Sequence 2
+                                   c_int,     # Match score
+                                   c_int,     # Mismatch score
+                                   c_int,     # Gap open score
+                                   c_int,     # Gap extension score
+                                   c_int]     # Guess overlap
+C_LIB.overlapAlignment.restype = c_void_p     # String describing alignment
 
 def overlap_alignment(sequence_1, sequence_2, scoring_scheme, guess_overlap):
     ptr = C_LIB.overlapAlignment(sequence_1.encode('utf-8'), sequence_2.encode('utf-8'),
@@ -280,3 +280,35 @@ def overlap_alignment(sequence_1, sequence_2, scoring_scheme, guess_overlap):
                                  scoring_scheme.gap_open, scoring_scheme.gap_extend, guess_overlap)
     result = c_string_to_python_string(ptr)
     return (int(x) for x in result.split(','))
+
+
+# When s1 is expected to be at the start of s2, this function will align them to give the s2
+# position where s1 ends.
+C_LIB.startAlignment.argtypes = [c_char_p,  # Sequence 1
+                                 c_char_p,  # Sequence 2
+                                 c_int,     # Match score
+                                 c_int,     # Mismatch score
+                                 c_int,     # Gap open score
+                                 c_int]     # Gap extension score
+C_LIB.startAlignment.restype = c_int        # Seq 2 position at seq 1 end
+
+def start_seq_alignment(sequence_1, sequence_2, scoring_scheme):
+    return C_LIB.startAlignment(sequence_1.encode('utf-8'), sequence_2.encode('utf-8'),
+                                scoring_scheme.match, scoring_scheme.mismatch,
+                                scoring_scheme.gap_open, scoring_scheme.gap_extend)
+
+
+# When s1 is expected to be at the end of s2, this function will align them to give the s2 position
+# where s1 starts.
+C_LIB.endAlignment.argtypes = [c_char_p,  # Sequence 1
+                               c_char_p,  # Sequence 2
+                               c_int,     # Match score
+                               c_int,     # Mismatch score
+                               c_int,     # Gap open score
+                               c_int]     # Gap extension score
+C_LIB.endAlignment.restype = c_int        # Seq 2 position at seq 1 start
+
+def end_seq_alignment(sequence_1, sequence_2, scoring_scheme):
+    return C_LIB.endAlignment(sequence_1.encode('utf-8'), sequence_2.encode('utf-8'),
+                              scoring_scheme.match, scoring_scheme.mismatch,
+                              scoring_scheme.gap_open, scoring_scheme.gap_extend)
