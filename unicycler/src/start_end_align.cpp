@@ -10,6 +10,8 @@
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
 #include "start_end_align.h"
+
+#include <algorithm>
 #include <seqan/align.h>
 
 
@@ -36,8 +38,9 @@ int startEndAlignment(char * s1, char * s2, bool start,
     if (start)
         trim_offset = 0;
     else
-        trim_offset = sequence2.length() - trim_size;
-    sequence2 = sequence2.substr(trim_offset, trim_size);
+        trim_offset = std::max(0, int(sequence2.length()) - trim_size);
+    if (int(sequence2.length()) > trim_size)
+        sequence2 = sequence2.substr(trim_offset, trim_size);
 
     Dna5String sequenceH(sequence1);
     Dna5String sequenceV(sequence2);
