@@ -30,8 +30,8 @@ from . import settings
 try:
     from .cpp_wrappers import minimap_align_reads, miniasm_assembly, start_seq_alignment, \
         end_seq_alignment
-except AttributeError as e:
-    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+except AttributeError as att_err:
+    sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
              'Have you successfully build the library file using make?')
 
 
@@ -361,49 +361,59 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
             fastq.write(read_dict[name].get_fastq())
 
     current_fasta = unpolished_seq
-    last_polished_seq = full_bridge_seq
+    last_seq = full_bridge_seq
+    previous_seqs = [last_seq]
 
-    i = 0
-    for i in range(settings.RACON_POLISH_LOOP_COUNT):
+    polish_round_count = 0
+    for _ in range(settings.RACON_POLISH_LOOP_COUNT):
+        round_num_str = '%02d' % (polish_round_count + 1)
 
         # Create the alignments for Racon using miniasm.
-        mappings_filename = os.path.join(bridge_dir, 'alignments_' + str(i+1) + '.paf')
+        mappings_filename = os.path.join(bridge_dir, 'alignments_' + round_num_str + '.paf')
         with open(mappings_filename, 'wt') as mappings:
             mappings.write(minimap_align_reads(current_fasta, polish_reads, 1, 0))
 
-        # Run Racon.
-        racon_fasta = os.path.join(bridge_dir, 'consensus_' + str(i+1) + '.fasta')
-        racon_log = os.path.join(bridge_dir, 'consensus_' + str(i+1) + '.log')
-        command = [racon_path, polish_reads, mappings_filename, current_fasta, racon_fasta]
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = process.communicate()
-        with open(racon_log, 'wb') as log_file:
-            log_file.write(out)
-            log_file.write(err)
+        # Run Racon. It crashes sometimes, so repeat until its return code is 0.
+        racon_fasta = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.fasta')
+        racon_log = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.log')
+        command = [racon_path, '--verbose', '9', '--threads', '1', '--bq', '-1',
+                   polish_reads, mappings_filename, current_fasta, racon_fasta]
+        return_code = 1
+        while return_code != 0:
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = process.communicate()
+            with open(racon_log, 'wb') as log_file:
+                log_file.write(out)
+                log_file.write(err)
+            return_code = process.returncode
+            if return_code != 0:
+                if os.path.isfile(racon_fasta):
+                    os.remove(racon_fasta)
+                if os.path.isfile(racon_log):
+                    os.remove(racon_log)
         if not os.path.isfile(racon_fasta):
             break
-
-        # If the sequence hasn't changed, there's no need to do another round of polishing.
         polished_seq = load_fasta(racon_fasta)[0][1]
-        if polished_seq == last_polished_seq:
+        polish_round_count += 1
+
+        # If the sequence hasn't changed or is equal to any previous state (sometimes Racon
+        # oscillates between a few states), there's no need to do another round of polishing.
+        if any(polished_seq == x for x in previous_seqs):
             break
 
         current_fasta = racon_fasta
-        last_polished_seq = polished_seq
+        last_seq = polished_seq
+        previous_seqs.append(last_seq)
 
-    # We don't want to make any Racon changes in the contig regions, so we use some alignments
-    # to figure out where the contigs are in the polished sequence and then build a new
-    # polished sequence using the original contigs.
-    middle_start = start_seq_alignment(bridge_start_seq, last_polished_seq, scoring_scheme)
-    middle_end = end_seq_alignment(bridge_end_seq, last_polished_seq, scoring_scheme)
-
-    # Save the polished sequence back into the graph segment.
-    new_bridge_seq = last_polished_seq[middle_start:middle_end]
+    # Use some alignments to figure out where the contigs are in the polished sequence so we can
+    # snip out the bridge part of the sequence and save it back into the graph segment.
+    middle_start = start_seq_alignment(bridge_start_seq, last_seq, scoring_scheme)
+    middle_end = end_seq_alignment(bridge_end_seq, last_seq, scoring_scheme)
+    new_bridge_seq = last_seq[middle_start:middle_end]
     new_rev_bridge_seq = reverse_complement(new_bridge_seq)
     if middle_sign == '-':
         new_bridge_seq, new_rev_bridge_seq = new_rev_bridge_seq, new_bridge_seq
     middle.forward_sequence = new_bridge_seq
     middle.reverse_sequence = new_rev_bridge_seq
 
-    # Return the number of polish rounds
-    return i+1
+    return polish_round_count

@@ -49,7 +49,8 @@ FOUND_CONTIG_MAX_RATIO = 1.5
 
 RACON_POLISH_MARGIN = 1000
 
-RACON_POLISH_LOOP_COUNT = 9
+# This is the maximum number of times a bridge will be Racon polished
+RACON_POLISH_LOOP_COUNT = 100
 
 
 
