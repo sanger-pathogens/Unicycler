@@ -47,13 +47,19 @@ import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     weighted_average_list, get_sequence_file_type, MyHelpFormatter, dim, magenta, colour,\
     get_default_thread_count
-from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
-    delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
 from .alignment import Alignment, AlignmentScoringScheme
 from . import settings
 from .minimap_alignment import load_minimap_alignments
 from . import log
+
+try:
+    from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
+        delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
+
 
 # Used to ensure that multiple threads writing to the same SAM file don't write at the same time.
 SAM_WRITE_LOCK = threading.Lock()

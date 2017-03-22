@@ -31,10 +31,16 @@ from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, 
     reverse_complement, MyHelpFormatter, get_default_thread_count
 from .read_ref import load_references, load_long_reads
 from .alignment import AlignmentScoringScheme
-from .cpp_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
 from .unicycler_align import semi_global_align_long_reads, add_aligning_arguments, \
     fix_up_arguments, load_sam_alignments
 from . import log
+
+try:
+    from .cpp_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
+
 
 VERBOSITY = 0  # Controls how much the script prints to the screen
 CONSOLE_WIDTH = 40  # The width of many things printed to stdout

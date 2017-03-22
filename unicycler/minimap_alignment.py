@@ -15,11 +15,17 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
+import sys
 from collections import defaultdict
 from .misc import get_nice_header, dim, line_iterator, range_overlap
-from .cpp_wrappers import minimap_align_reads
 from . import log
 from . import settings
+
+try:
+    from .cpp_wrappers import minimap_align_reads
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
 
 
 class MinimapAlignment(object):

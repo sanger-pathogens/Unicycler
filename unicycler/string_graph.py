@@ -16,14 +16,20 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 import statistics
+import sys
 from collections import defaultdict
 from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red, \
     get_right_arrow
 from .assembly_graph import build_reverse_links
-from .cpp_wrappers import overlap_alignment, minimap_align_reads
 from .minimap_alignment import load_minimap_alignments, combine_close_hits
 from . import settings
 from . import log
+
+try:
+    from .cpp_wrappers import overlap_alignment, minimap_align_reads
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
 
 
 class StringGraph(object):

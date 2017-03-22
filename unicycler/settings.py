@@ -49,6 +49,8 @@ FOUND_CONTIG_MAX_RATIO = 1.5
 
 RACON_POLISH_MARGIN = 1000
 
+RACON_POLISH_LOOP_COUNT = 5
+
 
 
 # Unicycler will only work with read alignments if they are long enough. This values specifies

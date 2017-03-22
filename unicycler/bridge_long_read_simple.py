@@ -21,16 +21,22 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 import shutil
+import sys
 from collections import defaultdict
 import itertools
 from multiprocessing.dummy import Pool as ThreadPool
-from .cpp_wrappers import fully_global_alignment
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .assembly_graph_segment import Segment
 from .assembly_graph_copy_depth import determine_copy_depth
 from .misc import print_table, get_right_arrow
 from . import log
 from . import settings
+
+try:
+    from .cpp_wrappers import fully_global_alignment
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
 
 
 def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
