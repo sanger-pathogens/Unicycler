@@ -30,8 +30,8 @@ from . import settings
 try:
     from .cpp_wrappers import minimap_align_reads, miniasm_assembly, start_seq_alignment, \
         end_seq_alignment
-except AttributeError as att_err:
-    sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
              'Have you successfully build the library file using make?')
 
 
@@ -339,16 +339,11 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
     if not os.path.isdir(bridge_dir):
         os.makedirs(bridge_dir)
 
-    margin_1 = settings.RACON_POLISH_MARGIN_1
-    bridge_start_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin_1:]
-    bridge_middle_seq = string_graph.seq_from_signed_seg_name(bridging_path[1])
-    bridge_end_seq = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin_1]
-
-    margin_2 = settings.RACON_POLISH_MARGIN_1
-    bridge_start_seq_short = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin_2:]
-    bridge_end_seq_short = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin_2]
-
     # Save the bridge to file, with a bit of contig sequence on each end.
+    margin = settings.RACON_POLISH_MARGIN
+    bridge_start_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:]
+    bridge_middle_seq = string_graph.seq_from_signed_seg_name(bridging_path[1])
+    bridge_end_seq = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin]
     full_bridge_seq = bridge_start_seq + bridge_middle_seq + bridge_end_seq
     unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
     with open(unpolished_seq, 'wt') as fasta:
@@ -356,21 +351,12 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
         fasta.write(full_bridge_seq)
         fasta.write('\n')
 
-    # Save the reads to file which we'll use to polish, including two 'reads' for contig sequences.
-    qual_char = chr(settings.CONTIG_READ_QSCORE + 33)
+    # Save the reads to file which we'll use to polish.
     read_names = sorted(end_overlap_reads[first_num] | start_overlap_reads[last_num])
-    first_signed_name = first.short_name + first_sign
-    last_signed_name = last.short_name + last_sign
     if not read_names:
         return 0
     polish_reads = os.path.join(bridge_dir, 'reads.fastq')
     with open(polish_reads, 'wt') as fastq:
-        fastq.write('@' + first_signed_name + '\n')
-        fastq.write(bridge_start_seq_short + '\n+\n')
-        fastq.write(qual_char * len(bridge_start_seq_short) + '\n')
-        fastq.write('@' + last_signed_name + '\n')
-        fastq.write(bridge_end_seq_short + '\n+\n')
-        fastq.write(qual_char * len(bridge_end_seq_short) + '\n')
         for name in read_names:
             fastq.write(read_dict[name].get_fastq())
 
@@ -379,28 +365,10 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
 
     i = 0
     for i in range(settings.RACON_POLISH_LOOP_COUNT):
-        current_seq = load_fasta(current_fasta)[0][1]
-        current_length = len(current_seq)
-        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 0)
 
-        # Create the alignments for Racon. For the contig 'reads', we build the PAF directly
-        # because we know exactly where they should go. For the real reads, we use miniasm.
+        # Create the alignments for Racon using miniasm.
         mappings_filename = os.path.join(bridge_dir, 'alignments_' + str(i+1) + '.paf')
         with open(mappings_filename, 'wt') as mappings:
-            l1 = str(margin_2)
-            l2 = str(current_length)
-            l3 = str(current_length - margin_2)
-            cm = 'cm:i:1000'
-            mappings.write('\t'.join([first_signed_name, l1, '0', l1, '+', 'bridge', l2, '0',
-                                      l1, l1, l1, '255', cm]))
-            mappings.write('\n')
-            mappings.write('\t'.join([last_signed_name, l1, '0', l1, '+', 'bridge', l2, l3,
-                                      l2, l1, l1, '255', cm]))
-            mappings.write('\n')
-            for minimap_alignment_str in line_iterator(minimap_alignments_str):
-                if not 'CONTIG_' in minimap_alignment_str:
-                    mappings.write(minimap_alignment_str)
-                    mappings.write('\n')
             mappings.write(minimap_align_reads(current_fasta, polish_reads, 1, 0))
 
         # Run Racon.
@@ -414,26 +382,14 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
             log_file.write(err)
         if not os.path.isfile(racon_fasta):
             break
-        polished_seq = load_fasta(racon_fasta)[0][1]
-
-        # We don't want to make any Racon changes in the contig regions, so we use some alignments
-        # to figure out where the contigs are in the polished sequence and then build a new
-        # polished sequence using the original contigs.
-        fixed_fasta = os.path.join(bridge_dir, 'consensus_fixed_' + str(i + 1) + '.fasta')
-        middle_start = start_seq_alignment(bridge_start_seq_short, polished_seq, scoring_scheme)
-        middle_end = end_seq_alignment(bridge_end_seq_short, polished_seq, scoring_scheme)
-        new_polished_seq = bridge_start_seq + polished_seq[middle_start:middle_end] + bridge_end_seq
-        with open(fixed_fasta, 'wt') as fasta:
-            fasta.write('>bridge\n')
-            fasta.write(new_polished_seq)
-            fasta.write('\n')
 
         # If the sequence hasn't changed, there's no need to do another round of polishing.
-        if new_polished_seq == last_polished_seq:
+        polished_seq = load_fasta(racon_fasta)[0][1]
+        if polished_seq == last_polished_seq:
             break
 
         current_fasta = racon_fasta
-        last_polished_seq = new_polished_seq
+        last_polished_seq = polished_seq
 
     # We don't want to make any Racon changes in the contig regions, so we use some alignments
     # to figure out where the contigs are in the polished sequence and then build a new
