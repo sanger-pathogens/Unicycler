@@ -17,13 +17,21 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import statistics
+import subprocess
+import sys
 from collections import defaultdict
-from .misc import green, red, line_iterator
+from .misc import green, red, line_iterator, load_fasta
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
-from .cpp_wrappers import minimap_align_reads, miniasm_assembly
 from .string_graph import StringGraph, get_unsigned_seg_name
 from . import log
 from . import settings
+
+try:
+    from .cpp_wrappers import minimap_align_reads, miniasm_assembly, start_seq_alignment, \
+        end_seq_alignment
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully build the library file using make?')
 
 
 class MiniasmFailure(Exception):
@@ -35,7 +43,7 @@ class MiniasmFailure(Exception):
 
 
 def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                          scoring_scheme):
+                          scoring_scheme, racon_path):
     """
     EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     * Take all single copy contigs over a certain length and get reads which overlap two or more.
@@ -174,7 +182,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     bridging_paths = string_graph.get_bridging_paths()
     for bridging_path in bridging_paths:
         polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
-                      end_overlap_reads)
+                      end_overlap_reads, racon_path, scoring_scheme)
 
 
     # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS
@@ -290,11 +298,12 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
 
 
 def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
-                  end_overlap_reads):
+                  end_overlap_reads, racon_path, scoring_scheme):
+    assert len(bridging_path) == 3
     first = string_graph.segments[get_unsigned_seg_name(bridging_path[0])]
-    last = string_graph.segments[get_unsigned_seg_name(bridging_path[-1])]
+    last = string_graph.segments[get_unsigned_seg_name(bridging_path[2])]
     first_sign = bridging_path[0][-1]
-    last_sign = bridging_path[-1][-1]
+    last_sign = bridging_path[2][-1]
     first_num = int(first.short_name.split('CONTIG_')[-1]) * (-1 if first_sign == '-' else 1)
     last_num = int(last.short_name.split('CONTIG_')[-1]) * (-1 if last_sign == '-' else 1)
 
@@ -302,28 +311,95 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
     bridge_dir = os.path.join(miniasm_dir, bridge_name)
     os.makedirs(bridge_dir)
 
-    unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
+    # Save the bridge to file, with a bit of contig sequence on each end.
     margin = settings.RACON_POLISH_MARGIN
+    bridge_start_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:]
+    bridge_middle_seq = string_graph.seq_from_signed_seg_name(bridging_path[1])
+    bridge_end_seq = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin]
+    unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
     with open(unpolished_seq, 'wt') as fasta:
         fasta.write('>bridge\n')
-        fasta.write(string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:])
-        for middle in bridging_path[1:-1]:
-            fasta.write(string_graph.seq_from_signed_seg_name(middle))
-        fasta.write(string_graph.seq_from_signed_seg_name(bridging_path[-1])[:margin])
+        fasta.write(bridge_start_seq)
+        fasta.write(bridge_middle_seq)
+        fasta.write(bridge_end_seq)
         fasta.write('\n')
 
-    polish_reads = os.path.join(bridge_dir, 'reads.fastq')
-    margin_plus = int(margin * 1.5)
+    # Save the reads to file which we'll use to polish, include two 'reads' for contig sequences.
     qual_char = chr(settings.CONTIG_READ_QSCORE + 33)
     read_names = sorted(end_overlap_reads[first_num] | start_overlap_reads[last_num])
+    first_signed_name = first.short_name + first_sign
+    last_signed_name = last.short_name + last_sign
+    polish_reads = os.path.join(bridge_dir, 'reads.fastq')
     with open(polish_reads, 'wt') as fastq:
-        fastq.write('@' + first.short_name + first_sign + '\n')
-        first_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin_plus:]
-        fastq.write(first_read_seq + '\n+\n')
-        fastq.write(qual_char * len(first_read_seq) + '\n')
-        fastq.write('@' + last.short_name + last_sign + '\n')
-        last_read_seq = string_graph.seq_from_signed_seg_name(bridging_path[-1])[:margin_plus]
-        fastq.write(last_read_seq + '\n+\n')
-        fastq.write(qual_char * len(last_read_seq) + '\n')
+        fastq.write('@' + first_signed_name + '\n')
+        fastq.write(bridge_start_seq + '\n+\n')
+        fastq.write(qual_char * len(bridge_start_seq) + '\n')
+        fastq.write('@' + last_signed_name + '\n')
+        fastq.write(bridge_end_seq + '\n+\n')
+        fastq.write(qual_char * len(bridge_end_seq) + '\n')
         for name in read_names:
             fastq.write(read_dict[name].get_fastq())
+
+    current_fasta = unpolished_seq
+    last_polish_seq = ''
+    for i in range(settings.RACON_POLISH_LOOP_COUNT):
+        current_seq = load_fasta(current_fasta)[0][1]
+        current_length = len(current_seq)
+        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 0)
+
+        # Create the alignments for Racon. For the contig 'reads', we build the PAF directly
+        # because we know exactly where they should go. For the real reads, we use miniasm.
+        mappings_filename = os.path.join(bridge_dir, 'alignments_' + str(i+1) + '.paf')
+        with open(mappings_filename, 'wt') as mappings:
+            l1 = str(margin)
+            l2 = str(current_length)
+            l3 = str(current_length - margin)
+            cm = 'cm:i:1000'
+            mappings.write('\t'.join([first_signed_name, l1, '0', l1, '+', 'bridge', l2, '0',
+                                      l1, l1, l1, '255', cm]))
+            mappings.write('\n')
+            mappings.write('\t'.join([last_signed_name, l1, '0', l1, '+', 'bridge', l2, l3,
+                                      l2, l1, l1, '255', cm]))
+            mappings.write('\n')
+            for minimap_alignment_str in line_iterator(minimap_alignments_str):
+                if not 'CONTIG_' in minimap_alignment_str:
+                    mappings.write(minimap_alignment_str)
+                    mappings.write('\n')
+
+        racon_fasta = os.path.join(bridge_dir, 'consensus_' + str(i+1) + '.fasta')
+        racon_log = os.path.join(bridge_dir, 'consensus_' + str(i+1) + '.log')
+        fixed_fasta = os.path.join(bridge_dir, 'consensus_fixed_' + str(i+1) + '.fasta')
+
+        command = [racon_path, polish_reads, mappings_filename, current_fasta, racon_fasta]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        with open(racon_log, 'wb') as log_file:
+            log_file.write(out)
+            log_file.write(err)
+        if not os.path.isfile(racon_fasta):
+            break
+        polish_seq = load_fasta(racon_fasta)[0][1]
+
+        # We don't want to make any Racon changes in the contig regions, so we use some alignments
+        # to figure out where the contigs are in the polished sequence and then build a new
+        # polished sequence using the original contigs.
+        middle_start = start_seq_alignment(bridge_start_seq, polish_seq, scoring_scheme)
+        middle_end = end_seq_alignment(bridge_end_seq, polish_seq, scoring_scheme)
+        if middle_end >= middle_start:
+            # It's normal for the contigs to not overlap.
+            new_polish_seq = bridge_start_seq + polish_seq[middle_start:middle_end] + bridge_end_seq
+        else:
+            # It's weird for the contigs to overlap, but if so, we don't want to duplicate sequence.
+            overlap = middle_end - middle_start
+            new_polish_seq = bridge_start_seq + bridge_end_seq[overlap:]
+
+        with open(fixed_fasta, 'wt') as fasta:
+            fasta.write('>polished_bridge\n')
+            fasta.write(new_polish_seq)
+            fasta.write('\n')
+        current_fasta = fixed_fasta
+
+        # If the sequence hasn't changed, there's no need to do another round of polishing.
+        if new_polish_seq == last_polish_seq:
+            break
+        last_polish_seq = new_polish_seq
