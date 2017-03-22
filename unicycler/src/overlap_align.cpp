@@ -17,8 +17,6 @@
 char * overlapAlignment(char * s1, char * s2,
                         int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore,
                         int guessOverlap) {
-
-    // Change the sequences to C++ strings.
     std::string sequence1(s1);
     std::string sequence2(s2);
 

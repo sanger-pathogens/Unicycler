@@ -29,6 +29,16 @@ int startEndAlignment(char * s1, char * s2, bool start,
                       int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore) {
     std::string sequence1(s1);
     std::string sequence2(s2);
+
+    // Trim the sequence 2 down to a bit more than the expected alignment (to help save time).
+    int trim_size = int(sequence1.length() * 1.5);
+    int trim_offset;
+    if (start)
+        trim_offset = 0;
+    else
+        trim_offset = sequence2.length() - trim_size;
+    sequence2 = sequence2.substr(trim_offset, trim_size);
+
     Dna5String sequenceH(sequence1);
     Dna5String sequenceV(sequence2);
 
@@ -84,5 +94,5 @@ int startEndAlignment(char * s1, char * s2, bool start,
     if (start)
         return seq2PosAtSeq1End;
     else
-        return seq2PosAtSeq1Start;
+        return seq2PosAtSeq1Start + trim_offset;
 }

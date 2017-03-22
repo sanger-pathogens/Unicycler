@@ -864,7 +864,7 @@ class StringGraphSegment(object):
             self.contig = False
             self.qual = None
 
-        # If the construct gave an explicit quality, we'll use that.
+        # If the constructor gave an explicit quality, we'll use that.
         if qual is not None:
             self.qual = qual
 

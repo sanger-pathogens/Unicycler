@@ -20,7 +20,7 @@ import statistics
 import subprocess
 import sys
 from collections import defaultdict
-from .misc import green, red, line_iterator, load_fasta
+from .misc import green, red, line_iterator, load_fasta, reverse_complement
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
 from .string_graph import StringGraph, get_unsigned_seg_name
 from . import log
@@ -183,6 +183,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     for bridging_path in bridging_paths:
         polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
                       end_overlap_reads, racon_path, scoring_scheme)
+    string_graph.save_to_gfa(os.path.join(miniasm_dir, '19_racon_polish.gfa'))
 
 
     # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS
@@ -301,8 +302,10 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
                   end_overlap_reads, racon_path, scoring_scheme):
     assert len(bridging_path) == 3
     first = string_graph.segments[get_unsigned_seg_name(bridging_path[0])]
+    middle = string_graph.segments[get_unsigned_seg_name(bridging_path[1])]
     last = string_graph.segments[get_unsigned_seg_name(bridging_path[2])]
     first_sign = bridging_path[0][-1]
+    middle_sign = bridging_path[1][-1]
     last_sign = bridging_path[2][-1]
     first_num = int(first.short_name.split('CONTIG_')[-1]) * (-1 if first_sign == '-' else 1)
     last_num = int(last.short_name.split('CONTIG_')[-1]) * (-1 if last_sign == '-' else 1)
@@ -316,15 +319,14 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
     bridge_start_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:]
     bridge_middle_seq = string_graph.seq_from_signed_seg_name(bridging_path[1])
     bridge_end_seq = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin]
+    full_bridge_seq = bridge_start_seq + bridge_middle_seq + bridge_end_seq
     unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
     with open(unpolished_seq, 'wt') as fasta:
         fasta.write('>bridge\n')
-        fasta.write(bridge_start_seq)
-        fasta.write(bridge_middle_seq)
-        fasta.write(bridge_end_seq)
+        fasta.write(full_bridge_seq)
         fasta.write('\n')
 
-    # Save the reads to file which we'll use to polish, include two 'reads' for contig sequences.
+    # Save the reads to file which we'll use to polish, including two 'reads' for contig sequences.
     qual_char = chr(settings.CONTIG_READ_QSCORE + 33)
     read_names = sorted(end_overlap_reads[first_num] | start_overlap_reads[last_num])
     first_signed_name = first.short_name + first_sign
@@ -341,7 +343,7 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
             fastq.write(read_dict[name].get_fastq())
 
     current_fasta = unpolished_seq
-    last_polish_seq = ''
+    last_polish_seq = full_bridge_seq
     for i in range(settings.RACON_POLISH_LOOP_COUNT):
         current_seq = load_fasta(current_fasta)[0][1]
         current_length = len(current_seq)
@@ -394,7 +396,7 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
             new_polish_seq = bridge_start_seq + bridge_end_seq[overlap:]
 
         with open(fixed_fasta, 'wt') as fasta:
-            fasta.write('>polished_bridge\n')
+            fasta.write('>bridge\n')
             fasta.write(new_polish_seq)
             fasta.write('\n')
         current_fasta = fixed_fasta
@@ -403,3 +405,11 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
         if new_polish_seq == last_polish_seq:
             break
         last_polish_seq = new_polish_seq
+
+    # Save the polished sequence back into the graph segment.
+    new_bridge_seq = last_polish_seq[margin:-margin]
+    new_rev_bridge_seq = reverse_complement(new_bridge_seq)
+    if middle_sign == '-':
+        new_bridge_seq, new_rev_bridge_seq = new_rev_bridge_seq, new_bridge_seq
+    middle.forward_sequence = new_bridge_seq
+    middle.reverse_sequence = new_rev_bridge_seq
