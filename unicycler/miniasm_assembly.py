@@ -304,6 +304,12 @@ def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, en
                         'connects two contigs. The resulting consensus sequences will be more '
                         'accurate than the starting sequences (which are made from individual '
                         'long reads).', verbosity=2)
+
+    bridging_paths = string_graph.get_bridging_paths()
+    if not bridging_paths:
+        log.log('No bridging paths exist', verbosity=2)
+        return
+
     ra = get_right_arrow()
     col_widths = [22, len(ra), 22, 6, 5, 10, 10]
     racon_table_header = ['Start', '', 'End', 'Racon rounds', 'Read depth', 'Pre-Racon length',
@@ -311,7 +317,6 @@ def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, en
     print_table([racon_table_header], fixed_col_widths=col_widths, left_align_header=False,
                 alignments='RLLRRRR', indent=0, col_separation=1)
 
-    bridging_paths = string_graph.get_bridging_paths()
     for bridging_path in bridging_paths:
         assert len(bridging_path) == 3
         pre_racon_length = len(string_graph.seq_from_signed_seg_name(bridging_path[1]))
@@ -323,6 +328,7 @@ def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, en
                            str(pre_racon_length), str(post_racon_length)]
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
                     alignments='RLLRRRR', indent=0, header_format='normal', col_separation=1)
+    log.log('', verbosity=2)
 
 
 def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
