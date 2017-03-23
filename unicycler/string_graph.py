@@ -191,6 +191,7 @@ class StringGraph(object):
             log.log('Removed links:', verbosity=2)
             for seg_1, seg_2 in deleted_links:
                 log.log('  ' + seg_1 + ' ' + get_right_arrow() + ' ' + seg_2, verbosity=2)
+            log.log('', verbosity=2)
         else:
             log.log('No links needed removal', verbosity=2)
 
@@ -263,51 +264,55 @@ class StringGraph(object):
                             verbosity=2)
 
         for path in sorted(self.get_bridging_paths()):
-            assert len(path) >= 3
+            assert len(path) >= 2
             contig_1 = path[0]
             contig_2 = path[-1]
             middle = path[1:-1]
 
-            # If there is only one read joining the contigs, then there's nothing to simplify.
-            if len(middle) == 1:
-                continue
+            log.log(contig_1 + ' ' + get_right_arrow() + ' ' + contig_2, verbosity=2)
 
-            # If there are multiple reads, we hope to find one that connects the two contigs.
-            # Search them in order of highest to lowest quality, seeing if the links we need are
-            # in the pre-transitive reduction graph.
-            single_bridge_read = None
-            reads_by_qual = sorted([x for x in middle], reverse=True,
-                               key=lambda x: self.segments[get_unsigned_seg_name(x)].qual)
-            for read in reads_by_qual:
-                if (contig_1, read) in before_transitive_reduction.links and \
-                        (read, contig_2) in before_transitive_reduction.links:
-                    single_bridge_read = read
-                    break
+            if len(middle) == 0:
+                log.log('  directly joined - nothing to simplify', verbosity=2)
+            elif len(middle) == 1:
+                log.log('  already joined by a single segment: ' + middle[0], verbosity=2)
+            else:  # two or more segments in the middle
 
-            if single_bridge_read is not None:
+                # If there are multiple reads, we hope to find one that connects the two contigs.
+                # Search them in order of highest to lowest quality, seeing if the links we need
+                # are in the pre-transitive reduction graph.
+                single_bridge_read = None
+                for read in sorted([x for x in middle], reverse=True,
+                                   key=lambda x: self.segments[get_unsigned_seg_name(x)].qual):
+                    if (contig_1, read) in before_transitive_reduction.links and \
+                            (read, contig_2) in before_transitive_reduction.links:
+                        single_bridge_read = read
+                        break
 
-                # Delete all of the other segments in the bridge.
-                removed_segments = []
-                for read in [x for x in middle if x != single_bridge_read]:
-                    unsigned_read = get_unsigned_seg_name(read)
-                    self.remove_segment(unsigned_read)
-                    removed_segments.append(unsigned_read)
-                log.log('Removed segments:  ' + ', '.join(removed_segments), verbosity=2)
-                log.log('Surviving segment: ' + get_unsigned_seg_name(single_bridge_read),
-                        verbosity=2)
-                log.log('', verbosity=2)
+                if single_bridge_read is None:
+                    log.log('  no spanning read found - unable to simplify', verbosity=2)
+                else:
+                    log.log('  simplifying bridge to one read: ' +
+                            get_unsigned_seg_name(single_bridge_read), verbosity=2)
 
-                # Create links between the surviving segment and the contigs.
-                link_1_tuple = (contig_1, single_bridge_read)
-                link_2_tuple = (single_bridge_read, contig_2)
-                if link_1_tuple not in self.links:
-                    link_1 = before_transitive_reduction.links[link_1_tuple]
-                    self.add_link(link_1_tuple[0], link_1_tuple[1],
-                                  link_1.seg_1_overlap, link_1.seg_2_overlap)
-                if link_2_tuple not in self.links:
-                    link_2 = before_transitive_reduction.links[link_2_tuple]
-                    self.add_link(link_2_tuple[0], link_2_tuple[1],
-                                  link_2.seg_1_overlap, link_2.seg_2_overlap)
+                    # Delete all of the other segments in the bridge.
+                    removed_segments = []
+                    for read in [x for x in middle if x != single_bridge_read]:
+                        unsigned_read = get_unsigned_seg_name(read)
+                        self.remove_segment(unsigned_read)
+                        removed_segments.append(unsigned_read)
+
+                    # Create links between the surviving segment and the contigs.
+                    link_1_tuple = (contig_1, single_bridge_read)
+                    link_2_tuple = (single_bridge_read, contig_2)
+                    if link_1_tuple not in self.links:
+                        link_1 = before_transitive_reduction.links[link_1_tuple]
+                        self.add_link(link_1_tuple[0], link_1_tuple[1],
+                                      link_1.seg_1_overlap, link_1.seg_2_overlap)
+                    if link_2_tuple not in self.links:
+                        link_2 = before_transitive_reduction.links[link_2_tuple]
+                        self.add_link(link_2_tuple[0], link_2_tuple[1],
+                                      link_2.seg_1_overlap, link_2.seg_2_overlap)
+            log.log('', verbosity=2)
 
 
     def remove_overlaps(self, before_transitive_reduction, scoring_scheme):
@@ -500,7 +505,11 @@ class StringGraph(object):
 
             for path_seg in path:
                 self.remove_segment(get_unsigned_seg_name(path_seg))
-        log.log('', verbosity=2)
+
+        if not paths_to_merge:
+            log.log('No paths require merging', verbosity=2)
+        else:
+            log.log('', verbosity=2)
 
     def get_next_available_merged_segment_name(self):
         n = 1
@@ -599,6 +608,11 @@ class StringGraph(object):
 
         isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
         isolated_contig_names = self.save_isolated_contigs_to_file(isolated_contigs_file)
+
+        if not isolated_contig_names:
+            log.log('No isolate contigs require placing in the graph', verbosity=2)
+            return
+
         non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
         self.save_non_contigs_to_file(non_contigs_file,
                                       settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
@@ -607,10 +621,8 @@ class StringGraph(object):
         contig_to_read_alignments = \
             load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
                                                         threads, 3, 'find contigs'))
-        contig_alignments_by_segment = defaultdict(list)
-        if not isolated_contig_names:
-            return
         log.log('\n' + 'Isolated contigs: ', verbosity=2)
+        contig_alignments_by_segment = defaultdict(list)
         for contig_name in isolated_contig_names:
             alignments = contig_to_read_alignments[contig_name]
             alignments = combine_close_hits(alignments, settings.FOUND_CONTIG_MIN_RATIO,

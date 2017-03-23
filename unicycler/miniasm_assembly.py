@@ -280,7 +280,6 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, rea
             break_string = ' broken into ' + str(piece_count) + ' pieces'
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
                 str(len(read_dict)) + ' total long reads)' + break_string)
-    log.log('')
     return mean_read_quals
 
 
@@ -300,10 +299,11 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
 
 def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
                    racon_path, scoring_scheme, threads):
+    log.log('', verbosity=2)
     log.log_explanation('Unicycler now uses Racon to polish each string graph segment which '
                         'connects two contigs. The resulting consensus sequences will be more '
-                        'accurate than the starting sequences (which are made from single long '
-                        'reads).')
+                        'accurate than the starting sequences (which are made from individual '
+                        'long reads).', verbosity=2)
     ra = get_right_arrow()
     col_widths = [22, len(ra), 22, 6, 5, 10, 10]
     racon_table_header = ['Start', '', 'End', 'Racon rounds', 'Read depth', 'Pre-Racon length',
