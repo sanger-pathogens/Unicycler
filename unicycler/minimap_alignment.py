@@ -105,7 +105,16 @@ class MinimapAlignment(object):
         return adjusted_read_start < 0 and adjusted_read_end >= self.read_length
 
     def fraction_read_aligned(self):
-        return (self.read_end - self.read_start) / self.read_length
+        try:
+            return (self.read_end - self.read_start) / self.read_length
+        except ZeroDivisionError:
+            return 0.0
+
+    def fraction_ref_aligned(self):
+        try:
+            return (self.ref_end - self.ref_start) / self.ref_length
+        except ZeroDivisionError:
+            return 0.0
 
 
 def load_minimap_alignments_basic(minimap_alignments_str):

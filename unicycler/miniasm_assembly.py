@@ -22,7 +22,8 @@ import sys
 from collections import defaultdict
 from .misc import green, red, line_iterator, load_fasta, reverse_complement, print_table, \
     get_right_arrow
-from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
+from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets, \
+    load_minimap_alignments_basic
 from .string_graph import StringGraph, get_unsigned_seg_name
 from . import log
 from . import settings
@@ -181,7 +182,7 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
 
     # Polish each bridge sequence using Racon.
     polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
-                   racon_path, scoring_scheme)
+                   racon_path, scoring_scheme, threads)
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '19_racon_polish.gfa'))
 
 
@@ -298,33 +299,34 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
 
 
 def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
-                   racon_path, scoring_scheme):
+                   racon_path, scoring_scheme, threads):
     log.log_explanation('Unicycler now uses Racon to polish each string graph segment which '
                         'connects two contigs. The resulting consensus sequences will be more '
                         'accurate than the starting sequences (which are made from single long '
                         'reads).')
     ra = get_right_arrow()
-    col_widths = [22, len(ra), 22, 6, 10, 10]
-    racon_table_header = ['Start', '', 'End', 'Racon rounds', 'Pre-Racon length', 'Post-Racon length']
+    col_widths = [22, len(ra), 22, 6, 5, 10, 10]
+    racon_table_header = ['Start', '', 'End', 'Racon rounds', 'Read depth', 'Pre-Racon length',
+                          'Post-Racon length']
     print_table([racon_table_header], fixed_col_widths=col_widths, left_align_header=False,
-                alignments='RLLRRR', indent=0, col_separation=1)
+                alignments='RLLRRRR', indent=0, col_separation=1)
 
     bridging_paths = string_graph.get_bridging_paths()
     for bridging_path in bridging_paths:
         assert len(bridging_path) == 3
         pre_racon_length = len(string_graph.seq_from_signed_seg_name(bridging_path[1]))
-        rounds = polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict,
-                               start_overlap_reads, end_overlap_reads, racon_path, scoring_scheme)
+        rounds, depth = polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict,
+                                      start_overlap_reads, end_overlap_reads, racon_path,
+                                      scoring_scheme, threads)
         post_racon_length = len(string_graph.seq_from_signed_seg_name(bridging_path[1]))
-        racon_table_row = [bridging_path[0], ra, bridging_path[2], str(rounds), str(pre_racon_length),
-                           str(post_racon_length)]
+        racon_table_row = [bridging_path[0], ra, bridging_path[2], str(rounds), '%.1f' % depth,
+                           str(pre_racon_length), str(post_racon_length)]
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
-                    alignments='RLLRRR', indent=0, header_format='normal', col_separation=1)
+                    alignments='RLLRRRR', indent=0, header_format='normal', col_separation=1)
 
 
 def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
-                  end_overlap_reads, racon_path, scoring_scheme):
-
+                  end_overlap_reads, racon_path, scoring_scheme, threads):
     first = string_graph.segments[get_unsigned_seg_name(bridging_path[0])]
     middle = string_graph.segments[get_unsigned_seg_name(bridging_path[1])]
     last = string_graph.segments[get_unsigned_seg_name(bridging_path[2])]
@@ -365,33 +367,39 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
     previous_seqs = [last_seq]
 
     polish_round_count = 0
+    depth = 0.0
     for _ in range(settings.RACON_POLISH_LOOP_COUNT):
         round_num_str = '%02d' % (polish_round_count + 1)
 
         # Create the alignments for Racon using miniasm.
         mappings_filename = os.path.join(bridge_dir, 'alignments_' + round_num_str + '.paf')
+        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 0)
         with open(mappings_filename, 'wt') as mappings:
-            mappings.write(minimap_align_reads(current_fasta, polish_reads, 1, 0))
+            mappings.write(minimap_alignments_str)
+        depth = sum(a.fraction_ref_aligned()
+                    for a in load_minimap_alignments_basic(minimap_alignments_str))
 
         # Run Racon. It crashes sometimes, so repeat until its return code is 0.
         racon_fasta = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.fasta')
         racon_log = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.log')
-        command = [racon_path, '--verbose', '9', '--threads', '1', '--bq', '-1',
+        command = [racon_path, '--verbose', '9', '--threads', str(threads), '--bq', '-1',
                    polish_reads, mappings_filename, current_fasta, racon_fasta]
         return_code = 1
-        while return_code != 0:
+        for t in range(100):  # Only try a fixed number of times, to prevent an infinite loop.
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = process.communicate()
             with open(racon_log, 'wb') as log_file:
                 log_file.write(out)
                 log_file.write(err)
             return_code = process.returncode
+            if return_code == 0:
+                break
             if return_code != 0:
                 if os.path.isfile(racon_fasta):
                     os.remove(racon_fasta)
                 if os.path.isfile(racon_log):
                     os.remove(racon_log)
-        if not os.path.isfile(racon_fasta):
+        if return_code != 0 or not os.path.isfile(racon_fasta):
             break
         polished_seq = load_fasta(racon_fasta)[0][1]
         polish_round_count += 1
@@ -416,4 +424,4 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
     middle.forward_sequence = new_bridge_seq
     middle.reverse_sequence = new_rev_bridge_seq
 
-    return polish_round_count
+    return polish_round_count, depth

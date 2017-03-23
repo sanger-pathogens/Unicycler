@@ -44,7 +44,7 @@ def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lon
     """
     Look for and apply simple long read bridges to the graph.
     """
-    log.log_section_header('Simple repeat bridging with minimap alignments')
+    log.log_section_header('Simple repeat bridging')
     log.log_explanation('Before more complex bridging approaches are applied in later steps, '
                         'Unicycler uses long read alignments (from minimap) to resolve simple '
                         'repeat structures in the graph. This takes care of some "low-hanging '
