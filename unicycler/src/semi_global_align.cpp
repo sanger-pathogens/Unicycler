@@ -545,6 +545,7 @@ PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
 }
 
 
+
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq) {
     PointVector points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq, readSeq,
@@ -603,14 +604,17 @@ PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trim
 }
 
 
+// For a given point, the function scores it based on the density of nearby points. Specifically,
+// it rewards points that have lots of neighbours close to the diagonal, but it punishes points
+// with too many neighbours away from the diagonal.
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index) {
     PointVector neighbourPoints = radiusSearchAroundPoint(p, densityRadius, cloud, index);
+    double a = 1.0 / SCORE_DISTANCE_FROM_DIAGONAL;
     double densityScore = 0.0;
     for (auto const & neighbourPoint : neighbourPoints) {
         int xDiff = neighbourPoint.x - p.x;
         int yDiff = neighbourPoint.y - p.y;
-        if (xDiff + yDiff > 0)
-            densityScore += 1.0 / (abs(xDiff-yDiff) + 1.0);
+        densityScore += ((1.0 + a) / (abs(xDiff-yDiff) + 1.0)) - a;
     }
     return densityScore;
 }

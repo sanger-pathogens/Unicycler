@@ -71,3 +71,8 @@
 // If a Seqan seed chain contains a gap with an area larger than this, then we don't go ahead with
 // the alignment (because it would take too long and probably not be good anyway).
 #define MAX_BANDED_ALIGNMENT_GAP_AREA 100000000
+
+// When searching for a line tracing starting point, neighbouring points too far from the diagonal
+// are penalised. This controls how far a point can be from the diagonal before its contribution
+// drops to 0.
+#define SCORE_DISTANCE_FROM_DIAGONAL 5.0
