@@ -63,18 +63,17 @@ class SpadesContigBridge(object):
         # then the bridge sequence is just the overlapping sequence between them.
         self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
 
-        # The start segment and end segment should agree in depth. If they don't, that's very bad,
-        # so depth_disagreement is applied to quality twice (squared effect).
+        # The start segment and end segment should agree in depth. If they don't, that's bad.
         start_seg = graph.segments[abs(self.start_segment)]
         end_seg = graph.segments[abs(self.end_segment)]
         self.quality *= get_depth_agreement_factor(start_seg.depth, end_seg.depth)
-        self.depth = get_mean_depth(start_seg, end_seg, graph)
 
         # If the segments in the path exclusively lead to the start and end segments (i.e they
         # cannot lead to any another segment), then we can also scale the quality based on the
         # depth consistency of the path. E.g. if a bridge path contains a segment 3 times and that
         # segment's depth also suggests about 3 times, that's good. If they don't agree, that's
         # bad.
+        self.depth = get_mean_depth(start_seg, end_seg, graph)
         if path_is_self_contained(self.graph_path, self.start_segment, self.end_segment, graph):
             graph_path_pos_nums = list(set([abs(x) for x in self.graph_path]))
             for path_segment in graph_path_pos_nums:
