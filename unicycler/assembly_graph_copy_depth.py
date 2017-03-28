@@ -64,7 +64,7 @@ def determine_copy_depth(graph):
                         'plasmids (which may be higher or lower in depth).',
                         verbosity=2)
 
-    # Propagate copy depth as possible using those initial assignments.
+    # Propagate copy depth as much as possible using those initial assignments.
     copy_depth_table = [['Input', '', 'Output']]
     determine_copy_depth_part_2(graph, settings.COPY_PROPAGATION_TOLERANCE, copy_depth_table)
 
