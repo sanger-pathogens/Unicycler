@@ -545,14 +545,11 @@ PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
 }
 
 
-
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq) {
-    PointVector points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq, readSeq,
-                                                         cloud, index);
-    Point highestDensityPoint = points[0];
+    Point highestDensityPoint = cloud.pts[0];
     double highestDensityScore = 0.0;
-    for (auto const & point : points) {
+    for (auto const & point : cloud.pts) {
         double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
         if (densityScore > highestDensityScore) {
             highestDensityScore = densityScore;
@@ -560,47 +557,6 @@ Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t
         }
     }
     return highestDensityPoint;
-}
-
-
-PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
-                                            std::string * readSeq, PointCloud & cloud,
-                                            my_kd_tree_t & index) {
-    int xStepCount = int(ceil(readSeq->length() / double(searchRadius)));
-    int yStepCount = int(ceil(trimmedRefSeq.length() / double(searchRadius)));
-    double xStepSize = double(readSeq->length()) / xStepCount;
-    double yStepSize = double(trimmedRefSeq.length()) / yStepCount;
-
-    nanoflann::SearchParams params;
-    double highestDensity = 0.0;
-    PointVector pointsInHighestDensity;
-
-    for (int i = 0; i <= xStepCount; ++i) {
-        int xCentre = int(0.5 + i * xStepSize);
-
-        for (int j = 0; j <= yStepCount; ++j) {
-            int yCentre = int(0.5 + j * yStepSize);
-
-            const int query_pt[2] = {xCentre, yCentre};
-
-            std::vector<std::pair<size_t,int> > ret_matches;
-            const size_t nMatches = index.radiusSearch(query_pt, searchRadius, ret_matches, params);
-            double density = double(nMatches);
-
-            // Search regions on the edge will have less density than they should (because the
-            // region has less area). This biases the search away from the edges, but that's okay
-            // because alignments often get tricky and repetitive near the edges (i.e. the ends of
-            // contigs) and so we probably don't want to start our line tracing there.
-
-            if (density > highestDensity) {
-                highestDensity = density;
-                pointsInHighestDensity.clear();
-                for (auto const & k : ret_matches)
-                    pointsInHighestDensity.push_back(cloud.pts[k.first]);
-            }
-        }
-    }
-    return pointsInHighestDensity;
 }
 
 
