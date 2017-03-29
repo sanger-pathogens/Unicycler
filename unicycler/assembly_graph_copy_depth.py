@@ -77,6 +77,8 @@ def determine_copy_depth(graph):
             break
 
     # Now propagate with no tolerance threshold to complete the remaining segments.
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['REMOVING PROPAGATION TOLERANCE', '', ''])
     determine_copy_depth_part_2(graph, 1.0, copy_depth_table)
 
     print_table(copy_depth_table, alignments='RLL', max_col_width=999, hide_header=True,
@@ -87,8 +89,12 @@ def determine_copy_depth_part_2(graph, tolerance, copy_depth_table):
     """
     Propagates copy depth repeatedly until assignments stop.
     """
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['MERGING MULTIPLICITY', '', ''])
     while merge_copy_depths(graph, tolerance, copy_depth_table):
         pass
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['SPLITTING MULTIPLICITY', '', ''])
     if redistribute_copy_depths(graph, tolerance, copy_depth_table):
         determine_copy_depth_part_2(graph, tolerance, copy_depth_table)
 
@@ -97,9 +103,10 @@ def assign_single_copy_depth(graph, min_single_copy_length, copy_depth_table):
     """
     This function assigns a single copy to the longest available segment.
     """
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['FINDING NEW SINGLE-COPY', '', ''])
     segments = sorted(get_segments_without_copies(graph), key=lambda x: x.get_length(),
                       reverse=True)
-
     for segment in segments:
         if segment.get_length() < min_single_copy_length:
             continue
