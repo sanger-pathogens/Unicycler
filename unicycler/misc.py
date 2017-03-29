@@ -87,6 +87,8 @@ def check_input_files(args):
         check_file_exists(args.unpaired)
     if args.long:
         check_file_exists(args.long)
+    if args.short1 == args.short2:
+        quit_with_error('first and second read pair files cannot be the same file')
 
 
 def check_file_exists(filename):

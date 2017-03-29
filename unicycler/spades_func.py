@@ -184,8 +184,11 @@ def spades_read_correction(short1, short2, short_unpaired, spades_dir, threads, 
             log.log(dim(spades_output), 2)
 
     spades_error = process.stderr.readline().strip().decode()
+    return_code = process.returncode
     if spades_error:
         quit_with_error('SPAdes encountered an error: ' + spades_error)
+    if return_code != 0:
+        quit_with_error('SPAdes crashed!')
 
     # Read error correction should be done now, so copy the correct read files to a more permanent
     # location.
