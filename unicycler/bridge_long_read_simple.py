@@ -112,7 +112,7 @@ def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lo
     """
     Create and return simple long read bridges.
     """
-    log.log_section_header('Simple repeat bridging')
+    log.log_section_header('Creating simple long read bridges')
     log.log_explanation('Unicycler uses long read alignments (from minimap) to resolve simple '
                         'repeat structures in the graph. This takes care of some "low-hanging '
                         'fruit" of the graph simplification.')

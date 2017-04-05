@@ -483,16 +483,30 @@ class AssemblyGraph(object):
         self.forward_links = remove_nums_from_links(self.forward_links, nums_to_remove)
         self.reverse_links = remove_nums_from_links(self.reverse_links, nums_to_remove)
 
-        # Rebuild paths which might contain deleted segments.
-        paths_to_delete = set()
-        neg_nums_to_remove = [-x for x in nums_to_remove]
-        for path_name, path_nums in self.paths.items():
-            if len(list(set(nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-            if len(list(set(neg_nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-        for path_to_delete in paths_to_delete:
-            del self.paths[path_to_delete]
+        self.remove_segments_from_paths(nums_to_remove)
+
+    def remove_segments_from_paths(self, seg_nums):
+        """
+        Deletes the given segment numbers (regardless of sign) from the paths. If this results in
+        an invalid path, then the whole path is deleted.
+        """
+        fixed_paths = {}
+        for path_name, path in self.paths.items():
+            fixed_path = [x for x in path if x not in seg_nums and -x not in seg_nums]
+            if len(fixed_path) > 1 and self.is_path_valid(fixed_path):
+                fixed_paths[path_name] = fixed_path
+        self.paths = fixed_paths
+
+    def is_path_valid(self, path):
+        """
+        Returns True/False based on whether or not the given path is in the graph.
+        """
+        for i, seg_num in enumerate(path):
+            if i > 0:
+                prev_seg_num = path[i - 1]
+                if seg_num not in self.forward_links[prev_seg_num]:
+                    return False
+        return True
 
     def remove_small_components(self, min_component_size):
         """
@@ -1003,6 +1017,9 @@ class AssemblyGraph(object):
         if segment.number not in self.copy_depths:
             return 0
         return len(self.copy_depths[segment.number])
+
+    def get_copy_number_from_segment_number(self, seg_num):
+        return self.get_copy_number(self.segments[abs(seg_num)])
 
     def get_copy_number_colour(self, segment):
         """
@@ -2040,8 +2057,8 @@ class AssemblyGraph(object):
                     self.add_link(upstream_seg, downstream_seg)
                 segs_to_remove.append(seg_num)
 
-        self.remove_segments(segs_to_remove)
         if segs_to_remove and not suppress_log:
+            self.remove_segments(segs_to_remove)
             log.log('\nRemoved zero-length segments:')
             log.log_number_list(segs_to_remove)
 

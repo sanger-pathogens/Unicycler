@@ -16,7 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 # Simple bridging will only proceed for single-copy segments above a certain length. This is to
 # ensure that it does not occur for complex areas of the assembly graph.
-MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING = 4000
+MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING = 2000
 
 # When aligning minimap reads to the graph (which is overlap-free), we still want to allow a tiny
 # bit of overlap because minimap alignments are a bit course.

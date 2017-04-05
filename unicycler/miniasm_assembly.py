@@ -44,8 +44,8 @@ class MiniasmFailure(Exception):
         return repr(self.message)
 
 
-def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                          scoring_scheme, racon_path):
+def create_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
+                           scoring_scheme, racon_path):
     """
     EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     * Take all single copy contigs over a certain length and get reads which overlap two or more.
@@ -60,8 +60,8 @@ def build_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_fi
     log.log_explanation('Unicycler uses miniasm to construct a string graph '
                         'assembly using both the short read contigs and the long reads. If this '
                         'produces an assembly, Unicycler will extract bridges between '
-                        'contigs, improve them with Racon and use them to simplify the assembly '
-                        'graph. This method requires decent coverage of long reads and therefore '
+                        'contigs, improve them with Racon and use them to buld bridges. '
+                        'This method requires decent coverage of long reads and therefore '
                         'may not be fruitful if long reads are sparse. However, it does not '
                         'rely on the short read assembly graph having good connectivity and is '
                         'able to bridge an assembly graph even when it contains many dead ends.',

@@ -15,7 +15,8 @@ not, see <http://www.gnu.org/licenses/>.
 
 import math
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
-from .misc import float_to_str, get_num_agreement
+from .misc import float_to_str, get_num_agreement, get_right_arrow, print_table
+from . import log
 
 
 class SpadesContigBridge(object):
@@ -123,7 +124,13 @@ def create_spades_contig_bridges(graph, single_copy_segments):
     """
     Builds graph bridges using the SPAdes contig paths.
     """
-    # TO DO: output a table of the bridges made!
+    log.log_section_header('Creating SPAdes contig bridges')
+    log.log_explanation('SPAdes uses paired-end information to perform repeat resolution (RR) and '
+                        'produce contigs from the assembly graph. SPAdes saves the graph paths '
+                        'corresponding to these contigs in the contigs.paths file. When one of '
+                        'these paths contains two or more single-copy segments, Unicycler can '
+                        'create a bridge from the path.', verbosity=1)
+
     bridge_path_set = set()
     single_copy_numbers = [x.number for x in single_copy_segments]
     for segment in single_copy_segments:
@@ -177,7 +184,23 @@ def create_spades_contig_bridges(graph, single_copy_segments):
     conflicting_paths = conflicting_paths_no_dupes
     final_bridge_paths = [x for x in bridge_path_list if x not in conflicting_paths]
 
-    return [SpadesContigBridge(spades_contig_path=x, graph=graph) for x in final_bridge_paths]
+    bridges = [SpadesContigBridge(spades_contig_path=x, graph=graph) for x in final_bridge_paths]
+
+    if bridges:
+        bridge_table = [['Start', 'Path', 'End', 'Bridge quality']]
+        spaded_arrow = ' ' + get_right_arrow() + ' '
+        max_path_str_len = 5
+        for bridge in bridges:
+            path_str = spaded_arrow.join(str(seg) for seg in bridge.graph_path)
+            max_path_str_len = max(max_path_str_len, len(path_str))
+            bridge_table.append([str(bridge.start_segment), path_str, str(bridge.end_segment),
+                                 float_to_str(bridge.quality, 1)])
+        print_table(bridge_table, alignments='RLRR', left_align_header=False, indent=0,
+                    fixed_col_widths=[5, max_path_str_len, 5, 7])
+    else:
+        log.log('No SPAdes contig bridges')
+
+    return bridges
 
 
 def find_contig_bridges(segment_num, path, single_copy_numbers):

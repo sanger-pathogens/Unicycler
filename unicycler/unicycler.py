@@ -25,7 +25,7 @@ import itertools
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read_simple import create_simple_long_read_bridges
-from .miniasm_assembly import build_miniasm_bridges
+from .miniasm_assembly import create_miniasm_bridges
 from .bridge_long_read import create_long_read_bridges
 from .bridge_spades_contig import create_spades_contig_bridges
 from .bridge_loop_unroll import create_loop_unrolling_bridges
@@ -105,7 +105,6 @@ def main():
     # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
     bridges = []
     if args.mode != 0:
-        log.log_section_header('Creating SPAdes contigs bridges')
         bridges += create_spades_contig_bridges(graph, single_copy_segments)
         bridges += create_loop_unrolling_bridges(graph)
         graph = copy.deepcopy(graph)
@@ -125,8 +124,8 @@ def main():
 
         # Try assembling the contigs along with the long reads using a modified miniasm+racon. If
         # successful, we extract bridges from the assembly and apply them to the graph.
-        bridges += build_miniasm_bridges(graph, args.out, args.keep, args.threads, read_dict,
-                                         long_read_filename, scoring_scheme, args.racon_path)
+        bridges += create_miniasm_bridges(graph, args.out, args.keep, args.threads, read_dict,
+                                          long_read_filename, scoring_scheme, args.racon_path)
 
         # Prepare for long read alignment.
         alignment_dir = os.path.join(args.out, 'read_alignment')
