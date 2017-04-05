@@ -603,6 +603,8 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
             for value, col_width, alignment in zip(row_line, col_widths, alignments):
                 if alignment == 'L' or (i == 0 and left_align_header):
                     aligned_row.append(value.ljust(col_width))
+                elif alignment == 'C':
+                    aligned_row.append(value.center(col_width))
                 else:
                     aligned_row.append(value.rjust(col_width))
             row_str = separator.join(aligned_row)

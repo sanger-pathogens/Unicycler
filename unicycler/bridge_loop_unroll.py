@@ -122,7 +122,7 @@ class LoopUnrollingBridge(object):
     @staticmethod
     def get_type_name():
         """
-        Returns the of the bridge types.
+        Returns the name of the bridge type.
         """
         return 'loop'
 

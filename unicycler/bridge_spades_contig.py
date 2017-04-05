@@ -115,7 +115,7 @@ class SpadesContigBridge(object):
     @staticmethod
     def get_type_name():
         """
-        Returns the of the bridge types.
+        Returns the name of the bridge type.
         """
         return 'SPAdes'
 
@@ -195,7 +195,7 @@ def create_spades_contig_bridges(graph, single_copy_segments):
             max_path_str_len = max(max_path_str_len, len(path_str))
             bridge_table.append([str(bridge.start_segment), path_str, str(bridge.end_segment),
                                  float_to_str(bridge.quality, 1)])
-        print_table(bridge_table, alignments='RLRR', left_align_header=False, indent=0,
+        print_table(bridge_table, alignments='RCLR', left_align_header=False, indent=0,
                     fixed_col_widths=[5, max_path_str_len, 5, 7])
     else:
         log.log('No SPAdes contig bridges')

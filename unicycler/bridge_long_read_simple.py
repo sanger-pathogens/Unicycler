@@ -102,7 +102,7 @@ class SimpleLongReadBridge(object):
     @staticmethod
     def get_type_name():
         """
-        Returns the of the bridge types.
+        Returns the name of the bridge type.
         """
         return 'simple long read'
 
@@ -252,7 +252,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
     max_op_1_len = max(max(len(y) for y in x[1].split(', ')) for x in two_way_junctions_table) + 1
     max_op_2_len = max(max(len(y) for y in x[2].split(', ')) for x in two_way_junctions_table) + 1
-    print_table(two_way_junctions_table, alignments='RLLRRRRR', left_align_header=False, indent=0,
+    print_table(two_way_junctions_table, alignments='RCCRRRRR', left_align_header=False, indent=0,
                 fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 7, 5, 7],
                 sub_colour={'no reads': 'red', 'tie vote': 'red'})
     log.log('')

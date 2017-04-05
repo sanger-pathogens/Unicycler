@@ -44,8 +44,8 @@ class MiniasmFailure(Exception):
         return repr(self.message)
 
 
-def create_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                           scoring_scheme, racon_path):
+def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_read_filename,
+                              scoring_scheme, racon_path):
     """
     EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     * Take all single copy contigs over a certain length and get reads which overlap two or more.
@@ -56,7 +56,7 @@ def create_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_f
       * single copy contigs in FASTQ form (with a high quality, 'I' or something)
 
     """
-    log.log_section_header('Assemble contigs and long reads with miniasm and Racon')
+    log.log_section_header('Assembling contigs and long reads with miniasm and Racon')
     log.log_explanation('Unicycler uses miniasm to construct a string graph '
                         'assembly using both the short read contigs and the long reads. If this '
                         'produces an assembly, Unicycler will extract bridges between '
@@ -185,12 +185,8 @@ def create_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_f
                    racon_path, scoring_scheme, threads)
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '19_racon_polish.gfa'))
 
-
-    # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS
-    # * Use essentially the same process as place_isolated_contigs
-    # *
-
-
+    # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS?
+    # * Could use the same process as place_isolated_contigs
 
 
     # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
@@ -210,6 +206,7 @@ def create_miniasm_bridges(graph, out_dir, keep, threads, read_dict, long_read_f
 
     if keep < 3:
         shutil.rmtree(miniasm_dir)
+    return string_graph
 
 
 def get_miniasm_assembly_reads(minimap_alignments):
