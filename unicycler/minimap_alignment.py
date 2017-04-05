@@ -25,7 +25,7 @@ try:
     from .cpp_wrappers import minimap_align_reads
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
-             'Have you successfully build the library file using make?')
+             'Have you successfully built the library file using make?')
 
 
 class MinimapAlignment(object):

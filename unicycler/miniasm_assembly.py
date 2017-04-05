@@ -33,7 +33,7 @@ try:
         end_seq_alignment
 except AttributeError as att_err:
     sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
-             'Have you successfully build the library file using make?')
+             'Have you successfully built the library file using make?')
 
 
 class MiniasmFailure(Exception):

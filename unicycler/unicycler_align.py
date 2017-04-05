@@ -58,7 +58,7 @@ try:
         delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
-             'Have you successfully build the library file using make?')
+             'Have you successfully built the library file using make?')
 
 
 # Used to ensure that multiple threads writing to the same SAM file don't write at the same time.

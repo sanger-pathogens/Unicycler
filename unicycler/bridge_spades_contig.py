@@ -123,6 +123,7 @@ def create_spades_contig_bridges(graph, single_copy_segments):
     """
     Builds graph bridges using the SPAdes contig paths.
     """
+    # TO DO: output a table of the bridges made!
     bridge_path_set = set()
     single_copy_numbers = [x.number for x in single_copy_segments]
     for segment in single_copy_segments:

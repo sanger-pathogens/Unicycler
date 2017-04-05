@@ -22,58 +22,119 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import shutil
 import sys
+import math
 from collections import defaultdict
 import itertools
 from multiprocessing.dummy import Pool as ThreadPool
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
-from .assembly_graph_segment import Segment
 from .assembly_graph_copy_depth import determine_copy_depth
-from .misc import print_table, get_right_arrow
+from .misc import print_table, get_right_arrow, float_to_str
+from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
 from . import log
 from . import settings
 
 try:
     from .cpp_wrappers import fully_global_alignment
-except AttributeError as e:
-    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
-             'Have you successfully build the library file using make?')
+except AttributeError as att_err:
+    sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
+             'Have you successfully built the library file using make?')
 
 
-def apply_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                                   scoring_scheme):
+
+class SimpleLongReadBridge(object):
+    def __init__(self, graph, start, end, path, votes_for, votes_against):
+
+        # The numbers of the two single copy segments which are being bridged.
+        self.start_segment = start
+        self.end_segment = end
+
+        # The path through the unbridged graph.
+        self.graph_path = path
+
+        # The bridge depth, a weighted mean of the start and end depths.
+        self.depth = get_mean_depth(graph.segments[abs(self.start_segment)],
+                                    graph.segments[abs(self.end_segment)], graph)
+
+        # A score used to determine the order of bridge application. Simple long read bridges are
+        # reliable and start with a high quality.
+        self.quality = 1.0
+
+        # When a bridge is applied, the segments in the bridge may have their depth reduced
+        # accordingly. This member stores which segments have had their depth reduced and by how
+        # much due to this bridge's application. It is stored so if this bridge is later deleted,
+        # we can restore the depth to the segments.
+        self.segments_reduced_depth = []
+
+        # If there are segments in between the start and end (there usually will be), then they
+        # provide the bridge sequence. If not (i.e. if the start and end directly connect),
+        # then the bridge sequence is just the overlapping sequence between them.
+        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
+
+        # The start segment and end segment should agree in depth. If they don't, that's bad.
+        start_seg = graph.segments[abs(self.start_segment)]
+        end_seg = graph.segments[abs(self.end_segment)]
+        self.quality *= get_depth_agreement_factor(start_seg.depth, end_seg.depth)
+
+        # More 'landslidey' votes lead to high qualities. Close-call votes lead to low qualities.
+        try:
+            vote_proportion = votes_for / (votes_for + votes_against)
+        except ZeroDivisionError:
+            vote_proportion = 0.0
+        vote_quality = max(0.0, 2.0 * (vote_proportion - 0.5))
+        self.quality *= vote_quality
+
+        # We finalise the quality to a range of 0 to 100. We also use the sqrt function to pull
+        # the scores up a bit (otherwise they tend to hang near the bottom of the range).
+        self.quality = 100.0 * math.sqrt(self.quality)
+
+    def __repr__(self):
+        return 'Simple long read bridge: ' + get_bridge_str(self) + \
+               ' (quality = ' + float_to_str(self.quality, 2) + ')'
+
+    @staticmethod
+    def get_type_score():
+        """
+        Returns a score indicating the relative importance of the bridge types:
+        LongReadBridge = 2, SpadesContigBridge = 1, LoopUnrollingBridge = 0
+        """
+        return 3
+
+    @staticmethod
+    def get_type_name():
+        """
+        Returns the of the bridge types.
+        """
+        return 'simple long read'
+
+
+def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
+                                 scoring_scheme):
     """
-    Look for and apply simple long read bridges to the graph.
+    Create and return simple long read bridges.
     """
     log.log_section_header('Simple repeat bridging')
-    log.log_explanation('Before more complex bridging approaches are applied in later steps, '
-                        'Unicycler uses long read alignments (from minimap) to resolve simple '
+    log.log_explanation('Unicycler uses long read alignments (from minimap) to resolve simple '
                         'repeat structures in the graph. This takes care of some "low-hanging '
                         'fruit" of the graph simplification.')
 
     bridging_dir = os.path.join(out_dir, 'simple_bridging')
     if not os.path.exists(bridging_dir):
         os.makedirs(bridging_dir)
-
     minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
                                                             bridging_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
-
-    simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
-                                    minimap_alignments)
-    simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict, scoring_scheme, threads)
-    log.log('', 2)
-
-    graph.merge_all_possible(None, 2)
-    determine_copy_depth(graph)
-
+    bridges = simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
+                                              minimap_alignments)
+    bridges += simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads,
+                                   minimap_alignments, read_dict, scoring_scheme, threads)
     if keep < 3:
         shutil.rmtree(bridging_dir)
-    return graph
+    return bridges
 
 
 def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
                                     minimap_alignments):
+    bridges = []
     c_with_arrows = get_right_arrow() + 'C' + get_right_arrow()
     log.log_explanation('Two-way junctions are defined as cases where two graph contigs (A and B) '
                         'join together (C) and then split apart again (D and E). This usually '
@@ -85,7 +146,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
                         'winner, Unicycler resolves the graph at that junction.')
 
     two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', 'Op. 1 votes', 'Op. 2 votes',
-                                'Neither votes', 'Result']]
+                                'Neither votes', 'Final op.', 'Bridge quality']]
 
     junctions = graph.find_simple_two_way_junctions(settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING)
     for junction in junctions:
@@ -154,60 +215,53 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
         table_row += [str(option_1_votes), str(option_2_votes), str(neither_option_votes)]
 
-        # If the neither option got the most votes, then something is screwy (e.g. perhaps this
-        # isn't the simple two-way junction we thought), so we don't bridge anything.
-        if neither_option_votes > option_1_votes and neither_option_votes > option_2_votes:
-            table_row.append('too many alt')
 
         # If there aren't any votes at all, that's a shame! The long reads were probably too few
         # and/or too short to span the junction.
-        elif option_1_votes == 0 and option_2_votes == 0:
-            table_row.append('no support')
+        if option_1_votes == 0 and option_2_votes == 0:
+            table_row += ['none', 'no reads']
 
         # If the best option isn't sufficiently better than the second best option, we don't bridge
         # anything.
-        elif min(option_1_votes, option_2_votes) / max(option_1_votes, option_2_votes) > 0.5:
-            table_row.append('too close')
+        elif option_1_votes == option_2_votes:
+            table_row += ['none', 'tie vote']
 
         else:
             # If we got here, then we're good to bridge!
-            junction_seg = graph.segments[junction]
-            bridge_depth = junction_seg.depth / 2
-            bridge_seq = junction_seg.forward_sequence
-            graph.remove_segments([junction])
-
-            junction_copy_num_1 = graph.get_next_available_seg_number()
-            junction_copy_num_2 = junction_copy_num_1 + 1
-            junction_copy_1 = Segment(junction_copy_num_1, bridge_depth, bridge_seq, True)
-            junction_copy_2 = Segment(junction_copy_num_2, bridge_depth, bridge_seq, True)
-            graph.segments[junction_copy_num_1] = junction_copy_1
-            graph.segments[junction_copy_num_2] = junction_copy_2
-
-            graph.add_link(inputs[0], junction_copy_num_1)
-            graph.add_link(inputs[1], junction_copy_num_2)
-
+            start_1 = inputs[0]
+            start_2 = inputs[1]
             if option_1_votes > option_2_votes:
-                graph.add_link(junction_copy_num_1, outputs[0])
-                graph.add_link(junction_copy_num_2, outputs[1])
-            else:  # option 2
-                graph.add_link(junction_copy_num_1, outputs[1])
-                graph.add_link(junction_copy_num_2, outputs[0])
-            table_row.append('applied')
+                table_row.append('1')
+                end_1 = outputs[0]
+                end_2 = outputs[1]
+                votes_for = option_1_votes
+                votes_against = option_2_votes + neither_option_votes
+            else:  # option 2:
+                table_row.append('2')
+                end_1 = outputs[1]
+                end_2 = outputs[0]
+                votes_for = option_2_votes
+                votes_against = option_1_votes + neither_option_votes
+            bridges.append(SimpleLongReadBridge(graph, start_1, end_1, [junction], votes_for,
+                                                votes_against))
+            bridges.append(SimpleLongReadBridge(graph, start_2, end_2, [junction], votes_for,
+                                                votes_against))
+            table_row.append(float_to_str(bridges[-1].quality, 1))
 
         two_way_junctions_table.append(table_row)
 
     max_op_1_len = max(max(len(y) for y in x[1].split(', ')) for x in two_way_junctions_table) + 1
     max_op_2_len = max(max(len(y) for y in x[2].split(', ')) for x in two_way_junctions_table) + 1
-    max_result_len = max(len(x[-1]) for x in two_way_junctions_table)
-    print_table(two_way_junctions_table, alignments='RLLRRRR', left_align_header=False, indent=0,
-                fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 7, max_result_len],
-                sub_colour={'too many alt': 'red', 'no support': 'red', 'too close': 'red',
-                            'applied': 'green'})
+    print_table(two_way_junctions_table, alignments='RLLRRRRR', left_align_header=False, indent=0,
+                fixed_col_widths=[8, max_op_1_len, max_op_2_len, 5, 5, 7, 5, 7],
+                sub_colour={'no reads': 'red', 'tie vote': 'red'})
     log.log('')
+    return bridges
 
 
 def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
                         read_dict, scoring_scheme, threads):
+    bridges = []
     ra = get_right_arrow()
     zero_loops = 'A' + ra + 'C' + ra + 'B'
     one_loop = 'A' + ra + 'C' + ra + 'D' + ra + 'C' + ra + 'B'
@@ -222,10 +276,11 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                         'count it agrees best with, and Unicycler resolves the graph using the '
                         'most voted for count.')
 
-    col_widths = [5, 6, 6, 5, 5, 18, 17]
-    loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes', 'Result']
+    col_widths = [5, 6, 6, 5, 5, 18, 5, 7]
+    loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes',
+                         'Loop count', 'Bridge quality']
     print_table([loop_table_header], fixed_col_widths=col_widths, left_align_header=False,
-                alignments='RRRRRLL', indent=0)
+                alignments='RRRRRLRR', indent=0)
 
     loops = sorted(graph.find_all_simple_loops())
     for start, end, middle, repeat in loops:
@@ -289,51 +344,38 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
         loop_table_row.append(vote_str.strip())
 
         # Determine the repeat count which wins!
-        applied_message = None
         results = sorted(list(votes.items()), key=lambda x: x[1], reverse=True)
         if not results:
-            loop_table_row.append('no reads')
+            loop_table_row += ['no reads', '']
         else:
             winning_loop_count = results[0][0]
+            winning_votes = results[0][1]
             if len(results) == 1:
-                second_best_ratio = 0.0
+                second_best_votes = 0
+                votes_against = 0
             else:
-                second_best_ratio = results[1][1] / results[0][1]
+                second_best_votes = results[1][1]
+                votes_against = sum(r[1] for r in results)
             if winning_loop_count == -1:
-                loop_table_row.append('too many bad')
-            elif second_best_ratio > 0.5:
-                loop_table_row.append('too close')
+                loop_table_row += ['bad reads', '']
+            elif winning_votes == second_best_votes:
+                loop_table_row += ['tie vote', '']
             else:
-                applied_message = 'applied: ' + str(winning_loop_count) + ' loop' + \
-                                  ('' if winning_loop_count == 1 else 's')
-                loop_table_row.append(applied_message)
-
                 # If we got here, then we're good to bridge!
-                middle_seq = graph.seq_from_signed_seg_num(middle)
-                repeat_seq = graph.seq_from_signed_seg_num(repeat)
-                new_seg_seq = repeat_seq
+                loop_table_row.append(str(winning_loop_count))
+
+                bridge_path = [repeat]
                 for _ in range(winning_loop_count):
-                    new_seg_seq += middle_seq + repeat_seq
-                new_seg_num = graph.get_next_available_seg_number()
-                new_seg = Segment(new_seg_num, mean_start_end_depth, new_seg_seq, True)
-                graph.segments[new_seg_num] = new_seg
-                graph.add_link(start, new_seg_num)
-                graph.add_link(new_seg_num, end)
+                    bridge_path += [middle, repeat]
 
-                # If we've traversed the loop, we can delete the segments. If we've haven't, then
-                # we leave them as a separate circular sequence.
-                if winning_loop_count > 0:
-                    graph.remove_segments([abs(middle), abs(repeat)])
-                else:
-                    graph.remove_link(start, repeat)
-                    graph.remove_link(repeat, end)
+                bridges.append(SimpleLongReadBridge(graph, start, end, bridge_path, winning_votes,
+                                                    votes_against))
+                loop_table_row.append(float_to_str(bridges[-1].quality, 1))
 
-        sub_colours = {'too many bad': 'red', 'no reads': 'red', 'too close': 'red'}
-        if applied_message:
-            sub_colours[applied_message] = 'green'
         print_table([loop_table_row], fixed_col_widths=col_widths, header_format='normal',
-                    alignments='RRRRRLL', left_align_header=False, bottom_align_header=False,
-                    sub_colour=sub_colours, indent=0)
+                    alignments='RRRRRLRR', left_align_header=False, bottom_align_header=False,
+                    sub_colour={'bad reads': 'red', 'no reads': 'red', 'tie vote': 'red'}, indent=0)
+    return bridges
 
 
 def get_read_loop_vote_one_arg(all_args):

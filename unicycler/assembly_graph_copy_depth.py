@@ -25,7 +25,7 @@ def determine_copy_depth(graph):
     # Reset any existing copy depths.
     graph.copy_depths = {}
 
-    log.log_section_header('Determining graph multiplicity', single_newline=True)
+    log.log_section_header('Determining graph multiplicity')
     log.log_explanation('Multiplicity is the number of times a '
                         'sequence occurs in the underlying sequence. Single-copy segments '
                         '(those with a multiplicity of one, occurring only once in the underlying '

@@ -30,7 +30,7 @@ try:
     from .cpp_wrappers import consensus_alignment
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
-             'Have you successfully build the library file using make?')
+             'Have you successfully built the library file using make?')
 
 
 class LongReadBridge(object):

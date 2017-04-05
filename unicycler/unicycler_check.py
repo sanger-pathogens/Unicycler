@@ -39,7 +39,7 @@ try:
     from .cpp_wrappers import simulate_depths, get_random_sequence_alignment_error_rates
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
-             'Have you successfully build the library file using make?')
+             'Have you successfully built the library file using make?')
 
 
 VERBOSITY = 0  # Controls how much the script prints to the screen

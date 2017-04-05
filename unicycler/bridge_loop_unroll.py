@@ -127,6 +127,7 @@ def create_loop_unrolling_bridges(graph):
     """
     This function creates loop unrolling bridges using the information in SPAdes paths.
     """
+    # TO DO: output a table of the bridges made!
     bridges = []
     simple_loops = graph.find_all_simple_loops()
 
