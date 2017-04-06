@@ -73,11 +73,12 @@ void save_string_graph(const asg_t *g, const sdict_t *read_dict, const ma_sub_t 
         used_read_indices.insert(target_i);
     }
 
-    // Also include any reads which are contigs.
-    for (size_t i = 0; i < read_dict->n_seq; ++i) {
-        if (is_read_illumina_contig(read_dict, i))
-            used_read_indices.insert(i);
-    }
+//    // Also include any reads which are contigs.
+//    for (size_t i = 0; i < read_dict->n_seq; ++i) {
+//        if (is_read_illumina_contig(read_dict, i))
+//            used_read_indices.insert(i);
+//    }
+
     unordered_set<string> used_read_names;
     for (set<size_t>::iterator it = used_read_indices.begin(); it != used_read_indices.end(); ++it)
         used_read_names.insert(string(read_dict->seq[*it].name));

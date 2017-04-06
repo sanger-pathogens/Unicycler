@@ -141,7 +141,6 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
     std::cerr << "\n";
 
     cerr << "===> Step 4.1: transitive reduction <===\n";
-
     asg_arc_del_trans(string_graph, gap_fuzz);
     save_string_graph(string_graph, read_dict, subreads, transitive_reduction_string_graph, reads_filename.c_str());
     std::cerr << "\n";
