@@ -686,7 +686,9 @@ def print_intro_message(args, full_command, out_dir_message):
                           'function as a SPAdes-optimiser. It will try many k-mer sizes, choose '
                           'the best based on contig length and graph connectivity, and scaffold '
                           'the graph using SPAdes repeat resolution.')
-    log.log_explanation(intro_message)
+    log.log_explanation(intro_message, extra_empty_lines_after=0)
+    log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler',
+                        extra_empty_lines_after=0)
 
     log.log('Command: ' + bold(full_command))
     log.log('')

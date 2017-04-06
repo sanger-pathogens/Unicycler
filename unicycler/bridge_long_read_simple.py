@@ -142,8 +142,8 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
                         'its resolution: (A' + c_with_arrows + 'D and B' + c_with_arrows + 'E) or '
                         '(A' + c_with_arrows + 'E and B' + c_with_arrows + 'D). '
                         'Each read which spans such a junction gets to "vote" for option 1, '
-                        'option 2 or neither. If the reads\' votes show option 1 or 2 as a clear '
-                        'winner, Unicycler resolves the graph at that junction.')
+                        'option 2 or neither. Unicycler creates a bridge at each junction for '
+                        'the most voted for option.')
 
     two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', 'Op. 1 votes', 'Op. 2 votes',
                                 'Neither votes', 'Final op.', 'Bridge quality']]
@@ -273,7 +273,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                         'Long reads which span the loop inform which is the correct number of '
                         'times through. In this step, such reads are found and each is aligned '
                         'against alternative loop counts. A reads casts its "vote" for the loop '
-                        'count it agrees best with, and Unicycler resolves the graph using the '
+                        'count it agrees best with, and Unicycler creates a bridge using the '
                         'most voted for count.')
 
     col_widths = [5, 6, 6, 5, 5, 18, 5, 7]

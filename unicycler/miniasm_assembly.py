@@ -56,11 +56,10 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
       * single copy contigs in FASTQ form (with a high quality, 'I' or something)
 
     """
-    log.log_section_header('Assembling contigs and long reads with miniasm and Racon')
+    log.log_section_header('Assembling contigs and long reads with miniasm')
     log.log_explanation('Unicycler uses miniasm to construct a string graph '
-                        'assembly using both the short read contigs and the long reads. If this '
-                        'produces an assembly, Unicycler will extract bridges between '
-                        'contigs, improve them with Racon and use them to buld bridges. '
+                        'assembly using both the short read contigs and the long reads. It can '
+                        'then use the resulting string graph to produce bridges between contigs. '
                         'This method requires decent coverage of long reads and therefore '
                         'may not be fruitful if long reads are sparse. However, it does not '
                         'rely on the short read assembly graph having good connectivity and is '
@@ -73,7 +72,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
                         'the real long reads.', extra_empty_lines_after=0)
     log.log_explanation('Miniasm removes sequences which are contained in another sequence, and '
                         'this can result in short read contigs being lost in the string graph '
-                        '(particularly common if the long reads are very long). If this happens, '
+                        '(particularly if the long reads are very long). If this happens, '
                         'the reads will be split where they contain a contig and Unicycler '
                         'will repeat the miniasm assembly until no contigs are lost.')
 
@@ -184,6 +183,14 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
                    racon_path, scoring_scheme, threads)
     string_graph.save_to_gfa(os.path.join(miniasm_dir, '19_racon_polish.gfa'))
+
+    # We now want to extend the contigs all the way to their end, if possible. E.g. if miniasm
+    # trimmed a few bases off the start and end of the contig, we can add those back on, shortening
+    # the neighbouring bridges slightly.
+    string_graph.extend_contigs(graph, scoring_scheme)
+    string_graph.save_to_gfa(os.path.join(miniasm_dir, '20_contigs_extended.gfa'))
+
+
 
     # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS?
     # * Could use the same process as place_isolated_contigs
@@ -296,7 +303,7 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
 
 def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
                    racon_path, scoring_scheme, threads):
-    log.log('', verbosity=2)
+    log.log_section_header('Polishing miniasm assembly with Racon')
     log.log_explanation('Unicycler now uses Racon to polish each string graph segment which '
                         'connects two contigs. The resulting consensus sequences will be more '
                         'accurate than the starting sequences (which are made from individual '

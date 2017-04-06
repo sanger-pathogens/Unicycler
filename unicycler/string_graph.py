@@ -19,14 +19,15 @@ import statistics
 import sys
 from collections import defaultdict
 from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red, \
-    get_right_arrow
+    get_right_arrow, print_table
 from .assembly_graph import build_reverse_links
 from .minimap_alignment import load_minimap_alignments, combine_close_hits
 from . import settings
 from . import log
 
 try:
-    from .cpp_wrappers import overlap_alignment, minimap_align_reads
+    from .cpp_wrappers import overlap_alignment, minimap_align_reads, start_seq_alignment, \
+        end_seq_alignment
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
              'Have you successfully built the library file using make?')
@@ -845,6 +846,110 @@ class StringGraph(object):
         preceding_seg_name = preceding_segments[0]
         following_seg_name = following_segments[0]
         return preceding_seg_name == pos_seg_name and following_seg_name == pos_seg_name
+
+    def extend_contigs(self, assembly_graph, scoring_scheme):
+        """
+        Extends contigs to their full length, where possible.
+        """
+        log.log_explanation('At this point, the contigs in the graph may still be slightly trimmed '
+                            'due to miniasm trimming. Unicycler now tries to extend those contigs '
+                            'to their full length, reducing neighbouring read sequences by the '
+                            'corresponding amount.',
+                            verbosity=2)
+
+        contig_extension_table = [['Contig', 'Start bases added', 'End bases added']]
+        for segment in sorted(self.segments.values(), reverse=True, key=lambda x: x.get_length()):
+            if not segment.contig:
+                continue
+            pos_seg_name = segment.full_name + '+'
+            seg_num = int(segment.short_name.replace('CONTIG_', ''))
+            full_seq = assembly_graph.segments[seg_num].forward_sequence
+            start_pos, end_pos = segment.start_pos - 1, segment.end_pos
+            if start_pos > 0:
+                missing_start = full_seq[:start_pos]
+            else:
+                missing_start = ''
+            if end_pos < len(full_seq):
+                missing_end = full_seq[end_pos:]
+            else:
+                missing_end = ''
+            contig_seq = segment.forward_sequence
+            has_upstream = len(self.get_preceding_segments(pos_seg_name)) == 1
+            has_downstream = len(self.get_following_segments(pos_seg_name)) == 1
+            up_is_contig, down_is_contig = False, False
+            if has_upstream:
+                up_seg_name = get_unsigned_seg_name(self.get_preceding_segments(pos_seg_name)[0])
+                up_is_contig = self.segments[up_seg_name].contig
+            if has_downstream:
+                down_seg_name = get_unsigned_seg_name(self.get_following_segments(pos_seg_name)[0])
+                down_is_contig = self.segments[down_seg_name].contig
+            a_graph_has_upstream = len(assembly_graph.get_upstream_seg_nums(seg_num)) > 0
+            a_graph_has_downstream = len(assembly_graph.get_downstream_seg_nums(seg_num)) > 0
+
+            start_trim_before = len(missing_start)
+            end_trim_before = len(missing_end)
+
+            # The contig extension is not performed if the contig ends in a dead-end in the
+            # assembly graph - in that case we may want to trim a bit. It's also not performed if
+            # the contig is connected to another contig (in which case extending this one would
+            # shorten the other).
+            if missing_start and has_upstream and not up_is_contig and a_graph_has_upstream:
+                upstream_seg_name = self.get_preceding_segments(pos_seg_name)[0]
+                upstream_seg = self.segments[get_unsigned_seg_name(upstream_seg_name)]
+                upstream_seq = self.seq_from_signed_seg_name(upstream_seg_name)
+                new_end_pos = end_seq_alignment(missing_start, upstream_seq, scoring_scheme)
+                new_upstream_seq = upstream_seq[:new_end_pos]
+                new_rev_upstream_seq = reverse_complement(new_upstream_seq)
+                contig_seq = missing_start + contig_seq
+                if upstream_seg_name.endswith('-'):
+                    new_upstream_seq, new_rev_upstream_seq = new_rev_upstream_seq, new_upstream_seq
+                upstream_seg.forward_sequence = new_upstream_seq
+                upstream_seg.reverse_sequence = new_rev_upstream_seq
+                start_trim_after = 0
+            else:
+                start_trim_after = start_trim_before
+
+            # Now do the same thing, but for the end of the contig.
+            if missing_end and has_downstream and not down_is_contig and a_graph_has_downstream:
+                downstream_seg_name = self.get_following_segments(pos_seg_name)[0]
+                downstream_seg = self.segments[get_unsigned_seg_name(downstream_seg_name)]
+                downstream_seq = self.seq_from_signed_seg_name(downstream_seg_name)
+                new_start_pos = start_seq_alignment(missing_end, downstream_seq, scoring_scheme)
+                new_downstream_seq = downstream_seq[new_start_pos:]
+                new_rev_downstream_seq = reverse_complement(new_downstream_seq)
+                contig_seq += missing_end
+                if downstream_seg_name.endswith('-'):
+                    new_downstream_seq, new_rev_downstream_seq = \
+                        new_rev_downstream_seq, new_downstream_seq
+                downstream_seg.forward_sequence = new_downstream_seq
+                downstream_seg.reverse_sequence = new_rev_downstream_seq
+                end_trim_after = 0
+            else:
+                end_trim_after = end_trim_before
+
+            # If we've made any changes, we need to alter the contig sequence.
+            bases_added_to_start = start_trim_before - start_trim_after
+            bases_added_to_end = end_trim_before - end_trim_after
+            if bases_added_to_start + bases_added_to_end > 0:
+                segment.forward_sequence = contig_seq
+                segment.reverse_sequence = reverse_complement(contig_seq)
+                segment.start_pos = start_trim_after
+                segment.end_pos = len(contig_seq) - end_trim_after
+
+            table_row = [segment.short_name]
+            if bases_added_to_start:
+                table_row.append(green(str(bases_added_to_start)))
+            else:
+                table_row.append(red('0'))
+            if bases_added_to_end:
+                table_row.append(green(str(bases_added_to_end)))
+            else:
+                table_row.append(red('0'))
+            contig_extension_table.append(table_row)
+
+        print_table(contig_extension_table, alignments='LRR', left_align_header=False, indent=0,
+                    fixed_col_widths=[12, 5, 5], col_separation=2)
+
 
 
 class StringGraphSegment(object):
