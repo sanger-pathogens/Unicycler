@@ -55,6 +55,25 @@ def semi_global_alignment(read_name, read_sequence, verbosity, minimap_alignment
 
 
 
+# This function does an exhaustive semi-global alignment (nothing fancy, only suitable for short
+# sequences).
+C_LIB.semiGlobalAlignmentExhaustive.argtypes = [c_char_p,  # Sequence 1
+                                                c_char_p,  # Sequence 2
+                                                c_int,  # Match score
+                                                c_int,  # Mismatch score
+                                                c_int,  # Gap open score
+                                                c_int]  # Gap extension score
+C_LIB.semiGlobalAlignmentExhaustive.restype = c_void_p  # String describing alignment
+
+def semi_global_alignment_exhaustive(sequence_1, sequence_2, scoring_scheme):
+    ptr = C_LIB.semiGlobalAlignmentExhaustive(sequence_1.encode('utf-8'),
+                                              sequence_2.encode('utf-8'),
+                                              scoring_scheme.match, scoring_scheme.mismatch,
+                                              scoring_scheme.gap_open, scoring_scheme.gap_extend)
+    return c_string_to_python_string(ptr)
+
+
+
 # This is the global alignment function mainly used to compare read consensus sequences to assembly
 # graph paths.
 C_LIB.fullyGlobalAlignment.argtypes = [c_char_p,  # Sequence 1

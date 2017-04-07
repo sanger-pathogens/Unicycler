@@ -15,13 +15,14 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
-import statistics
 import sys
+import re
 from collections import deque, defaultdict
 from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red, \
-    get_right_arrow, print_table, bold
+    get_right_arrow, bold, load_fasta
 from .assembly_graph import build_reverse_links
 from .minimap_alignment import load_minimap_alignments, combine_close_hits
+from .cpp_wrappers import semi_global_alignment_exhaustive
 from . import settings
 from . import log
 
@@ -254,309 +255,6 @@ class StringGraph(object):
                     used_segments.add(get_unsigned_seg_name(seg))
                 paths.append(path)
         return paths
-    #
-    # def simplify_bridges(self, before_transitive_reduction):
-    #     """
-    #     This function takes cases where there is a simple path from one contig to the next, and it
-    #     replaces it with a single spanning read.
-    #     """
-    #     log.log('', verbosity=2)
-    #     log.log_explanation('The path between two contigs may contain many reads. If any one of '
-    #                         'those reads spans the entire gap between the two contigs, then '
-    #                         'Unicycler simplifies the graph by using only a single read to connect '
-    #                         'the contigs. When multiple reads are available, it chooses the one '
-    #                         'with the highest average qscore.',
-    #                         verbosity=2)
-    #
-    #     for path in sorted(self.get_bridging_paths()):
-    #         assert len(path) >= 2
-    #         contig_1 = path[0]
-    #         contig_2 = path[-1]
-    #         middle = path[1:-1]
-    #
-    #         log.log(contig_1 + ' ' + get_right_arrow() + ' ' + contig_2, verbosity=2)
-    #
-    #         if len(middle) == 0:
-    #             log.log('  directly joined - nothing to simplify', verbosity=2)
-    #         elif len(middle) == 1:
-    #             log.log('  already joined by a single segment: ' + middle[0], verbosity=2)
-    #         else:  # two or more segments in the middle
-    #
-    #             # If there are multiple reads, we hope to find one that connects the two contigs.
-    #             # Search them in order of highest to lowest quality, seeing if the links we need
-    #             # are in the pre-transitive reduction graph.
-    #             single_bridge_read = None
-    #             for read in sorted([x for x in middle], reverse=True,
-    #                                key=lambda x: self.segments[get_unsigned_seg_name(x)].qual):
-    #                 if (contig_1, read) in before_transitive_reduction.links and \
-    #                         (read, contig_2) in before_transitive_reduction.links:
-    #                     single_bridge_read = read
-    #                     break
-    #
-    #             if single_bridge_read is None:
-    #                 log.log('  no spanning read found - unable to simplify', verbosity=2)
-    #             else:
-    #                 log.log('  simplifying bridge to one read: ' +
-    #                         get_unsigned_seg_name(single_bridge_read), verbosity=2)
-    #
-    #                 # Delete all of the other segments in the bridge.
-    #                 removed_segments = []
-    #                 for read in [x for x in middle if x != single_bridge_read]:
-    #                     unsigned_read = get_unsigned_seg_name(read)
-    #                     self.remove_segment(unsigned_read)
-    #                     removed_segments.append(unsigned_read)
-    #
-    #                 # Create links between the surviving segment and the contigs.
-    #                 link_1_tuple = (contig_1, single_bridge_read)
-    #                 link_2_tuple = (single_bridge_read, contig_2)
-    #                 if link_1_tuple not in self.links:
-    #                     link_1 = before_transitive_reduction.links[link_1_tuple]
-    #                     self.add_link(link_1_tuple[0], link_1_tuple[1],
-    #                                   link_1.seg_1_overlap, link_1.seg_2_overlap)
-    #                 if link_2_tuple not in self.links:
-    #                     link_2 = before_transitive_reduction.links[link_2_tuple]
-    #                     self.add_link(link_2_tuple[0], link_2_tuple[1],
-    #                                   link_2.seg_1_overlap, link_2.seg_2_overlap)
-    #         log.log('', verbosity=2)
-
-    #
-    # def remove_overlaps(self, before_transitive_reduction, scoring_scheme):
-    #     """
-    #     Removes reads and trims reads to get rid of graph overlap:
-    #       * Selectively removes overlaps from lower quality sequences first.
-    #       * Keeps as much contig sequence as possible.
-    #
-    #     before_transitive_reduction is the string graph at an earlier state where there are still
-    #     transitive links. This helps us to find the correct overlaps when removing segments.
-    #     This function assumes that remove_branching_paths has been run and we only have simple,
-    #     unbranching paths to deal with.
-    #     """
-    #     log.log('', verbosity=2)
-    #     log.log_explanation('At this point, the graph still contains overlaps - perhaps very long '
-    #                         'overlaps. Unicycler now removes those from the graph by throwing out '
-    #                         'redundant sequences and trimming sequence ends. As with the previous '
-    #                         'step, sequences with higher average qscores are preferentially kept.',
-    #                         verbosity=2)
-    #
-    #     segments_by_quality = sorted([x for x in self.segments],
-    #                                  key=lambda x: (self.segments[x].qual, self.segments[x].get_length()))
-    #     for seg_name in segments_by_quality:
-    #         seg = self.segments[seg_name]
-    #         seg_len = seg.get_length()
-    #         pos_seg_name = seg_name + '+'
-    #
-    #         preceding_segments = self.get_preceding_segments(pos_seg_name)
-    #         following_segments = self.get_following_segments(pos_seg_name)
-    #         assert len(preceding_segments) <= 1
-    #         assert len(following_segments) <= 1
-    #
-    #         if len(preceding_segments) == 1:
-    #             preceding_seg_name = preceding_segments[0]
-    #             start_link = self.links[(preceding_seg_name, pos_seg_name)]
-    #             start_overlap = start_link.seg_2_overlap
-    #         else:
-    #             preceding_seg_name = None
-    #             start_link = None
-    #             start_overlap = 0
-    #
-    #         if len(following_segments) == 1:
-    #             following_seg_name = following_segments[0]
-    #             end_link = self.links[(pos_seg_name, following_seg_name)]
-    #             end_overlap = end_link.seg_1_overlap
-    #         else:
-    #             following_seg_name = None
-    #             end_link = None
-    #             end_overlap = 0
-    #
-    #         # If there aren't any overlaps, then we've nothing to do!
-    #         if start_overlap == 0 and end_overlap == 0:
-    #             continue
-    #
-    #         # If the start and end overlap sum to less than the length of the segment, then we
-    #         # trim off the overlaps and leave the segment in the middle. We do this by actually
-    #         # removing the segment and creating a new one with a different start/end range.
-    #         if start_overlap + end_overlap < seg_len:
-    #             new_start_pos = seg.start_pos + start_overlap
-    #             new_end_pos = seg.end_pos - end_overlap
-    #             new_name = seg.short_name + ':' + str(new_start_pos) + '-' + str(new_end_pos)
-    #             new_pos_name = new_name + '+'
-    #             if end_overlap > 0:
-    #                 new_seq = seg.forward_sequence[start_overlap:-end_overlap]
-    #             else:
-    #                 new_seq = seg.forward_sequence[start_overlap:]
-    #             new_qual = seg.qual
-    #
-    #             # Out with the old and in with the new!
-    #             self.remove_segment(seg_name)
-    #             self.segments[new_name] = StringGraphSegment(new_name, new_seq, qual=new_qual)
-    #             if preceding_seg_name is not None:
-    #                 self.add_link(preceding_seg_name, new_pos_name, 0, 0)
-    #             if following_seg_name is not None:
-    #                 self.add_link(new_pos_name, following_seg_name, 0, 0)
-    #
-    #             log.log('trimmed ' + str(start_overlap) + ' bp from start and ' +
-    #                     str(end_overlap) + ' bp from end of ' + seg_name, verbosity=2)
-    #
-    #         # If the start and end overlap are more than the length of the segment, then we can
-    #         # remove the segment entirely (because the preceding and following segments will
-    #         # still overlap).
-    #         elif start_link is not None and end_link is not None:
-    #             start_overlap_ratio = start_link.seg_1_overlap / start_link.seg_2_overlap
-    #             end_overlap_ratio = end_link.seg_2_overlap / end_link.seg_1_overlap
-    #
-    #             # Make a guess for the new link overlaps.
-    #             new_link_overlap = -(seg_len - start_overlap - end_overlap)
-    #             overlap_1 = int(round(new_link_overlap * start_overlap_ratio))
-    #             overlap_2 = int(round(new_link_overlap * end_overlap_ratio))
-    #
-    #             # Look for the link in the before transitive reduction graph to find the
-    #             # exact overlaps, they are available.
-    #             link_tuple = (preceding_seg_name, following_seg_name)
-    #             if link_tuple in before_transitive_reduction.links:
-    #                 exact_link = before_transitive_reduction.links[link_tuple]
-    #                 overlap_1 = exact_link.seg_1_overlap
-    #                 overlap_2 = exact_link.seg_2_overlap
-    #
-    #             # If we failed to find the link in the graph, we will align the reads
-    #             # using to get an exact overlap.
-    #             else:
-    #                 preceding_segment_seq = self.seq_from_signed_seg_name(preceding_seg_name)
-    #                 following_segment_seq = self.seq_from_signed_seg_name(following_seg_name)
-    #                 guess_overlap = max(overlap_1, overlap_2)
-    #                 new_overlap_1, new_overlap_2 = overlap_alignment(preceding_segment_seq,
-    #                                                                  following_segment_seq,
-    #                                                                  scoring_scheme,
-    #                                                                  guess_overlap)
-    #                 if new_overlap_1 != -1 and new_overlap_2 != 1:
-    #                     overlap_1, overlap_2 = new_overlap_1, new_overlap_2
-    #
-    #             self.add_link(preceding_seg_name, following_seg_name, overlap_1, overlap_2)
-    #             self.remove_segment(seg_name)
-    #             log.log('removed ' + seg_name, verbosity=2)
-    #
-    #         # We should never fail both of the above conditions. I.e. either we can trim the ends
-    #         # or there is a link on both sides. Neither shouldn't be true (a link on one side
-    #         # which covers the whole read) because that would imply that the read is contained,
-    #         # something that miniasm filters out.
-    #         else:
-    #             assert False
-    #
-    #     # We should now have an overlap-free graph!
-    #     self.check_graph_has_no_overlaps()
-    #     log.log('', verbosity=2)
-    #
-    # def merge_reads(self):
-    #     """
-    #     This function takes any reads in a simple path and merges them together. It assumes that
-    #     the graph is now overlap-free.
-    #     """
-    #     log.log('', verbosity=2)
-    #     log.log_explanation('Simple paths in the graph which contain only long read sequences can '
-    #                         'now be merged together. This results in a graph with two distinct '
-    #                         'types of segments: contigs (from the short read assembly) and long '
-    #                         'read sequences.',
-    #                         verbosity=2)
-    #
-    #     segments_in_paths = set()
-    #     paths_to_merge = []
-    #     for seg_name in sorted(self.segments.keys(), reverse=True,
-    #                            key=lambda x: self.segments[x].get_length()):
-    #         if seg_name in segments_in_paths:
-    #             continue
-    #         path = self.get_simple_read_path(seg_name + '+')
-    #         if path:
-    #             segments_in_paths.update(get_unsigned_seg_name(x) for x in path)
-    #         if len(path) > 1:
-    #             paths_to_merge.append(path)
-    #
-    #     for path in paths_to_merge:
-    #         merged_seg_name = self.get_next_available_merged_segment_name()
-    #         merged_seg_seq = ''
-    #         merged_seq_quals = []
-    #         for path_seg in path:
-    #             seq = self.seq_from_signed_seg_name(path_seg)
-    #             merged_seq_quals.append(self.segments[get_unsigned_seg_name(path_seg)].qual)
-    #             merged_seg_seq += seq
-    #         merged_seq_qual = statistics.mean(merged_seq_quals)
-    #         self.segments[merged_seg_name] = StringGraphSegment(merged_seg_name, merged_seg_seq,
-    #                                                             qual=merged_seq_qual)
-    #         pos_merged_seg_name = merged_seg_name + '+'
-    #
-    #         preceding_segments = self.get_preceding_segments(path[0])
-    #         following_segments = self.get_following_segments(path[-1])
-    #         assert len(preceding_segments) <= 1
-    #         assert len(following_segments) <= 1
-    #
-    #         # If the path is circular, then we just need to make one new link: start to end.
-    #         if (len(preceding_segments) == 1 and len(following_segments) == 1 and
-    #                 preceding_segments[0] == path[-1] and following_segments[0] == path[0]):
-    #             self.add_link(pos_merged_seg_name, pos_merged_seg_name, 0, 0)
-    #
-    #         # If the path isn't circular, then we need to link it up to any neighbours it might
-    #         # have (which must be contigs).
-    #         else:
-    #             if len(preceding_segments) == 1:
-    #                 preceding_segment = preceding_segments[0]
-    #                 assert preceding_segment.startswith('CONTIG_')
-    #                 self.add_link(preceding_segment, pos_merged_seg_name, 0, 0)
-    #             if len(following_segments) == 1:
-    #                 following_segment = following_segments[0]
-    #                 assert following_segment.startswith('CONTIG_')
-    #                 self.add_link(pos_merged_seg_name, following_segment, 0, 0)
-    #
-    #         log.log((' ' + get_right_arrow() + ' ').join(path), verbosity=2)
-    #         log.log('merged into ' + merged_seg_name, verbosity=2)
-    #         log.log('', verbosity=2)
-    #
-    #         for path_seg in path:
-    #             self.remove_segment(get_unsigned_seg_name(path_seg))
-    #
-    #     if not paths_to_merge:
-    #         log.log('No paths require merging', verbosity=2)
-    #     else:
-    #         log.log('', verbosity=2)
-
-    # def get_next_available_merged_segment_name(self):
-    #     n = 1
-    #     while True:
-    #         name = 'merged_reads_' + str(n)
-    #         if name not in self.segments:
-    #             return name
-    #         n += 1
-    #
-    # def get_simple_read_path(self, starting_seg):
-    #     """
-    #     Starting from the given segment, this simple paths consisting only of reads (not contigs).
-    #     """
-    #     if self.segments[get_unsigned_seg_name(starting_seg)].contig:
-    #         return []
-    #     simple_path = [starting_seg]
-    #
-    #     # Extend path forward as much as possible.
-    #     current_seg_name = starting_seg
-    #     while True:
-    #         following_segments = self.get_following_segments(current_seg_name)
-    #         if len(following_segments) != 1:
-    #             break
-    #         current_seg_name = following_segments[0]
-    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-    #             break
-    #         if current_seg_name == starting_seg:  # Check for looping in a circle
-    #             return simple_path
-    #         simple_path.append(current_seg_name)
-    #
-    #     # Extend path backward as much as possible.
-    #     current_seg_name = starting_seg
-    #     while True:
-    #         preceding_segments = self.get_preceding_segments(current_seg_name)
-    #         if len(preceding_segments) != 1:
-    #             break
-    #         current_seg_name = preceding_segments[0]
-    #         if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-    #             break
-    #         simple_path = [current_seg_name] + simple_path
-    #
-    #     return simple_path
 
     def seq_from_signed_seg_name(self, signed_name):
         assert(signed_name.endswith('+') or signed_name.endswith('-'))
@@ -565,6 +263,12 @@ class StringGraph(object):
             return self.segments[unsigned_seg_name].forward_sequence
         else:
             return self.segments[unsigned_seg_name].reverse_sequence
+
+    def save_to_fasta(self, filename):
+        with open(filename, 'w') as fasta:
+            for segment in sorted(self.segments.values(), reverse=True,
+                                  key=lambda x: x.get_length()):
+                fasta.write(segment.fasta_record())
 
     def save_non_contigs_to_file(self, filename, min_length):
         """
@@ -851,110 +555,6 @@ class StringGraph(object):
         following_seg_name = following_segments[0]
         return preceding_seg_name == pos_seg_name and following_seg_name == pos_seg_name
 
-    # def extend_contigs(self, assembly_graph, scoring_scheme):
-    #     """
-    #     Extends contigs to their full length, where possible.
-    #     """
-    #     log.log_explanation('At this point, the contigs in the graph may still be slightly trimmed '
-    #                         'due to miniasm trimming. Unicycler now tries to extend those contigs '
-    #                         'to their full length, reducing neighbouring read sequences by the '
-    #                         'corresponding amount.',
-    #                         verbosity=2)
-    #
-    #     contig_extension_table = [['Contig', 'Start bases added', 'End bases added']]
-    #     for segment in sorted(self.segments.values(), reverse=True, key=lambda x: x.get_length()):
-    #         if not segment.contig:
-    #             continue
-    #         pos_seg_name = segment.full_name + '+'
-    #         seg_num = int(segment.short_name.replace('CONTIG_', ''))
-    #         full_seq = assembly_graph.segments[seg_num].forward_sequence
-    #         start_pos, end_pos = segment.start_pos - 1, segment.end_pos
-    #         if start_pos > 0:
-    #             missing_start = full_seq[:start_pos]
-    #         else:
-    #             missing_start = ''
-    #         if end_pos < len(full_seq):
-    #             missing_end = full_seq[end_pos:]
-    #         else:
-    #             missing_end = ''
-    #         contig_seq = segment.forward_sequence
-    #         has_upstream = len(self.get_preceding_segments(pos_seg_name)) == 1
-    #         has_downstream = len(self.get_following_segments(pos_seg_name)) == 1
-    #         up_is_contig, down_is_contig = False, False
-    #         if has_upstream:
-    #             up_seg_name = get_unsigned_seg_name(self.get_preceding_segments(pos_seg_name)[0])
-    #             up_is_contig = self.segments[up_seg_name].contig
-    #         if has_downstream:
-    #             down_seg_name = get_unsigned_seg_name(self.get_following_segments(pos_seg_name)[0])
-    #             down_is_contig = self.segments[down_seg_name].contig
-    #         a_graph_has_upstream = len(assembly_graph.get_upstream_seg_nums(seg_num)) > 0
-    #         a_graph_has_downstream = len(assembly_graph.get_downstream_seg_nums(seg_num)) > 0
-    #
-    #         start_trim_before = len(missing_start)
-    #         end_trim_before = len(missing_end)
-    #
-    #         # The contig extension is not performed if the contig ends in a dead-end in the
-    #         # assembly graph - in that case we may want to trim a bit. It's also not performed if
-    #         # the contig is connected to another contig (in which case extending this one would
-    #         # shorten the other).
-    #         if missing_start and has_upstream and not up_is_contig and a_graph_has_upstream:
-    #             upstream_seg_name = self.get_preceding_segments(pos_seg_name)[0]
-    #             upstream_seg = self.segments[get_unsigned_seg_name(upstream_seg_name)]
-    #             upstream_seq = self.seq_from_signed_seg_name(upstream_seg_name)
-    #             new_end_pos = end_seq_alignment(missing_start, upstream_seq, scoring_scheme)
-    #             new_upstream_seq = upstream_seq[:new_end_pos]
-    #             new_rev_upstream_seq = reverse_complement(new_upstream_seq)
-    #             contig_seq = missing_start + contig_seq
-    #             if upstream_seg_name.endswith('-'):
-    #                 new_upstream_seq, new_rev_upstream_seq = new_rev_upstream_seq, new_upstream_seq
-    #             upstream_seg.forward_sequence = new_upstream_seq
-    #             upstream_seg.reverse_sequence = new_rev_upstream_seq
-    #             start_trim_after = 0
-    #         else:
-    #             start_trim_after = start_trim_before
-    #
-    #         # Now do the same thing, but for the end of the contig.
-    #         if missing_end and has_downstream and not down_is_contig and a_graph_has_downstream:
-    #             downstream_seg_name = self.get_following_segments(pos_seg_name)[0]
-    #             downstream_seg = self.segments[get_unsigned_seg_name(downstream_seg_name)]
-    #             downstream_seq = self.seq_from_signed_seg_name(downstream_seg_name)
-    #             new_start_pos = start_seq_alignment(missing_end, downstream_seq, scoring_scheme)
-    #             new_downstream_seq = downstream_seq[new_start_pos:]
-    #             new_rev_downstream_seq = reverse_complement(new_downstream_seq)
-    #             contig_seq += missing_end
-    #             if downstream_seg_name.endswith('-'):
-    #                 new_downstream_seq, new_rev_downstream_seq = \
-    #                     new_rev_downstream_seq, new_downstream_seq
-    #             downstream_seg.forward_sequence = new_downstream_seq
-    #             downstream_seg.reverse_sequence = new_rev_downstream_seq
-    #             end_trim_after = 0
-    #         else:
-    #             end_trim_after = end_trim_before
-    #
-    #         # If we've made any changes, we need to alter the contig sequence.
-    #         bases_added_to_start = start_trim_before - start_trim_after
-    #         bases_added_to_end = end_trim_before - end_trim_after
-    #         if bases_added_to_start + bases_added_to_end > 0:
-    #             segment.forward_sequence = contig_seq
-    #             segment.reverse_sequence = reverse_complement(contig_seq)
-    #             segment.start_pos = start_trim_after
-    #             segment.end_pos = len(contig_seq) - end_trim_after
-    #
-    #         table_row = [segment.short_name]
-    #         if bases_added_to_start:
-    #             table_row.append(green(str(bases_added_to_start)))
-    #         else:
-    #             table_row.append(red('0'))
-    #         if bases_added_to_end:
-    #             table_row.append(green(str(bases_added_to_end)))
-    #         else:
-    #             table_row.append(red('0'))
-    #         contig_extension_table.append(table_row)
-    #
-    #     print_table(contig_extension_table, alignments='LRR', left_align_header=False, indent=0,
-    #                 fixed_col_widths=[12, 5, 5], col_separation=2)
-
-
     def get_connected_components(self):
         """
         Returns a list of lists, where each inner list is the segment names of one connected
@@ -983,7 +583,6 @@ class StringGraph(object):
         # Sort (just for consistency from one run to the next)
         return sorted(components)
 
-
     def get_connected_segments(self, seg_name):
         """
         Given a segment number, this function returns a list of all other names for segments that
@@ -1001,6 +600,74 @@ class StringGraph(object):
             for segment in upstream_segments:
                 connected_segments.add(get_unsigned_seg_name(segment))
         return list(connected_segments)
+
+
+    def replace_with_polished_sequences(self, polished_fasta, scoring_scheme):
+        """
+        Swaps out the current sequences with polished versions from Racon.
+        """
+        polished_seqs = load_fasta(polished_fasta)
+        for seg_name, segment in self.segments.items():
+            try:
+                polished_seq = [x[1] for x in polished_seqs if 'Consensus_' + seg_name == x[0]][0]
+
+                # Racon sometimes drops the start or end of sequences, so we do some semi-global
+                # alignments to see if bases have been lost. If so, we put them back!
+                gap = 500
+                unpolished_seq_start = segment.forward_sequence[:gap]
+                unpolished_seq_end = segment.forward_sequence[-gap:]
+                polished_seq_start = polished_seq[:gap]
+                polished_seq_end = polished_seq[-gap:]
+                start_alignment = semi_global_alignment_exhaustive(unpolished_seq_start,
+                                                                   polished_seq_start,
+                                                                   scoring_scheme)
+                end_alignment = semi_global_alignment_exhaustive(unpolished_seq_end,
+                                                                 polished_seq_end, scoring_scheme)
+
+                missing_start_seq = ''
+                try:
+                    cigar_parts = re.findall(r'\d+\w', start_alignment.split(',')[9])
+                    first_cigar = cigar_parts[0]
+                    if first_cigar[-1] == 'I':
+                        missing_start_count = int(first_cigar[:-1])
+                        missing_start_seq = unpolished_seq_start[:missing_start_count]
+                except (ValueError, IndexError):
+                    pass
+
+                missing_end_seq = ''
+                try:
+                    cigar_parts = re.findall(r'\d+\w', end_alignment.split(',')[9])
+                    last_cigar = cigar_parts[-1]
+                    if last_cigar[-1] == 'I':
+                        missing_end_count = int(last_cigar[:-1])
+                        missing_end_seq = unpolished_seq_end[-missing_end_count:]
+                except (ValueError, IndexError):
+                    pass
+
+                if missing_start_seq or missing_end_seq:
+                    polished_seq = missing_start_seq + polished_seq + missing_end_seq
+
+                segment.forward_sequence = polished_seq
+                segment.reverse_sequence = reverse_complement(polished_seq)
+            except IndexError:
+                pass
+
+    def rotate_circular_sequences(self):
+        """
+        Rotates the sequence to a new starting point. It shifts by a non-rational (well, almost)
+        fraction of the sequence length so repeated executions of this function don't result in
+        repeated starting positions.
+        """
+        for seg_name, segment in self.segments.items():
+            if self.segment_is_circular(seg_name):
+                seq = segment.forward_sequence
+                shift = int(len(seq) * 0.70710678118655)
+                seq = seq[shift:] + seq[:shift]
+                segment.forward_sequence = seq
+                segment.reverse_sequence = reverse_complement(seq)
+
+    def get_total_segment_length(self):\
+        return sum(s.get_length() for s in self.segments.values())
 
 
 class StringGraphSegment(object):
@@ -1053,11 +720,6 @@ class StringGraphSegment(object):
     def fasta_record(self):
         return ''.join(['>', self.full_name, '\n',
                         add_line_breaks_to_sequence(self.forward_sequence, 70)])
-
-    def fastq_record(self, qual_score):
-        qual_char = chr(qual_score + 33)
-        return ''.join(['@', self.full_name, '\n',  self.forward_sequence, '\n+\n',
-                        qual_char * self.get_length(), '\n'])
 
 
 class StringGraphLink(object):
@@ -1171,7 +833,7 @@ def merge_string_graph_segments_into_unitig_graph(string_graph):
             else:
                 assert len(next_seg) == 1
                 overlap = string_graph.links[(current_seg, next_seg[0])].seg_1_overlap
-                if overlap == 0:  # don't think this will happen...
+                if overlap == 0:  # I don't think this will happen...
                     unitig_seq += current_seq
                 else:
                     unitig_seq += current_seq[:-overlap]
@@ -1189,7 +851,7 @@ def merge_string_graph_segments_into_unitig_graph(string_graph):
         log.log('', verbosity=2)
 
     # Build and return the unitig graph using the sequences we just made.
-    unitig_sequences = sorted(unitig_sequences, key=lambda x: len(x[0]))
+    unitig_sequences = sorted(unitig_sequences, key=lambda x: len(x[0]), reverse=True)
     unitig_graph = StringGraph(None, None)
     for i, unitig_seq_circular in enumerate(unitig_sequences):
         unitig_seq, circular = unitig_seq_circular

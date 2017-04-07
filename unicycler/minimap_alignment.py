@@ -76,34 +76,6 @@ class MinimapAlignment(object):
         adjusted_contig_end = self.ref_end + self.read_end_gap
         return adjusted_contig_start < 0 or adjusted_contig_end >= self.ref_length
 
-    def ref_contained_in_read(self):
-        """
-        Returns true if the read overlaps both ends of the reference.
-        """
-        if self.read_strand == '+':
-            strand_specific_ref_start = self.ref_start
-            strand_specific_ref_end = self.ref_end
-        else:  # self.read_strand == '-'
-            strand_specific_ref_start = self.ref_length - self.ref_end
-            strand_specific_ref_end = self.ref_length - self.ref_start
-        adjusted_ref_start = strand_specific_ref_start - self.read_start
-        adjusted_ref_end = strand_specific_ref_end + self.read_end_gap
-        return adjusted_ref_start < 0 and adjusted_ref_end >= self.ref_length
-
-    def read_contained_in_ref(self):
-        """
-        Returns true if the reference overlaps both ends of the read.
-        """
-        if self.read_strand == '+':
-            strand_specific_read_start = self.read_start
-            strand_specific_read_end = self.read_end
-        else:  # self.read_strand == '-'
-            strand_specific_read_start = self.read_length - self.read_end
-            strand_specific_read_end = self.read_length - self.read_start
-        adjusted_read_start = strand_specific_read_start - self.ref_start
-        adjusted_read_end = strand_specific_read_end + self.ref_end_gap
-        return adjusted_read_start < 0 and adjusted_read_end >= self.read_length
-
     def fraction_read_aligned(self):
         try:
             return (self.read_end - self.read_start) / self.read_length

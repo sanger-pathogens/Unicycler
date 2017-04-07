@@ -19,12 +19,10 @@ import shutil
 import statistics
 import subprocess
 import sys
-from .misc import green, red, line_iterator, load_fasta, reverse_complement, print_table, \
-    get_right_arrow
+from .misc import green, red, line_iterator, print_table, int_to_str
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets, \
     load_minimap_alignments_basic
-from .string_graph import StringGraph, get_unsigned_seg_name, \
-    merge_string_graph_segments_into_unitig_graph
+from .string_graph import StringGraph, merge_string_graph_segments_into_unitig_graph
 from . import log
 from . import settings
 
@@ -91,6 +89,9 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
     before_transitive_reduction_filename = os.path.join(miniasm_dir, '03_raw_string_graph.gfa')
     string_graph_filename = os.path.join(miniasm_dir, '10_final_string_graph.gfa')
+    branching_paths_removed_filename = os.path.join(miniasm_dir, '11_branching_paths_removed.gfa')
+    unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
+    racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
 
     mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
                                                   read_dict, graph)
@@ -126,68 +127,45 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
 
     string_graph.remove_branching_paths()
     if keep >= 3:
-        string_graph.save_to_gfa(os.path.join(miniasm_dir, '12_branching_paths_removed.gfa'))
+        string_graph.save_to_gfa(branching_paths_removed_filename)
 
     unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph)
     if keep >= 3:
-        unitig_graph.save_to_gfa(os.path.join(miniasm_dir, '13_unitig_graph.gfa'))
+        unitig_graph.save_to_gfa(unitig_graph_filename)
 
-    # string_graph.simplify_bridges(before_transitive_reduction)
-    # if keep >= 3:
-    #     string_graph.save_to_gfa(os.path.join(miniasm_dir, '13_simplified_bridges.gfa'))
-    #
-    # string_graph.remove_overlaps(before_transitive_reduction, scoring_scheme)
-    # if keep >= 3:
-    #     string_graph.save_to_gfa(os.path.join(miniasm_dir, '14_overlaps_removed.gfa'))
-    #
-    # string_graph.merge_reads()
-    # if keep >= 3:
-    #     string_graph.save_to_gfa(os.path.join(miniasm_dir, '15_reads_merged.gfa'))
-
-    quit()  # TEMP
-
-    # # Some single copy contigs might be isolated from the main part of the graph (due to contained
-    # # read filtered or some graph simplification step, like bubble popping). We now need to place
-    # # them back in by aligning to the non-contig graph segments.
-    # string_graph.place_isolated_contigs(miniasm_dir, threads)
-    # if keep >= 3:
-    #     string_graph.save_to_gfa(os.path.join(miniasm_dir, '18_contigs_placed.gfa'))
-    #
-    # # TO DO: I can probably remove this later, for efficiency. It's just a sanity check that none
-    # # of the graph manipulations screwed up the sequence ranges.
-    # string_graph.check_segment_names_and_ranges(read_dict, graph)
-    #
-    # # Polish each bridge sequence using Racon.
-    # polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
-    #                racon_path, scoring_scheme, threads)
-    # string_graph.save_to_gfa(os.path.join(miniasm_dir, '19_racon_polish.gfa'))
-    #
-    # # We now want to extend the contigs all the way to their end, if possible. E.g. if miniasm
-    # # trimmed a few bases off the start and end of the contig, we can add those back on, shortening
-    # # the neighbouring bridges slightly.
-    # string_graph.extend_contigs(graph, scoring_scheme)
-    # string_graph.save_to_gfa(os.path.join(miniasm_dir, '20_contigs_extended.gfa'))
+    polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, read_dict, graph,
+                              racon_path, threads, scoring_scheme)
+    if keep >= 3:
+        unitig_graph.save_to_gfa(racon_polished_filename)
 
 
 
-    # TRY TO PLACE SMALLER SINGLE-COPY CONTIGS?
-    # * Could use the same process as place_isolated_contigs
 
 
-    # LOOK FOR EACH BRIDGE SEQUENCE IN THE GRAPH.
-    # * Goal 1: if we can find a short read version of the bridge, we should use that because it
-    #   will probably be more accurate.
-    # * Goal 2: using a graph path will let us 'use up' the segments, which helps with clean-up.
-    # * In order to replace a miniasm assembly bridge sequence with a graph path sequence, the
-    #   match has to be very strong! High identity over all sequence windows.
-    # * Can use my existing path finding code, but tweak the settings to make them faster. This is
-    #   because failing to find an existing path isn't too terrible, as we already have the miniasm
-    #   sequence.
 
-    # DO SOME BASIC GRAPH CLEAN-UP AND MERGE ALL POSSIBLE SEGMENTS.
-    # * Clean up will be a bit tougher as we may have missed used sequence.
 
-    # RE-RUN COPY NUMBER DETERMINATION.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     if keep < 3:
         shutil.rmtree(miniasm_dir)
@@ -262,99 +240,72 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
     return not graph.is_component_complete([segment.number])
 
 
-def polish_bridges(miniasm_dir, string_graph, read_dict, start_overlap_reads, end_overlap_reads,
-                   racon_path, scoring_scheme, threads):
+def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, read_dict, graph,
+                              racon_path, threads, scoring_scheme):
     log.log_section_header('Polishing miniasm assembly with Racon')
-    log.log_explanation('Unicycler now uses Racon to polish each string graph segment which '
-                        'connects two contigs. The resulting consensus sequences will be more '
-                        'accurate than the starting sequences (which are made from individual '
-                        'long reads).', verbosity=2)
+    log.log_explanation('Unicycler now uses Racon to polish the miniasm assembly. It does '
+                        'multiple rounds of polishing to get the best consensus, and circular '
+                        'unitigs are rotated between rounds such that all parts (including the '
+                        'ends) are polished well.')
 
-    bridging_paths = string_graph.get_bridging_paths()
-    if not bridging_paths:
-        log.log('No bridging paths exist', verbosity=2)
-        return
+    polish_dir = os.path.join(miniasm_dir, 'racon_polish')
+    if not os.path.isdir(polish_dir):
+        os.makedirs(polish_dir)
 
-    ra = get_right_arrow()
-    col_widths = [22, len(ra), 22, 6, 5, 10, 10]
-    racon_table_header = ['Start', '', 'End', 'Racon rounds', 'Read depth', 'Pre-Racon length',
-                          'Post-Racon length']
+    # Save reads to file for polishing. We exclude reads that miniasm decided were chimeras.
+    chimeric_read_names = set()
+    chimeric_read_list_filename = os.path.join(miniasm_dir, 'chimeric_reads.txt')
+    if os.path.isfile(chimeric_read_list_filename):
+        with open(chimeric_read_list_filename) as chimeric_read_list_file:
+            for line in chimeric_read_list_file:
+                chimeric_read_names.add(line.strip())
+    assembly_read_names = [x for x in assembly_read_names if x not in chimeric_read_names]
+    polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
+    save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph)
+    log.log('')
+
+    col_widths = [6, 12, 14]
+    racon_table_header = ['Polish round', 'Assembly size', 'Mapping quality']
     print_table([racon_table_header], fixed_col_widths=col_widths, left_align_header=False,
-                alignments='RLLRRRR', indent=0, col_separation=1)
+                alignments='RRR', indent=0)
 
-    for bridging_path in bridging_paths:
-        assert len(bridging_path) == 3
-        pre_racon_length = len(string_graph.seq_from_signed_seg_name(bridging_path[1]))
-        rounds, depth = polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict,
-                                      start_overlap_reads, end_overlap_reads, racon_path,
-                                      scoring_scheme, threads)
-        post_racon_length = len(string_graph.seq_from_signed_seg_name(bridging_path[1]))
-        racon_table_row = [bridging_path[0], ra, bridging_path[2], str(rounds), '%.1f' % depth,
-                           str(pre_racon_length), str(post_racon_length)]
-        print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
-                    alignments='RLLRRRR', indent=0, header_format='normal', col_separation=1)
-    log.log('', verbosity=2)
-
-
-def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_overlap_reads,
-                  end_overlap_reads, racon_path, scoring_scheme, threads):
-    first = string_graph.segments[get_unsigned_seg_name(bridging_path[0])]
-    middle = string_graph.segments[get_unsigned_seg_name(bridging_path[1])]
-    last = string_graph.segments[get_unsigned_seg_name(bridging_path[2])]
-    first_sign = bridging_path[0][-1]
-    middle_sign = bridging_path[1][-1]
-    last_sign = bridging_path[2][-1]
-    first_num = int(first.short_name.split('CONTIG_')[-1]) * (-1 if first_sign == '-' else 1)
-    last_num = int(last.short_name.split('CONTIG_')[-1]) * (-1 if last_sign == '-' else 1)
-
-    bridge_name = 'bridge_' + (first.short_name + '_to_' + last.short_name).replace('CONTIG_', '')
-    bridge_dir = os.path.join(miniasm_dir, bridge_name)
-    if not os.path.isdir(bridge_dir):
-        os.makedirs(bridge_dir)
-
-    # Save the bridge to file, with a bit of contig sequence on each end.
-    margin = settings.RACON_POLISH_MARGIN
-    bridge_start_seq = string_graph.seq_from_signed_seg_name(bridging_path[0])[-margin:]
-    bridge_middle_seq = string_graph.seq_from_signed_seg_name(bridging_path[1])
-    bridge_end_seq = string_graph.seq_from_signed_seg_name(bridging_path[2])[:margin]
-    full_bridge_seq = bridge_start_seq + bridge_middle_seq + bridge_end_seq
-    unpolished_seq = os.path.join(bridge_dir, 'unpolished.fasta')
-    with open(unpolished_seq, 'wt') as fasta:
-        fasta.write('>bridge\n')
-        fasta.write(full_bridge_seq)
-        fasta.write('\n')
-
-    # Save the reads to file which we'll use to polish.
-    read_names = sorted(end_overlap_reads[first_num] | start_overlap_reads[last_num])
-    if not read_names:
-        return 0
-    polish_reads = os.path.join(bridge_dir, 'reads.fastq')
-    with open(polish_reads, 'wt') as fastq:
-        for name in read_names:
-            fastq.write(read_dict[name].get_fastq())
-
-    current_fasta = unpolished_seq
-    last_seq = full_bridge_seq
-    previous_seqs = [last_seq]
-
-    polish_round_count = 0
-    depth = 0.0
-    for _ in range(settings.RACON_POLISH_LOOP_COUNT):
+    best_mapping_quality = 0
+    times_quality_failed_to_increase = 0
+    for polish_round_count in range(settings.RACON_POLISH_LOOP_COUNT):
         round_num_str = '%02d' % (polish_round_count + 1)
+        pre_polish_fasta = os.path.join(polish_dir, round_num_str + '_1_pre-polish.fasta')
+        mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.paf')
+        racon_log = os.path.join(polish_dir, round_num_str + '_3_racon.log')
+        post_polish_fasta = os.path.join(polish_dir, round_num_str + '_4_post-polish.fasta')
+
+        if polish_round_count > 0:
+            unitig_graph.rotate_circular_sequences()
+        unitig_graph.save_to_fasta(pre_polish_fasta)
 
         # Create the alignments for Racon using miniasm.
-        mappings_filename = os.path.join(bridge_dir, 'alignments_' + round_num_str + '.paf')
-        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 0)
+        minimap_alignments_str = minimap_align_reads(pre_polish_fasta, polish_reads, 1, 0)
         with open(mappings_filename, 'wt') as mappings:
             mappings.write(minimap_alignments_str)
-        depth = sum(a.fraction_ref_aligned()
-                    for a in load_minimap_alignments_basic(minimap_alignments_str))
+        mapping_quality = sum(a.matching_bases
+                              for a in load_minimap_alignments_basic(minimap_alignments_str))
+
+        racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
+                           int_to_str(unitig_graph.get_total_segment_length()),
+                           int_to_str(mapping_quality)]
+        print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
+                    alignments='LRR', indent=0, header_format='normal')
+
+        # If we've failed to improve on our best quality for a few rounds, then we're done!
+        if mapping_quality <= best_mapping_quality:
+            times_quality_failed_to_increase += 1
+        else:
+            best_mapping_quality = mapping_quality
+        if times_quality_failed_to_increase > 2:
+            break
 
         # Run Racon. It crashes sometimes, so repeat until its return code is 0.
-        racon_fasta = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.fasta')
-        racon_log = os.path.join(bridge_dir, 'consensus_' + round_num_str + '.log')
         command = [racon_path, '--verbose', '9', '--threads', str(threads), '--bq', '-1',
-                   polish_reads, mappings_filename, current_fasta, racon_fasta]
+                   polish_reads, mappings_filename, pre_polish_fasta, post_polish_fasta]
         return_code = 1
         for t in range(100):  # Only try a fixed number of times, to prevent an infinite loop.
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -363,36 +314,17 @@ def polish_bridge(bridging_path, miniasm_dir, string_graph, read_dict, start_ove
                 log_file.write(out)
                 log_file.write(err)
             return_code = process.returncode
-            if return_code == 0:
+            if return_code == 0 and os.path.isfile(post_polish_fasta):
                 break
-            if return_code != 0:
-                if os.path.isfile(racon_fasta):
-                    os.remove(racon_fasta)
-                if os.path.isfile(racon_log):
-                    os.remove(racon_log)
-        if return_code != 0 or not os.path.isfile(racon_fasta):
-            break
-        polished_seq = load_fasta(racon_fasta)[0][1]
-        polish_round_count += 1
+            if os.path.isfile(post_polish_fasta):
+                os.remove(post_polish_fasta)
+            if os.path.isfile(racon_log):
+                os.remove(racon_log)
 
-        # If the sequence hasn't changed or is equal to any previous state (sometimes Racon
-        # oscillates between a few states), there's no need to do another round of polishing.
-        if any(polished_seq == x for x in previous_seqs):
+        # If even after all those tries Racon still didn't succeed, then we give up!
+        if return_code != 0 or not os.path.isfile(post_polish_fasta):
             break
 
-        current_fasta = racon_fasta
-        last_seq = polished_seq
-        previous_seqs.append(last_seq)
+        unitig_graph.replace_with_polished_sequences(post_polish_fasta, scoring_scheme)
 
-    # Use some alignments to figure out where the contigs are in the polished sequence so we can
-    # snip out the bridge part of the sequence and save it back into the graph segment.
-    middle_start = start_seq_alignment(bridge_start_seq, last_seq, scoring_scheme)
-    middle_end = end_seq_alignment(bridge_end_seq, last_seq, scoring_scheme)
-    new_bridge_seq = last_seq[middle_start:middle_end]
-    new_rev_bridge_seq = reverse_complement(new_bridge_seq)
-    if middle_sign == '-':
-        new_bridge_seq, new_rev_bridge_seq = new_rev_bridge_seq, new_bridge_seq
-    middle.forward_sequence = new_bridge_seq
-    middle.reverse_sequence = new_rev_bridge_seq
-
-    return polish_round_count, depth
+    log.log('')
