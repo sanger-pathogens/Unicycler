@@ -82,7 +82,6 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     # (and will therefore be useful for assembly).
     minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
                                                             miniasm_dir, threads)
-    start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
     assembly_read_names = get_miniasm_assembly_reads(minimap_alignments)
 
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
@@ -119,7 +118,6 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         log.log(red('failed'))
         raise MiniasmFailure('miniasm failed to generate a string graph')
     string_graph = StringGraph(string_graph_filename, mean_read_quals)
-    # before_transitive_reduction = StringGraph(before_transitive_reduction_filename, mean_read_quals)
 
     log.log(green('success'))
     log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
@@ -183,7 +181,7 @@ def get_miniasm_assembly_reads(minimap_alignments):
     return sorted(miniasm_assembly_reads)
 
 
-def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph):
+def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, contig_copy_count=1):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
     mean_read_quals = {}
@@ -194,16 +192,25 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph):
         seg_count = 0
         for seg in sorted(graph.segments.values(), key=lambda x: x.number):
             if segment_suitable_for_miniasm_assembly(graph, seg):
-                fastq.write('@CONTIG_')
-                fastq.write(str(seg.number))
-                fastq.write('\n')
-                fastq.write(seg.forward_sequence)
-                fastq.write('\n+\n')
-                fastq.write(qual * seg.get_length())
-                fastq.write('\n')
+                for i in range(contig_copy_count):
+                    fastq_name = '@CONTIG_' + str(seg.number)
+                    if contig_copy_count > 1:
+                        fastq_name += '_' + str(i+1)
+                    fastq.write(fastq_name)
+                    fastq.write('\n')
+                    if i % 2 == 0:  # evens
+                        fastq.write(seg.forward_sequence)
+                    else:  # odds
+                        fastq.write(seg.reverse_sequence)
+                    fastq.write('\n+\n')
+                    fastq.write(qual * seg.get_length())
+                    fastq.write('\n')
                 seg_count += 1
-        log.log('  ' + str(seg_count) + ' single copy contigs ' +
-                str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer')
+        message = '  ' + str(seg_count) + ' single copy contigs ' + \
+                  str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer'
+        if contig_copy_count > 1:
+            message += ' (duplicated ' + str(contig_copy_count) + ' times)'
+        log.log(message)
 
         # Now save the actual long reads.
         for read_name in read_names:
@@ -261,7 +268,8 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                 chimeric_read_names.add(line.strip())
     assembly_read_names = [x for x in assembly_read_names if x not in chimeric_read_names]
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
-    save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph)
+    save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph,
+                                settings.RACON_CONTIG_DUPLICATION_COUNT)
     log.log('')
 
     col_widths = [6, 12, 14]
