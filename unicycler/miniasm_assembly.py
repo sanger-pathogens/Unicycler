@@ -19,9 +19,11 @@ import shutil
 import statistics
 import subprocess
 import sys
-from .misc import green, red, line_iterator, print_table, int_to_str
-from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets, \
-    load_minimap_alignments_basic
+from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order, \
+    reverse_complement
+from .minimap_alignment import align_long_reads_to_assembly_graph, \
+    load_minimap_alignments_basic, load_minimap_alignments, combine_close_hits, \
+    remove_conflicting_alignments
 from .string_graph import StringGraph, merge_string_graph_segments_into_unitig_graph
 from . import log
 from . import settings
@@ -91,6 +93,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     branching_paths_removed_filename = os.path.join(miniasm_dir, '11_branching_paths_removed.gfa')
     unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
+    contigs_placed_filename = os.path.join(miniasm_dir, '14_contigs_placed.gfa')
 
     mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
                                                   read_dict, graph)
@@ -136,7 +139,24 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     if keep >= 3:
         unitig_graph.save_to_gfa(racon_polished_filename)
 
+    place_contigs(miniasm_dir, graph, unitig_graph, threads)
+    if keep >= 3:
+        unitig_graph.save_to_gfa(contigs_placed_filename)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+    quit()  # TEMP
 
 
 
@@ -278,24 +298,38 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                 alignments='RRR', indent=0)
 
     best_mapping_quality = 0
-    times_quality_failed_to_increase = 0
+    best_fasta = None
+    times_quality_failed_to_beat_best = 0
     for polish_round_count in range(settings.RACON_POLISH_LOOP_COUNT):
         round_num_str = '%02d' % (polish_round_count + 1)
+        previous_round_num_str = '%02d' % polish_round_count
         pre_polish_fasta = os.path.join(polish_dir, round_num_str + '_1_pre-polish.fasta')
         mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.paf')
         racon_log = os.path.join(polish_dir, round_num_str + '_3_racon.log')
         post_polish_fasta = os.path.join(polish_dir, round_num_str + '_4_post-polish.fasta')
-
+        if polish_round_count == 0:
+            previous_fasta = pre_polish_fasta
+        else:
+            previous_fasta = os.path.join(polish_dir,
+                                          previous_round_num_str + '_4_post-polish.fasta')
         if polish_round_count > 0:
             unitig_graph.rotate_circular_sequences()
         unitig_graph.save_to_fasta(pre_polish_fasta)
 
         # Create the alignments for Racon using miniasm.
         minimap_alignments_str = minimap_align_reads(pre_polish_fasta, polish_reads, 1, 0)
+        alignments_by_read = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
+                                                     allowed_overlap=10, filter_by_minimisers=True)
+        mapping_quality = 0
+        read_alignments = load_minimap_alignments_basic(minimap_alignments_str)
+        read_names = remove_dupes_preserve_order([x.read_name for x in read_alignments])
         with open(mappings_filename, 'wt') as mappings:
-            mappings.write(minimap_alignments_str)
-        mapping_quality = sum(a.matching_bases
-                              for a in load_minimap_alignments_basic(minimap_alignments_str))
+            for read_name in read_names:
+                if read_name in alignments_by_read:
+                    for a in alignments_by_read[read_name]:
+                        mappings.write(a.paf_line)
+                        mappings.write('\n')
+                        mapping_quality += a.matching_bases
 
         racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
                            int_to_str(unitig_graph.get_total_segment_length()),
@@ -303,12 +337,15 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
                     alignments='LRR', indent=0, header_format='normal')
 
+
         # If we've failed to improve on our best quality for a few rounds, then we're done!
         if mapping_quality <= best_mapping_quality:
-            times_quality_failed_to_increase += 1
+            times_quality_failed_to_beat_best += 1
         else:
             best_mapping_quality = mapping_quality
-        if times_quality_failed_to_increase > 2:
+            best_fasta = previous_fasta
+            times_quality_failed_to_beat_best = 0
+        if times_quality_failed_to_beat_best > 2:
             break
 
         # Run Racon. It crashes sometimes, so repeat until its return code is 0.
@@ -336,3 +373,131 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         unitig_graph.replace_with_polished_sequences(post_polish_fasta, scoring_scheme)
 
     log.log('')
+    if best_fasta:
+        log.log('Best polish: ' + best_fasta)
+        unitig_graph.replace_with_polished_sequences(best_fasta, scoring_scheme)
+
+
+def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads):
+    log.log('', verbosity=2)
+    log.log_explanation('Unicycler now places the single copy contigs back into the unitig '
+                        'graph so it can extract bridging sequences between these contigs.',
+                        verbosity=2)
+
+    contig_search_dir = os.path.join(miniasm_dir, 'contig_search')
+    if not os.path.isdir(contig_search_dir):
+        os.makedirs(contig_search_dir)
+
+    # Save the contigs to a FASTA file.
+    contigs_fasta = os.path.join(contig_search_dir, 'contigs.fasta')
+    contig_names = []
+    longest_contig_seq_len = 0
+    with open(contigs_fasta, 'wt') as fasta:
+        for seg in sorted(assembly_graph.segments.values(), key=lambda x: x.number):
+            if segment_suitable_for_miniasm_assembly(assembly_graph, seg):
+                contig_name = 'CONTIG_' + str(seg.number)
+                contig_names.append(contig_name)
+                fasta.write('>' + contig_name + '\n')
+                seq = seg.forward_sequence
+                fasta.write(seq)
+                longest_contig_seq_len = max(longest_contig_seq_len, len(seq))
+                fasta.write('\n')
+
+    # Save the unitigs to a FASTA file. If the segment is circular, then we save it extra sequence
+    # on the end, so we can find contigs which loop. We also save these extended sequences in a
+    # dictionary for later.
+    unitigs_fasta = os.path.join(contig_search_dir, 'unitigs.fasta')
+    extended_unitig_sequences = {}
+    with open(unitigs_fasta, 'wt') as fasta:
+        for seg in sorted(unitig_graph.segments.values(), key=lambda x: x.get_length(),
+                          reverse=True):
+            seg_seq = seg.forward_sequence
+            if unitig_graph.segment_is_circular(seg.full_name):
+                if len(seg_seq) <= longest_contig_seq_len:
+                    seg_seq += seg_seq
+                else:
+                    seg_seq += seg_seq[:longest_contig_seq_len]
+            fasta.write('>' + seg.full_name + '\n')
+            fasta.write(seg_seq)
+            fasta.write('\n')
+            extended_unitig_sequences[seg.full_name] = seg_seq
+
+    alignments = load_minimap_alignments(minimap_align_reads(unitigs_fasta, contigs_fasta,
+                                                             threads, 0, 'find contigs'))
+    for contig_name in contig_names:
+        contig_alignments = alignments[contig_name]
+
+        # Clean up the alignments by removing redundant/conflicting hits and combining separated
+        # pieces.
+        filtered_alignments = []
+        for a in contig_alignments:
+            unitig_name = a.ref_name
+            unitig_length = unitig_graph.segments[unitig_name].get_length()
+            if unitig_graph.segment_is_circular(unitig_name) and a.ref_end > unitig_length:
+                a.ref_start -= unitig_length
+                a.ref_end -= unitig_length
+            filtered_alignments.append(a)
+        contig_alignments = remove_conflicting_alignments(filtered_alignments, 10)
+        contig_alignments = combine_close_hits(contig_alignments, settings.FOUND_CONTIG_MIN_RATIO,
+                                               settings.FOUND_CONTIG_MAX_RATIO)
+        if not contig_alignments:
+            continue
+        a = sorted(contig_alignments, key=lambda x: x.fraction_read_aligned(), reverse=True)[0]
+        if a.fraction_read_aligned() < settings.FOUND_CONTIG_MIN_FRACTION:
+            continue
+        start_gap = a.read_start
+        end_gap = a.read_length - a.read_end
+        estimated_unitig_start_pos = a.ref_start - start_gap
+        estimated_unitig_end_pos = a.ref_end + end_gap
+        if start_gap > settings.FOUND_CONTIG_MAX_END_GAP or \
+                end_gap > settings.FOUND_CONTIG_MAX_END_GAP:
+            continue
+        unitig_name = a.ref_name
+        if estimated_unitig_start_pos < 0:
+            if unitig_graph.segment_is_circular(unitig_name):
+                a.ref_start += unitig_length
+                a.ref_end += unitig_length
+                estimated_unitig_start_pos += unitig_length
+                estimated_unitig_end_pos += unitig_length
+            else:
+                estimated_unitig_start_pos = 0
+
+
+        print(contig_name + ': ' + str(a))  # TEMP
+
+        # Now we have one and only one alignment for this contig, but it's a minimap alignment that
+        # is likely trimming a bit off the start/end. We now extend the alignment to cover the
+        # entire contig.
+        extended_unitig_seq = extended_unitig_sequences[a.ref_name]
+        gap = max(settings.FOUND_CONTIG_END_REFINEMENT_SIZE, 2 * max(start_gap, end_gap))
+        contig_number = int(a.read_name[7:])
+        contig_start_seq = assembly_graph.segments[contig_number].forward_sequence[:gap]
+        contig_end_seq = assembly_graph.segments[contig_number].forward_sequence[-gap:]
+        if a.read_strand == '-':
+            start_gap, end_gap = end_gap, start_gap
+            contig_start_seq, contig_end_seq = \
+                reverse_complement(contig_end_seq), reverse_complement(contig_start_seq)
+
+        start_region_start = max(0, estimated_unitig_start_pos - gap)
+        start_region_end = min(len(extended_unitig_seq), estimated_unitig_start_pos + gap)
+        unitig_start_region = extended_unitig_seq[start_region_start:start_region_end]
+
+        end_region_start = max(0, estimated_unitig_end_pos - gap)
+        end_region_end = min(len(extended_unitig_seq), estimated_unitig_end_pos + gap)
+        unitig_end_region = extended_unitig_seq[end_region_start:end_region_end]
+
+        print('start_gap:', start_gap)  # TEMP
+        print('end_gap:', end_gap)  # TEMP
+        print('contig_start_seq:', contig_start_seq)  # TEMP
+        print('contig_end_seq:', contig_end_seq)  # TEMP
+        print('estimated_unitig_start_pos:', estimated_unitig_start_pos)  # TEMP
+        print('estimated_unitig_end_pos:', estimated_unitig_end_pos)  # TEMP
+        print('unitig_start_region:', unitig_start_region)  # TEMP
+        print('unitig_end_region:', unitig_end_region)  # TEMP
+
+        print('')  # TEMP
+
+
+
+
+

@@ -16,8 +16,9 @@ not, see <http://www.gnu.org/licenses/>.
 import math
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
-from .misc import int_to_str, float_to_str, weighted_average_list, score_function,\
-    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow
+from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
+    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow, \
+    remove_dupes_preserve_order
 from .bridge_long_read import LongReadBridge
 from . import settings
 from . import log
@@ -2524,6 +2525,3 @@ def get_overlap_from_gfa_link(filename):
     return 0
 
 
-def remove_dupes_preserve_order(lst):
-    seen = set()
-    return [x for x in lst if not (x in seen or seen.add(x))]

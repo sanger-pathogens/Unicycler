@@ -17,7 +17,8 @@ not, see <http://www.gnu.org/licenses/>.
 import os
 import sys
 from collections import defaultdict
-from .misc import get_nice_header, dim, line_iterator, range_overlap
+from .misc import get_nice_header, dim, line_iterator, range_overlap, range_is_contained, \
+    range_overlap_size, simplify_ranges
 from . import log
 from . import settings
 
@@ -30,8 +31,9 @@ except AttributeError as e:
 
 class MinimapAlignment(object):
 
-    def __init__(self, minimap_line):
-        line_parts = minimap_line.split('\t')
+    def __init__(self, paf_line):
+        self.paf_line = paf_line.strip()
+        line_parts = self.paf_line.split('\t')
 
         self.read_name = line_parts[0]
         self.read_length = int(line_parts[1])
@@ -185,7 +187,7 @@ def build_start_end_overlap_sets(minimap_alignments):
     return start_overlap_reads, end_overlap_reads
 
 
-def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio, string_graph):
+def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
     """
     This function takes a list of alignments and it combines alignments if doing so would stay
     within the allowed ratio range.
@@ -204,7 +206,6 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio, strin
     for read_ref_strand, grouped_alignments in alignment_groups.items():
         _, seg_name, strand = read_ref_strand
         grouped_alignments = sorted(grouped_alignments, key=lambda x: x.read_start)
-        circular = string_graph.segment_is_circular(seg_name)
 
         current = grouped_alignments[0]
         for i in range(1, len(grouped_alignments)):
@@ -218,17 +219,6 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio, strin
                 potential_merge_ref_range = a_ref_end - current.ref_start
             else:  # strand == '-'
                 potential_merge_ref_range = current.ref_end - a_ref_start
-
-            # If the segment is circular, then we need to allow the merging to loop around the link.
-            if circular and potential_merge_ref_range < 0:
-                if strand == '+':
-                    a_ref_start += a.ref_length
-                    a_ref_end += a.ref_length
-                    potential_merge_ref_range = a_ref_end - current.ref_start
-                else:  # strand == '-'
-                    a_ref_start -= a.ref_length
-                    a_ref_end -= a.ref_length
-                    potential_merge_ref_range = current.ref_end - a_ref_start
 
             merge_would_extend = (current.read_start < a.read_start and
                                   current.read_end < a.read_end)
@@ -255,3 +245,27 @@ def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio, strin
     return merged_alignments
 
 
+def remove_conflicting_alignments(alignments, allowed_overlap):
+    """
+    This function takes alignments for one read, removes conflicting and/or redundant alignments
+    and returns the clean-up list of alignments.
+    """
+    alignments = sorted(alignments, reverse=True,
+                        key=lambda x: (x.matching_bases, x.minimiser_count, x.ref_name))
+    kept_alignments = []
+    kept_alignment_ranges = []
+    for a in alignments:
+        this_range = (a.read_start, a.read_end)
+
+        # Don't keep alignments for which their part of the read is already aligned.
+        if range_is_contained(this_range, kept_alignment_ranges):
+            continue
+
+        # Don't keep alignments which overlap too much with existing alignments.
+        if range_overlap_size(this_range, kept_alignment_ranges) > allowed_overlap:
+            continue
+
+        kept_alignments.append(a)
+        kept_alignment_ranges = simplify_ranges(kept_alignment_ranges + [this_range])
+
+    return sorted(kept_alignments, key=lambda x: x.read_start)

@@ -18,7 +18,8 @@ import gzip
 import os
 import math
 from .misc import quit_with_error, get_nice_header, get_compression_type, get_sequence_file_type,\
-    strip_read_extensions, print_table, float_to_str
+    strip_read_extensions, print_table, float_to_str, range_is_contained, range_overlap_size, \
+    simplify_ranges
 from . import settings
 from . import log
 
@@ -203,59 +204,6 @@ def load_long_reads(filename):
     return read_dict, read_names, no_dup_filename
 
 
-def simplify_ranges(ranges):
-    """
-    Collapses overlapping ranges together. Input ranges are tuples of (start, end) in the normal
-    Python manner where the end isn't included.
-    """
-    fixed_ranges = []
-    for int_range in ranges:
-        if int_range[0] > int_range[1]:
-            fixed_ranges.append((int_range[1], int_range[0]))
-        elif int_range[0] < int_range[1]:
-            fixed_ranges.append(int_range)
-    starts_ends = [(x[0], 1) for x in fixed_ranges]
-    starts_ends += [(x[1], -1) for x in fixed_ranges]
-    starts_ends.sort(key=lambda x: x[0])
-    current_sum = 0
-    cumulative_sum = []
-    for start_end in starts_ends:
-        current_sum += start_end[1]
-        cumulative_sum.append((start_end[0], current_sum))
-    prev_depth = 0
-    start = 0
-    combined = []
-    for pos, depth in cumulative_sum:
-        if prev_depth == 0:
-            start = pos
-        elif depth == 0:
-            combined.append((start, pos))
-        prev_depth = depth
-    return combined
-
-
-def range_is_contained(test_range, other_ranges):
-    """
-    Returns True if test_range is entirely contained within any range in other_ranges.
-    """
-    start, end = test_range
-    for other_range in other_ranges:
-        if other_range[0] <= start and other_range[1] >= end:
-            return True
-    return False
-
-
-def range_overlap(test_range, other_ranges):
-    """
-    Returns the size of the overlap (integer) between the two ranges.
-    """
-    start, end = test_range
-    max_overlap = 0
-    for other_range in other_ranges:
-        max_overlap = max(max_overlap, min(end, other_range[1]) - max(start, other_range[0]))
-    return max_overlap
-
-
 class Reference(object):
     """
     This class holds a reference sequence: just a name and a nucleotide sequence.
@@ -325,7 +273,7 @@ class Read(object):
                 continue
 
             # Don't keep alignments which overlap too much with existing alignments.
-            if range_overlap(this_range, kept_alignment_ranges) > allowed_overlap:
+            if range_overlap_size(this_range, kept_alignment_ranges) > allowed_overlap:
                 continue
 
             # Don't keep alignments that seem to be very similar to an already kept alignment.
