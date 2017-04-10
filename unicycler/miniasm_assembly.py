@@ -501,6 +501,7 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
         # We work through each contig separately.
         unitig_name = seg.full_name
         unitig_seq = seg.forward_sequence
+        extended_unitig_seq = extended_unitig_sequences[unitig_name]
         unitig_length = len(seg.forward_sequence)
         circular_unitig = unitig_graph.segment_is_circular(unitig_name)
 
@@ -545,26 +546,33 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
             else:
                 segment_names.append(seg_name + '+')
 
-            # If this isn't the last contig, make a bridge to the next segment.
-            if i < len(unitig_contig_positions) - 1:
+            # Make a bridge to the next segment.
+            not_last = i < len(unitig_contig_positions) - 1
+            last_and_circular = (i == len(unitig_contig_positions) - 1 and circular_unitig)
+            if not_last or last_and_circular:
                 assert end_pos > 0
-                bridge_end = unitig_contig_positions[i+1][0]
-                bridge_seq = unitig_seq[end_pos:bridge_end]
+                bridge_start = end_pos
+                if not_last:
+                    bridge_end = unitig_contig_positions[i+1][0]
+                else:   # last_and_circular
+                    bridge_end = unitig_contig_positions[0][0] + unitig_length
+
+                if bridge_end >= bridge_start:  # Non-overlapping bridges (length of 0 or more)
+                    bridge_seq = extended_unitig_seq[bridge_start:bridge_end]
+                    seg_name = 'BRIDGE_' + str(next(bridge_num))
+                else:  # Overlapping bridges
+                    bridge_seq = extended_unitig_seq[bridge_end:bridge_start]
+                    seg_name = 'OVERLAPPING_BRIDGE_' + str(next(bridge_num))
+                new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
+                segment_names.append(seg_name + '+')
+
+            # If this is the last contig and it's linear, then make a bridge to the unitig's end.
+            if i == len(unitig_contig_positions) - 1 and not circular_unitig:
+                bridge_seq = unitig_seq[end_pos:unitig_length]
                 if bridge_seq:
                     seg_name = 'BRIDGE_' + str(next(bridge_num))
                     new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
                     segment_names.append(seg_name + '+')
-
-            # If this is the last contig...
-            if i == len(unitig_contig_positions) - 1:
-
-                # ...and it's not circular, then make a bridge to the unitig's end.
-                if not circular_unitig:
-                    bridge_seq = unitig_seq[end_pos:unitig_length]
-                    if bridge_seq:
-                        seg_name = 'BRIDGE_' + str(next(bridge_num))
-                        new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
-                        segment_names.append(seg_name + '+')
 
                 # ... and it is circular, then make a bridge connecting to the start.
                 if circular_unitig:
