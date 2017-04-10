@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import itertools
 from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments_basic, load_minimap_alignments
@@ -143,23 +144,11 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         unitig_graph.save_to_gfa(contigs_placed_filename)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
     quit()  # TEMP
 
 
 
-
+    # Build MiniasmBridge objects from the graph.
 
 
 
@@ -483,14 +472,19 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
             if length_ratio < settings.FOUND_CONTIG_MIN_RATIO or \
                     length_ratio > settings.FOUND_CONTIG_MAX_RATIO:
                 continue
-            print('')  # TEMP
-            print(contig_number, 'FOUND:', start_pos, 'to', end_pos, '-' if rev_strand else '+')  # TEMP
+            print(contig_number, 'found in unitig', unitig_name, ':', start_pos, 'to', end_pos, '-' if rev_strand else '+', 'strand')  # TEMP
             contig_positions.append((start_pos, end_pos, rev_strand, unitig_name, contig_number))
 
     # Now we build a new string graph that consists of contigs and their bridging sequences!
     new_graph = StringGraph(None)
-    bridge_num = 0
+    bridge_num = itertools.count(start=1)
     for seg in sorted(unitig_graph.segments.values(), key=lambda x: x.get_length(), reverse=True):
+
+        # We work through each contig separately.
+        unitig_name = seg.full_name
+        unitig_seq = seg.forward_sequence
+        unitig_length = len(seg.forward_sequence)
+        circular_unitig = unitig_graph.segment_is_circular(unitig_name)
 
         # Do any placed contigs overlap each other a lot? If so, that's very concerning, so we
         # throw those out!
@@ -503,71 +497,75 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
                 good_contig_positions.append(contig_position)
         unitig_contig_positions = sorted(good_contig_positions)
 
-        unitig_name = seg.full_name
-        circular_unitig = unitig_graph.segment_is_circular(unitig_name)
-        unitig_length = unitig_graph.segments[unitig_name].get_length()
-
-        unitig_seq = seg.forward_sequence
         segment_names = []
+
+        # In the unfortunate scenario of no contig placements, the unitig just goes into the new
+        # graph as it is.
+        if not unitig_contig_positions:
+            seg_name = 'BRIDGE_' + str(next(bridge_num))
+            new_graph.segments[seg_name] = StringGraphSegment(seg_name, unitig_seq)
+            segment_names.append(seg_name + '+')
+
+        # In the much more ideal scenario where there is at least one contig placement, we make
+        # the contig and bridge segments in order of their position on the unitig.
         for i, contig_position in enumerate(unitig_contig_positions):
             start_pos, end_pos, rev_strand, _, contig_number = contig_position
 
-            # If this is the first contig and this isn't a circular unitig, make a bridge segment
-            # at the very start.
-            if i == 0 and not circular_unitig and start_pos > 0:
-                bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+            # If this is the first contig and the unitig's linear, make a 'bridge' for the start.
+            if i == 0 and not circular_unitig:
                 bridge_seq = unitig_seq[:start_pos]
-                bridge_num += 1
-                new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
-                                                                         bridge_seq)
-                segment_names.append(bridge_seg_name + '+')
+                if bridge_seq:
+                    seg_name = 'BRIDGE_' + str(next(bridge_num))
+                    new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
+                    segment_names.append(seg_name + '+')
 
             # Make the contig segment.
-            contig_seg_name = 'CONTIG_' + str(contig_number)
+            seg_name = 'CONTIG_' + str(contig_number)
             contig_seq = assembly_graph.segments[contig_number].forward_sequence
-            new_graph.segments[contig_seg_name] = StringGraphSegment(contig_seg_name, contig_seq)
+            new_graph.segments[seg_name] = StringGraphSegment(seg_name, contig_seq)
             if rev_strand:
-                segment_names.append(contig_seg_name + '-')
+                segment_names.append(seg_name + '-')
             else:
-                segment_names.append(contig_seg_name + '+')
+                segment_names.append(seg_name + '+')
 
             # If this isn't the last contig, make a bridge to the next segment.
             if i < len(unitig_contig_positions) - 1:
-                bridge_seg_name = 'BRIDGE_' + str(bridge_num)
                 bridge_start = max(end_pos, 0)
                 bridge_end = unitig_contig_positions[i+1][0]
                 bridge_seq = unitig_seq[bridge_start:bridge_end]
-                bridge_num += 1
-                new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
-                                                                         bridge_seq)
-                segment_names.append(bridge_seg_name + '+')
+                if bridge_seq:
+                    seg_name = 'BRIDGE_' + str(next(bridge_num))
+                    new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
+                    segment_names.append(seg_name + '+')
 
             # If this is the last contig...
             if i < len(unitig_contig_positions) - 1:
 
                 # ...and it's not circular, then make a bridge to the unitig's end.
-                if not circular_unitig and end_pos < unitig_length:
-                    bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+                if not circular_unitig:
                     bridge_seq = unitig_seq[end_pos:unitig_length]
-                    bridge_num += 1
-                    new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
-                                                                             bridge_seq)
-                    segment_names.append(bridge_seg_name + '+')
+                    if bridge_seq:
+                        seg_name = 'BRIDGE_' + str(next(bridge_num))
+                        new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
+                        segment_names.append(seg_name + '+')
 
                 # ... and it is circular, then make a bridge connecting to the start.
                 if circular_unitig:
                     bridge_seq = unitig_seq[end_pos:unitig_length]
-                    first_contig_start_overlap = unitig_contig_positions[0][0]  # neg if overlap
+                    first_contig_start_overlap = unitig_contig_positions[0][0]
+
+                    # If the first contig overlaps the start, then the bridge needs to be shortened.
                     if first_contig_start_overlap < 0:
                         bridge_seq = bridge_seq[:first_contig_start_overlap]
+
+                    # If the first contig doesn't overlap, then we need more bridge sequence.
                     else:
                         bridge_seq += unitig_seq[:first_contig_start_overlap]
+
                     if bridge_seq:
-                        bridge_seg_name = 'BRIDGE_' + str(bridge_num)
-                        bridge_num += 1
-                        new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
-                                                                                 bridge_seq)
-                        segment_names.append(bridge_seg_name + '+')
+                        seg_name = 'BRIDGE_' + str(next(bridge_num))
+                        new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
+                        segment_names.append(seg_name + '+')
 
         # Create links between all the new segments.
         for i, segment_name in enumerate(segment_names[1:]):
