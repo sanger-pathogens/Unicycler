@@ -441,39 +441,57 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
             unitig_name = a.ref.name
             if contig_name.endswith('_START') or contig_name.endswith('_WHOLE'):
                 if a.rev_comp:  # reverse strand
-                    start_positions[contig_number] = (unitig_name, a.ref_end_pos)
+                    start_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
                 else:  # forward strand
-                    start_positions[contig_number] = (unitig_name, a.ref_start_pos)
+                    start_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
             if contig_name.endswith('_END') or contig_name.endswith('_WHOLE'):
                 if a.rev_comp:  # reverse strand
-                    end_positions[contig_number] = (unitig_name, a.ref_start_pos)
+                    end_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
                 else:  # forward strand
-                    end_positions[contig_number] = (unitig_name, a.ref_end_pos)
+                    end_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
 
     # Gather up the start/end positions for all found contigs.
     contig_positions = []
     for contig_number in contig_numbers:
         if contig_number in start_positions and contig_number in end_positions:
-            start_unitig_name, start_pos = start_positions[contig_number]
-            end_unitig_name, end_pos = end_positions[contig_number]
+            start_unitig_name, start_pos, start_rev_comp = start_positions[contig_number]
+            end_unitig_name, end_pos, end_rev_comp = end_positions[contig_number]
+
+            # Only accept start/ends on the same strand of the same unitig.
             if start_unitig_name != end_unitig_name:
                 continue
+            if start_rev_comp != end_rev_comp:
+                continue
+
             unitig_name = start_unitig_name
             unitig_length = unitig_graph.segments[unitig_name].get_length()
-            if start_pos >= unitig_length or end_pos >= unitig_length:
+            circular_unitig = unitig_graph.segment_is_circular(unitig_name)
+            rev_comp = start_rev_comp
+
+            # Make sure each position is in the actual unitig coordinates, not in the overlap past
+            # the end.
+            if start_pos >= unitig_length:
                 start_pos -= unitig_length
+            if end_pos >= unitig_length:
                 end_pos -= unitig_length
-            rev_strand = end_pos < start_pos
-            if rev_strand:
+
+            # Fix up start/ends that overlap the end of a circular unitig.
+            if start_pos > end_pos and not rev_comp and circular_unitig:
+                start_pos -= unitig_length
+            if end_pos > start_pos and rev_comp and circular_unitig:
+                end_pos -= unitig_length
+
+            if rev_comp:
                 start_pos, end_pos = end_pos, start_pos
+
             contig = assembly_graph.segments[contig_number]
             length_of_contig_in_unitig = end_pos - start_pos
             length_ratio = length_of_contig_in_unitig / contig.get_length()
             if length_ratio < settings.FOUND_CONTIG_MIN_RATIO or \
                     length_ratio > settings.FOUND_CONTIG_MAX_RATIO:
                 continue
-            print(contig_number, 'found in unitig', unitig_name, ':', start_pos, 'to', end_pos, '-' if rev_strand else '+', 'strand')  # TEMP
-            contig_positions.append((start_pos, end_pos, rev_strand, unitig_name, contig_number))
+            print(contig_number, 'found in unitig', unitig_name, ':', start_pos, 'to', end_pos, '-' if rev_comp else '+', 'strand')  # TEMP
+            contig_positions.append((start_pos, end_pos, rev_comp, unitig_name, contig_number))
 
     # Now we build a new string graph that consists of contigs and their bridging sequences!
     new_graph = StringGraph(None)
@@ -486,21 +504,19 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
         unitig_length = len(seg.forward_sequence)
         circular_unitig = unitig_graph.segment_is_circular(unitig_name)
 
-        # Do any placed contigs overlap each other a lot? If so, that's very concerning, so we
-        # throw those out!
+        # Do any contigs overlap each other a lot? It's very weird if they do, so throw them out!
         good_contig_positions = []
-        unitig_contig_positions = [x for x in contig_positions if x[3] == seg.name]
+        unitig_contig_positions = [x for x in contig_positions if x[3] == seg.full_name]
         for i, contig_position in enumerate(unitig_contig_positions):
             other_positions = unitig_contig_positions[:i] + unitig_contig_positions[i+1:]
-            if range_overlap_size(contig_position,
-                                  other_positions) <= settings.FOUND_CONTIG_MAX_OVERLAP_SIZE:
+            if range_overlap_size(contig_position[:2], [x[:2] for x in other_positions]) <= \
+                    settings.FOUND_CONTIG_MAX_OVERLAP_SIZE:
                 good_contig_positions.append(contig_position)
         unitig_contig_positions = sorted(good_contig_positions)
 
-        segment_names = []
-
         # In the unfortunate scenario of no contig placements, the unitig just goes into the new
         # graph as it is.
+        segment_names = []
         if not unitig_contig_positions:
             seg_name = 'BRIDGE_' + str(next(bridge_num))
             new_graph.segments[seg_name] = StringGraphSegment(seg_name, unitig_seq)
@@ -511,8 +527,9 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
         for i, contig_position in enumerate(unitig_contig_positions):
             start_pos, end_pos, rev_strand, _, contig_number = contig_position
 
-            # If this is the first contig and the unitig's linear, make a 'bridge' for the start.
+            # If this is the first contig and the unitig is linear, make a 'bridge' for the start.
             if i == 0 and not circular_unitig:
+                assert start_pos >= 0
                 bridge_seq = unitig_seq[:start_pos]
                 if bridge_seq:
                     seg_name = 'BRIDGE_' + str(next(bridge_num))
@@ -530,16 +547,16 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
 
             # If this isn't the last contig, make a bridge to the next segment.
             if i < len(unitig_contig_positions) - 1:
-                bridge_start = max(end_pos, 0)
+                assert end_pos > 0
                 bridge_end = unitig_contig_positions[i+1][0]
-                bridge_seq = unitig_seq[bridge_start:bridge_end]
+                bridge_seq = unitig_seq[end_pos:bridge_end]
                 if bridge_seq:
                     seg_name = 'BRIDGE_' + str(next(bridge_num))
                     new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
                     segment_names.append(seg_name + '+')
 
             # If this is the last contig...
-            if i < len(unitig_contig_positions) - 1:
+            if i == len(unitig_contig_positions) - 1:
 
                 # ...and it's not circular, then make a bridge to the unitig's end.
                 if not circular_unitig:
@@ -569,9 +586,9 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
 
         # Create links between all the new segments.
         for i, segment_name in enumerate(segment_names[1:]):
-            prev_segment_name = segment_names[i-1]
+            prev_segment_name = segment_names[i]
             new_graph.add_link(prev_segment_name, segment_name, 0, 0)
         if circular_unitig:
-            new_graph.add_link(segment_names[-1], segment_names[1], 0, 0)
+            new_graph.add_link(segment_names[-1], segment_names[0], 0, 0)
 
     return new_graph

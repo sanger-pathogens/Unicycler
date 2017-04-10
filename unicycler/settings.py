@@ -43,13 +43,14 @@ FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.75
 FOUND_CONTIG_MIN_FRACTION = 0.95
 FOUND_CONTIG_MAX_END_GAP = 500
 FOUND_CONTIG_END_REFINEMENT_SIZE = 100
-FOUND_CONTIG_MAX_OVERLAP_SIZE = 100
+FOUND_CONTIG_MAX_OVERLAP_SIZE = 250
 
 
 
 
 # This is the maximum number of times a bridge will be Racon polished
-RACON_POLISH_LOOP_COUNT = 100
+# RACON_POLISH_LOOP_COUNT = 100
+RACON_POLISH_LOOP_COUNT = 3  # TEMP
 
 # This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
 # if 6, then each contig is included 6 times as a read (3 forward strand 3 reverse).
