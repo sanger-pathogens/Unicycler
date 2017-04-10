@@ -37,24 +37,28 @@ MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
 # qscore at each base.
 CONTIG_READ_QSCORE = 40
 
-# After a miniasm assembly, Unicycler tries to place single copy contigs back into the string
-# graph. It must align at least MIN_FOUND_CONTIG_FRACTION of the contig to be successful. And if
-# the second best placement has more than FOUND_CONTIG_SECOND_BEST_THRESHOLD times the matching
-# bases of the best, we say they are too close and don't place the contig.
+
 MIN_FOUND_CONTIG_FRACTION = 0.9
 FOUND_CONTIG_SECOND_BEST_THRESHOLD = 0.75
-
-FOUND_CONTIG_MIN_RATIO = 0.6666667
-FOUND_CONTIG_MAX_RATIO = 1.5
 FOUND_CONTIG_MIN_FRACTION = 0.95
 FOUND_CONTIG_MAX_END_GAP = 500
 FOUND_CONTIG_END_REFINEMENT_SIZE = 100
+FOUND_CONTIG_MAX_OVERLAP_SIZE = 100
+
+
+
 
 # This is the maximum number of times a bridge will be Racon polished
 RACON_POLISH_LOOP_COUNT = 100
 
+# This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
+# if 6, then each contig is included 6 times as a read (3 forward strand 3 reverse).
 RACON_CONTIG_DUPLICATION_COUNT = 10
 
+CONTIG_SEARCH_END_SIZE = 2500
+CONTIG_SEARCH_MIN_IDENTITY = 95.0
+FOUND_CONTIG_MIN_RATIO = 0.9
+FOUND_CONTIG_MAX_RATIO = 1.11111
 
 
 # Unicycler will only work with read alignments if they are long enough. This values specifies

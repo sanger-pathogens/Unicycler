@@ -1013,9 +1013,6 @@ def range_is_contained(test_range, other_ranges):
 
 
 def range_overlap_size(test_range, other_ranges):
-    """
-    Returns the size of the overlap (integer) between the two ranges.
-    """
     start, end = test_range
     max_overlap = 0
     for other_range in other_ranges:

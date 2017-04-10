@@ -14,14 +14,11 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
-import os
 import sys
 import re
 from collections import deque, defaultdict
-from .misc import reverse_complement, add_line_breaks_to_sequence, range_overlap, green, red, \
-    get_right_arrow, bold, load_fasta
+from .misc import reverse_complement, add_line_breaks_to_sequence, get_right_arrow, bold, load_fasta
 from .assembly_graph import build_reverse_links
-from .minimap_alignment import load_minimap_alignments, combine_close_hits
 from .cpp_wrappers import semi_global_alignment_exhaustive
 from . import settings
 from . import log
@@ -36,7 +33,7 @@ except AttributeError as e:
 
 class StringGraph(object):
 
-    def __init__(self, filename, mean_read_quals):
+    def __init__(self, filename):
         self.segments = {}                      # unsigned seg name -> StringGraphSegment
         self.forward_links = defaultdict(list)  # signed seg name -> list of signed segment name
         self.reverse_links = defaultdict(list)  # signed seg name <- list of signed segment name
@@ -53,7 +50,7 @@ class StringGraph(object):
                     line_parts = line.strip().split('\t')
                     name = line_parts[1]
                     sequence = line_parts[2]
-                    self.segments[name] = StringGraphSegment(name, sequence, mean_read_quals)
+                    self.segments[name] = StringGraphSegment(name, sequence)
 
         # Load in the links.
         with open(filename, 'rt') as gfa_file:
@@ -282,204 +279,6 @@ class StringGraph(object):
                     continue
                 fasta.write(segment.fasta_record())
 
-    # def save_isolated_contigs_to_file(self, filename):
-    #     """
-    #     Saves all graph segments which are contigs but with no connections to a FASTA file.
-    #     Specifically, it only saves contigs which:
-    #       1) have been excluded by miniasm because they were contained (a list of such reads is in
-    #          contained_reads.txt)
-    #       2) were connected in the graph before transitive reduction but are no longer (implying
-    #          that they fell out in some part of the graph simplification process).
-    #     """
-    #     log.log('Saving ' + filename, 1)
-    #     contig_names = []
-    #     with open(filename, 'w') as fasta:
-    #         for segment in sorted(self.segments.values(), reverse=True,
-    #                               key=lambda x: x.get_length()):
-    #             if not segment.contig:
-    #                 continue
-    #             pos_seg_name = segment.full_name + '+'
-    #             if len(self.get_preceding_segments(pos_seg_name)) > 0 or \
-    #                     len(self.get_following_segments(pos_seg_name)) > 0:
-    #                 continue
-    #             fasta.write(segment.fasta_record())
-    #             contig_names.append(segment.full_name)
-    #     return sorted(contig_names, reverse=True, key=lambda x: self.segments[x].get_length())
-    #
-    # def place_isolated_contigs(self, working_dir, threads):
-    #     log.log('', verbosity=2)
-    #     log.log_explanation('Some single copy contigs may be isolated due to some part of the '
-    #                         'graph simplification (e.g. bubble popping). Since single copy '
-    #                         'contigs definitely belong in the assembly, Unicycler now tries to '
-    #                         'find their corresponding sequence in a long read graph segment to '
-    #                         'place these contigs back into the main graph.',
-    #                         verbosity=2)
-    #
-    #     isolated_contigs_file = os.path.join(working_dir, '16_isolated_contigs.fasta')
-    #     isolated_contig_names = self.save_isolated_contigs_to_file(isolated_contigs_file)
-    #
-    #     if not isolated_contig_names:
-    #         log.log('No isolate contigs require placing in the graph', verbosity=2)
-    #         return
-    #
-    #     non_contigs_file = os.path.join(working_dir, '17_non-contigs.fasta')
-    #     self.save_non_contigs_to_file(non_contigs_file,
-    #                                   settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING / 2)
-    #
-    #     log.log('Searching for isolated contigs with minimap')
-    #     contig_to_read_alignments = \
-    #         load_minimap_alignments(minimap_align_reads(non_contigs_file, isolated_contigs_file,
-    #                                                     threads, 3, 'find contigs'))
-    #     log.log('\n' + 'Isolated contigs: ', verbosity=2)
-    #     contig_alignments_by_segment = defaultdict(list)
-    #     for contig_name in isolated_contig_names:
-    #         alignments = contig_to_read_alignments[contig_name]
-    #         alignments = combine_close_hits(alignments, settings.FOUND_CONTIG_MIN_RATIO,
-    #                                         settings.FOUND_CONTIG_MAX_RATIO, self)
-    #         if alignments:
-    #             alignments = sorted(alignments, key=lambda x: x.matching_bases)
-    #             best = alignments[-1]
-    #
-    #             # If there are multiple possible places to put the contig, we check to see if the
-    #             # second-best option is too close to the best. If so, we don't place it.
-    #             second_best_bases = alignments[-2].matching_bases if len(alignments) > 1 else 0
-    #             second_to_first = second_best_bases / best.matching_bases
-    #
-    #             if best.fraction_read_aligned() < settings.MIN_FOUND_CONTIG_FRACTION:
-    #                 log.log('  ' + contig_name + ': ' + red('not found'))
-    #             elif second_to_first >= settings.FOUND_CONTIG_SECOND_BEST_THRESHOLD:
-    #                 log.log('  ' + contig_name + ': ' + red('found in multiple places'))
-    #             else:
-    #                 contig_alignments_by_segment[best.ref_name].append(best)
-    #                 log.log('  ' + contig_name + ': ' + green('found in ' + best.ref_name))
-    #         else:
-    #             log.log('  ' + contig_name + ': ' + red('not found'))
-    #
-    #     log.log('', verbosity=2)
-    #     if len(contig_alignments_by_segment) == 0:
-    #         log.log(red('No isolated contigs could be placed in the graph.'), verbosity=2)
-    #         return
-    #
-    #     log.log_explanation('Now graph segments which contain single copy contigs are chopped into '
-    #                         'pieces with the contigs replacing their corresponding sequence. This '
-    #                         'makes a string graph which contains as many of the single copy '
-    #                         'contigs as possible (ideally all of them).',
-    #                         verbosity=2)
-    #     for seg_name in sorted(contig_alignments_by_segment.keys(), reverse=True,
-    #                            key=lambda x: self.segments[x].get_length()):
-    #         seg = self.segments[seg_name]
-    #
-    #         # Check to see if this segment is circular, because if so we'll need to create a
-    #         # circularising link later.
-    #         circular = self.segment_is_circular(seg_name)
-    #
-    #         # Make sure none of the alignments overlap on the segment.
-    #         alignments = []
-    #         for a in sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.matching_bases):
-    #             if not any(range_overlap(a.ref_start, a.ref_end, b.ref_start, b.ref_end)
-    #                        for b in alignments):
-    #                 alignments.append(a)
-    #         alignments = sorted(contig_alignments_by_segment[seg_name], key=lambda x: x.ref_start)
-    #
-    #         log.log('Old segment:  ' + seg_name, verbosity=2)
-    #
-    #         # Get the neighbouring segments for later when we make the links.
-    #         preceding_segments = self.get_preceding_segments(seg_name + '+')
-    #         following_segments = self.get_following_segments(seg_name + '+')
-    #         assert len(preceding_segments) <= 1
-    #         assert len(following_segments) <= 1
-    #         if len(preceding_segments) == 1:
-    #             preceding_segment = preceding_segments[0]
-    #         else:
-    #             preceding_segment = None
-    #         if len(following_segments) == 1:
-    #             following_segment = following_segments[0]
-    #         else:
-    #             following_segment = None
-    #
-    #         piece_names, signed_piece_names, piece_seqs, piece_reverse = [], [], [], []
-    #         full_seg_seq = seg.forward_sequence
-    #         current_pos = 0
-    #         for i, a in enumerate(alignments):
-    #
-    #             # TO DO: if this segment is circular, then check to see if any alignments loop
-    #             #        around the link (as indicated by a negative ref_start or a negative
-    #             #        ref_end_gap). If so, make sure there is only one (i.e. we don't have two
-    #             #        overlapping alignments that loop, one start and one end) and deal with it
-    #             #        accordingly.
-    #
-    #             # First get the piece of the read segment.
-    #             piece_start_pos = seg.start_pos + current_pos
-    #             piece_end_pos = seg.start_pos + a.ref_start - 1
-    #             piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(piece_end_pos)
-    #             piece_seq = full_seg_seq[current_pos:a.ref_start]
-    #             if len(piece_seq) > 0:
-    #                 piece_names.append(piece_name)
-    #                 signed_piece_names.append(piece_name + '+')
-    #                 piece_seqs.append(piece_seq)
-    #                 piece_reverse.append(False)
-    #
-    #             # Now put in the contig segment.
-    #             signed_full_seq_name = a.read_name + a.read_strand
-    #             full_contig_seq = self.seq_from_signed_seg_name(signed_full_seq_name)
-    #             contig_name, contig_seq = \
-    #                 get_adjusted_contig_name_and_seq(signed_full_seq_name, full_contig_seq,
-    #                                                  a.read_start, a.read_end)
-    #             reverse = contig_name.endswith('-')
-    #             if reverse:
-    #                 contig_seq = reverse_complement(contig_seq)
-    #             contig_name = contig_name[:-1]  # Remove sign from name
-    #
-    #             # Delete the isolated contig from the graph.
-    #             self.remove_segment(a.read_name)
-    #
-    #             piece_names.append(contig_name)
-    #             signed_piece_names.append(contig_name + ('-' if reverse else '+'))
-    #             piece_seqs.append(contig_seq)
-    #             piece_reverse.append(reverse)
-    #
-    #             current_pos = a.ref_end
-    #
-    #         # Make a segment for the read segment piece after the last contig.
-    #         piece_start_pos = seg.start_pos + current_pos
-    #         piece_name = seg.short_name + ':' + str(piece_start_pos) + '-' + str(seg.end_pos)
-    #         piece_seq = full_seg_seq[current_pos:]
-    #         if len(piece_seq) > 0:
-    #             piece_names.append(piece_name)
-    #             signed_piece_names.append(piece_name + '+')
-    #             piece_seqs.append(piece_seq)
-    #             piece_reverse.append(False)
-    #
-    #         log.log('New segments: ' + ', '.join(signed_piece_names), verbosity=2)
-    #
-    #         # Create the segments and link them together.
-    #         first_piece, last_piece = None, None
-    #         for i, name in enumerate(piece_names):
-    #             seq = piece_seqs[i]
-    #             sign = '-' if piece_reverse[i] else '+'
-    #             self.segments[name] = StringGraphSegment(name, seq, qual=seg.qual)
-    #
-    #             if i == 0:
-    #                 first_piece = name + sign
-    #                 if preceding_segment is not None:
-    #                     self.add_link(preceding_segment, name + sign, 0, 0)
-    #             else:
-    #                 prev_name = piece_names[i-1]
-    #                 prev_sign = '-' if piece_reverse[i-1] else '+'
-    #                 self.add_link(prev_name + prev_sign, name + sign, 0, 0)
-    #
-    #             if i == len(piece_names) - 1 and following_segment is not None:  # last piece
-    #                 last_piece = name + sign
-    #                 self.add_link(name + sign, following_segment, 0, 0)
-    #
-    #         if circular:
-    #             self.add_link(last_piece, first_piece, 0, 0)
-    #
-    #         # Delete the old read segment which we've replaced.
-    #         self.remove_segment(seg_name)
-    #
-    #         log.log('', verbosity=2)
-
     def check_graph_has_no_overlaps(self):
         """
         Asserts that the graph has no branching structures and no overlaps.
@@ -672,7 +471,7 @@ class StringGraph(object):
 
 class StringGraphSegment(object):
 
-    def __init__(self, full_name, sequence, mean_read_quals=None, qual=None):
+    def __init__(self, full_name, sequence, qual=None):
         self.full_name = full_name
         self.forward_sequence = sequence
         self.reverse_sequence = reverse_complement(sequence)
@@ -691,10 +490,6 @@ class StringGraphSegment(object):
         if self.short_name.startswith('CONTIG_'):
             self.contig = True
             self.qual = settings.CONTIG_READ_QSCORE
-        elif mean_read_quals is not None:
-            assert(self.short_name in mean_read_quals)  # if not a contig, it should be a real long read
-            self.contig = False
-            self.qual = mean_read_quals[self.short_name]
         else:
             self.contig = False
             self.qual = None
@@ -852,7 +647,7 @@ def merge_string_graph_segments_into_unitig_graph(string_graph):
 
     # Build and return the unitig graph using the sequences we just made.
     unitig_sequences = sorted(unitig_sequences, key=lambda x: len(x[0]), reverse=True)
-    unitig_graph = StringGraph(None, None)
+    unitig_graph = StringGraph(None)
     for i, unitig_seq_circular in enumerate(unitig_sequences):
         unitig_seq, circular = unitig_seq_circular
         unitig_name = str(i+1)

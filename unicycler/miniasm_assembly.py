@@ -16,15 +16,15 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 import shutil
-import statistics
 import subprocess
 import sys
-from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order, \
-    reverse_complement
-from .minimap_alignment import align_long_reads_to_assembly_graph, \
-    load_minimap_alignments_basic, load_minimap_alignments, combine_close_hits, \
-    remove_conflicting_alignments
-from .string_graph import StringGraph, merge_string_graph_segments_into_unitig_graph
+from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order
+from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
+    load_minimap_alignments_basic, load_minimap_alignments
+from .string_graph import StringGraph, StringGraphSegment, \
+    merge_string_graph_segments_into_unitig_graph
+from .read_ref import load_references, load_long_reads
+from .unicycler_align import semi_global_align_long_reads
 from . import log
 from . import settings
 
@@ -95,8 +95,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
     contigs_placed_filename = os.path.join(miniasm_dir, '14_contigs_placed.gfa')
 
-    mean_read_quals = save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names,
-                                                  read_dict, graph)
+    save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph)
 
     # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
     # alignments are excluded (because single-copy contigs, by definition, should not overlap
@@ -120,7 +119,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
             os.path.isfile(before_transitive_reduction_filename)):
         log.log(red('failed'))
         raise MiniasmFailure('miniasm failed to generate a string graph')
-    string_graph = StringGraph(string_graph_filename, mean_read_quals)
+    string_graph = StringGraph(string_graph_filename)
 
     log.log(green('success'))
     log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
@@ -139,7 +138,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     if keep >= 3:
         unitig_graph.save_to_gfa(racon_polished_filename)
 
-    place_contigs(miniasm_dir, graph, unitig_graph, threads)
+    unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, threads, scoring_scheme)
     if keep >= 3:
         unitig_graph.save_to_gfa(contigs_placed_filename)
 
@@ -204,7 +203,6 @@ def get_miniasm_assembly_reads(minimap_alignments):
 def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, contig_copy_count=1):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
-    mean_read_quals = {}
 
     with open(read_filename, 'wt') as fastq:
         # First save the Illumina contigs as 'reads'. They are given a constant high qscore to
@@ -246,11 +244,9 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
             fastq.write('\n+\n')
             fastq.write(quals)
             fastq.write('\n')
-            mean_read_quals[read_name] = statistics.mean(ord(x)-33 for x in quals)
 
         log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
                 str(len(read_dict)) + ' total long reads)')
-    return mean_read_quals
 
 
 def segment_suitable_for_miniasm_assembly(graph, segment):
@@ -271,9 +267,9 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                               racon_path, threads, scoring_scheme):
     log.log_section_header('Polishing miniasm assembly with Racon')
     log.log_explanation('Unicycler now uses Racon to polish the miniasm assembly. It does '
-                        'multiple rounds of polishing to get the best consensus, and circular '
-                        'unitigs are rotated between rounds such that all parts (including the '
-                        'ends) are polished well.')
+                        'multiple rounds of polishing to get the best consensus. Circular unitigs '
+                        'are rotated between rounds such that all parts (including the ends) are '
+                        'polished well.')
 
     polish_dir = os.path.join(miniasm_dir, 'racon_polish')
     if not os.path.isdir(polish_dir):
@@ -378,7 +374,7 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         unitig_graph.replace_with_polished_sequences(best_fasta, scoring_scheme)
 
 
-def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads):
+def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme):
     log.log('', verbosity=2)
     log.log_explanation('Unicycler now places the single copy contigs back into the unitig '
                         'graph so it can extract bridging sequences between these contigs.',
@@ -390,18 +386,32 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads):
 
     # Save the contigs to a FASTA file.
     contigs_fasta = os.path.join(contig_search_dir, 'contigs.fasta')
-    contig_names = []
     longest_contig_seq_len = 0
+    contig_numbers = []
     with open(contigs_fasta, 'wt') as fasta:
         for seg in sorted(assembly_graph.segments.values(), key=lambda x: x.number):
             if segment_suitable_for_miniasm_assembly(assembly_graph, seg):
-                contig_name = 'CONTIG_' + str(seg.number)
-                contig_names.append(contig_name)
-                fasta.write('>' + contig_name + '\n')
                 seq = seg.forward_sequence
-                fasta.write(seq)
                 longest_contig_seq_len = max(longest_contig_seq_len, len(seq))
-                fasta.write('\n')
+                contig_name = 'CONTIG_' + str(seg.number)
+                contig_numbers.append(seg.number)
+
+                # If the contig is long, we just look for the ends.
+                if len(seq) >= settings.CONTIG_SEARCH_END_SIZE * 2:
+                    start_seq = seq[:settings.CONTIG_SEARCH_END_SIZE]
+                    end_seq = seq[-settings.CONTIG_SEARCH_END_SIZE:]
+                    fasta.write('>' + contig_name + '_START\n')
+                    fasta.write(start_seq)
+                    fasta.write('\n')
+                    fasta.write('>' + contig_name + '_END\n')
+                    fasta.write(end_seq)
+                    fasta.write('\n')
+
+                # If the contig is short, we look for the whole thing.
+                else:
+                    fasta.write('>' + contig_name + '_WHOLE\n')
+                    fasta.write(seq)
+                    fasta.write('\n')
 
     # Save the unitigs to a FASTA file. If the segment is circular, then we save it extra sequence
     # on the end, so we can find contigs which loop. We also save these extended sequences in a
@@ -422,82 +432,148 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads):
             fasta.write('\n')
             extended_unitig_sequences[seg.full_name] = seg_seq
 
-    alignments = load_minimap_alignments(minimap_align_reads(unitigs_fasta, contigs_fasta,
-                                                             threads, 0, 'find contigs'))
-    for contig_name in contig_names:
-        contig_alignments = alignments[contig_name]
+    # Now we align the contigs using the semi-global read aligning method. In this case, the
+    # 'reads' are the contigs and the 'references' are the unitigs.
+    references = load_references(unitigs_fasta, section_header=None, show_progress=False)
+    read_dict, read_names, read_filename = load_long_reads(contigs_fasta, silent=True)
+    min_alignment_len = settings.CONTIG_SEARCH_END_SIZE * 0.9
+    semi_global_align_long_reads(references, unitigs_fasta, read_dict, read_names, read_filename,
+                                 threads, scoring_scheme, [None], False, min_alignment_len, None,
+                                 None, 10, 3, None, verbosity=log.logger.stdout_verbosity_level)
+    start_positions = {}
+    end_positions = {}
+    for contig_name in read_names:
+        contig_number = int(contig_name.split('_')[1])
+        contig = read_dict[contig_name]
+        if contig.alignments:
+            a = sorted(contig.alignments, key=lambda x: x.scaled_score)[-1]
+            if a.percent_identity < settings.CONTIG_SEARCH_MIN_IDENTITY:
+                continue
+            unitig_name = a.ref.name
+            if contig_name.endswith('_START') or contig_name.endswith('_WHOLE'):
+                if a.rev_comp:  # reverse strand
+                    start_positions[contig_number] = (unitig_name, a.ref_end_pos)
+                else:  # forward strand
+                    start_positions[contig_number] = (unitig_name, a.ref_start_pos)
+            if contig_name.endswith('_END') or contig_name.endswith('_WHOLE'):
+                if a.rev_comp:  # reverse strand
+                    end_positions[contig_number] = (unitig_name, a.ref_start_pos)
+                else:  # forward strand
+                    end_positions[contig_number] = (unitig_name, a.ref_end_pos)
 
-        # Clean up the alignments by removing redundant/conflicting hits and combining separated
-        # pieces.
-        filtered_alignments = []
-        for a in contig_alignments:
-            unitig_name = a.ref_name
+    # Gather up the start/end positions for all found contigs.
+    contig_positions = []
+    for contig_number in contig_numbers:
+        if contig_number in start_positions and contig_number in end_positions:
+            start_unitig_name, start_pos = start_positions[contig_number]
+            end_unitig_name, end_pos = end_positions[contig_number]
+            if start_unitig_name != end_unitig_name:
+                continue
+            unitig_name = start_unitig_name
             unitig_length = unitig_graph.segments[unitig_name].get_length()
-            if unitig_graph.segment_is_circular(unitig_name) and a.ref_end > unitig_length:
-                a.ref_start -= unitig_length
-                a.ref_end -= unitig_length
-            filtered_alignments.append(a)
-        contig_alignments = remove_conflicting_alignments(filtered_alignments, 10)
-        contig_alignments = combine_close_hits(contig_alignments, settings.FOUND_CONTIG_MIN_RATIO,
-                                               settings.FOUND_CONTIG_MAX_RATIO)
-        if not contig_alignments:
-            continue
-        a = sorted(contig_alignments, key=lambda x: x.fraction_read_aligned(), reverse=True)[0]
-        if a.fraction_read_aligned() < settings.FOUND_CONTIG_MIN_FRACTION:
-            continue
-        start_gap = a.read_start
-        end_gap = a.read_length - a.read_end
-        estimated_unitig_start_pos = a.ref_start - start_gap
-        estimated_unitig_end_pos = a.ref_end + end_gap
-        if start_gap > settings.FOUND_CONTIG_MAX_END_GAP or \
-                end_gap > settings.FOUND_CONTIG_MAX_END_GAP:
-            continue
-        unitig_name = a.ref_name
-        if estimated_unitig_start_pos < 0:
-            if unitig_graph.segment_is_circular(unitig_name):
-                a.ref_start += unitig_length
-                a.ref_end += unitig_length
-                estimated_unitig_start_pos += unitig_length
-                estimated_unitig_end_pos += unitig_length
+            if start_pos >= unitig_length or end_pos >= unitig_length:
+                start_pos -= unitig_length
+                end_pos -= unitig_length
+            rev_strand = end_pos < start_pos
+            if rev_strand:
+                start_pos, end_pos = end_pos, start_pos
+            contig = assembly_graph.segments[contig_number]
+            length_of_contig_in_unitig = end_pos - start_pos
+            length_ratio = length_of_contig_in_unitig / contig.get_length()
+            if length_ratio < settings.FOUND_CONTIG_MIN_RATIO or \
+                    length_ratio > settings.FOUND_CONTIG_MAX_RATIO:
+                continue
+            print('')  # TEMP
+            print(contig_number, 'FOUND:', start_pos, 'to', end_pos, '-' if rev_strand else '+')  # TEMP
+            contig_positions.append((start_pos, end_pos, rev_strand, unitig_name, contig_number))
+
+    # Now we build a new string graph that consists of contigs and their bridging sequences!
+    new_graph = StringGraph(None)
+    bridge_num = 0
+    for seg in sorted(unitig_graph.segments.values(), key=lambda x: x.get_length(), reverse=True):
+
+        # Do any placed contigs overlap each other a lot? If so, that's very concerning, so we
+        # throw those out!
+        good_contig_positions = []
+        unitig_contig_positions = [x for x in contig_positions if x[3] == seg.name]
+        for i, contig_position in enumerate(unitig_contig_positions):
+            other_positions = unitig_contig_positions[:i] + unitig_contig_positions[i+1:]
+            if range_overlap_size(contig_position,
+                                  other_positions) <= settings.FOUND_CONTIG_MAX_OVERLAP_SIZE:
+                good_contig_positions.append(contig_position)
+        unitig_contig_positions = sorted(good_contig_positions)
+
+        unitig_name = seg.full_name
+        circular_unitig = unitig_graph.segment_is_circular(unitig_name)
+        unitig_length = unitig_graph.segments[unitig_name].get_length()
+
+        unitig_seq = seg.forward_sequence
+        segment_names = []
+        for i, contig_position in enumerate(unitig_contig_positions):
+            start_pos, end_pos, rev_strand, _, contig_number = contig_position
+
+            # If this is the first contig and this isn't a circular unitig, make a bridge segment
+            # at the very start.
+            if i == 0 and not circular_unitig and start_pos > 0:
+                bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+                bridge_seq = unitig_seq[:start_pos]
+                bridge_num += 1
+                new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
+                                                                         bridge_seq)
+                segment_names.append(bridge_seg_name + '+')
+
+            # Make the contig segment.
+            contig_seg_name = 'CONTIG_' + str(contig_number)
+            contig_seq = assembly_graph.segments[contig_number].forward_sequence
+            new_graph.segments[contig_seg_name] = StringGraphSegment(contig_seg_name, contig_seq)
+            if rev_strand:
+                segment_names.append(contig_seg_name + '-')
             else:
-                estimated_unitig_start_pos = 0
+                segment_names.append(contig_seg_name + '+')
 
+            # If this isn't the last contig, make a bridge to the next segment.
+            if i < len(unitig_contig_positions) - 1:
+                bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+                bridge_start = max(end_pos, 0)
+                bridge_end = unitig_contig_positions[i+1][0]
+                bridge_seq = unitig_seq[bridge_start:bridge_end]
+                bridge_num += 1
+                new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
+                                                                         bridge_seq)
+                segment_names.append(bridge_seg_name + '+')
 
-        print(contig_name + ': ' + str(a))  # TEMP
+            # If this is the last contig...
+            if i < len(unitig_contig_positions) - 1:
 
-        # Now we have one and only one alignment for this contig, but it's a minimap alignment that
-        # is likely trimming a bit off the start/end. We now extend the alignment to cover the
-        # entire contig.
-        extended_unitig_seq = extended_unitig_sequences[a.ref_name]
-        gap = max(settings.FOUND_CONTIG_END_REFINEMENT_SIZE, 2 * max(start_gap, end_gap))
-        contig_number = int(a.read_name[7:])
-        contig_start_seq = assembly_graph.segments[contig_number].forward_sequence[:gap]
-        contig_end_seq = assembly_graph.segments[contig_number].forward_sequence[-gap:]
-        if a.read_strand == '-':
-            start_gap, end_gap = end_gap, start_gap
-            contig_start_seq, contig_end_seq = \
-                reverse_complement(contig_end_seq), reverse_complement(contig_start_seq)
+                # ...and it's not circular, then make a bridge to the unitig's end.
+                if not circular_unitig and end_pos < unitig_length:
+                    bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+                    bridge_seq = unitig_seq[end_pos:unitig_length]
+                    bridge_num += 1
+                    new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
+                                                                             bridge_seq)
+                    segment_names.append(bridge_seg_name + '+')
 
-        start_region_start = max(0, estimated_unitig_start_pos - gap)
-        start_region_end = min(len(extended_unitig_seq), estimated_unitig_start_pos + gap)
-        unitig_start_region = extended_unitig_seq[start_region_start:start_region_end]
+                # ... and it is circular, then make a bridge connecting to the start.
+                if circular_unitig:
+                    bridge_seq = unitig_seq[end_pos:unitig_length]
+                    first_contig_start_overlap = unitig_contig_positions[0][0]  # neg if overlap
+                    if first_contig_start_overlap < 0:
+                        bridge_seq = bridge_seq[:first_contig_start_overlap]
+                    else:
+                        bridge_seq += unitig_seq[:first_contig_start_overlap]
+                    if bridge_seq:
+                        bridge_seg_name = 'BRIDGE_' + str(bridge_num)
+                        bridge_num += 1
+                        new_graph.segments[bridge_seg_name] = StringGraphSegment(bridge_seg_name,
+                                                                                 bridge_seq)
+                        segment_names.append(bridge_seg_name + '+')
 
-        end_region_start = max(0, estimated_unitig_end_pos - gap)
-        end_region_end = min(len(extended_unitig_seq), estimated_unitig_end_pos + gap)
-        unitig_end_region = extended_unitig_seq[end_region_start:end_region_end]
+        # Create links between all the new segments.
+        for i, segment_name in enumerate(segment_names[1:]):
+            prev_segment_name = segment_names[i-1]
+            new_graph.add_link(prev_segment_name, segment_name, 0, 0)
+        if circular_unitig:
+            new_graph.add_link(segment_names[-1], segment_names[1], 0, 0)
 
-        print('start_gap:', start_gap)  # TEMP
-        print('end_gap:', end_gap)  # TEMP
-        print('contig_start_seq:', contig_start_seq)  # TEMP
-        print('contig_end_seq:', contig_end_seq)  # TEMP
-        print('estimated_unitig_start_pos:', estimated_unitig_start_pos)  # TEMP
-        print('estimated_unitig_end_pos:', estimated_unitig_end_pos)  # TEMP
-        print('unitig_start_region:', unitig_start_region)  # TEMP
-        print('unitig_end_region:', unitig_end_region)  # TEMP
-
-        print('')  # TEMP
-
-
-
-
-
+    return new_graph
