@@ -19,13 +19,11 @@ import re
 from collections import deque, defaultdict
 from .misc import reverse_complement, add_line_breaks_to_sequence, get_right_arrow, bold, load_fasta
 from .assembly_graph import build_reverse_links
-from .cpp_wrappers import semi_global_alignment_exhaustive
 from . import settings
 from . import log
 
 try:
-    from .cpp_wrappers import overlap_alignment, minimap_align_reads, start_seq_alignment, \
-        end_seq_alignment
+    from .cpp_wrappers import semi_global_alignment_exhaustive
 except AttributeError as e:
     sys.exit('Error when importing C++ library: ' + str(e) + '\n'
              'Have you successfully built the library file using make?')

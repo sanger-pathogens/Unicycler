@@ -369,129 +369,26 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
                         'graph so it can extract bridging sequences between these contigs.',
                         verbosity=2)
 
-    contig_search_dir = os.path.join(miniasm_dir, 'contig_search')
-    if not os.path.isdir(contig_search_dir):
-        os.makedirs(contig_search_dir)
-
-    # Save the contigs to a FASTA file.
-    contigs_fasta = os.path.join(contig_search_dir, 'contigs.fasta')
-    longest_contig_seq_len = 0
-    contig_numbers = []
-    with open(contigs_fasta, 'wt') as fasta:
-        for seg in sorted(assembly_graph.segments.values(), key=lambda x: x.number):
-            if segment_suitable_for_miniasm_assembly(assembly_graph, seg):
-                seq = seg.forward_sequence
-                longest_contig_seq_len = max(longest_contig_seq_len, len(seq))
-                contig_name = 'CONTIG_' + str(seg.number)
-                contig_numbers.append(seg.number)
-
-                # If the contig is long, we just look for the ends.
-                if len(seq) >= settings.CONTIG_SEARCH_END_SIZE * 2:
-                    start_seq = seq[:settings.CONTIG_SEARCH_END_SIZE]
-                    end_seq = seq[-settings.CONTIG_SEARCH_END_SIZE:]
-                    fasta.write('>' + contig_name + '_START\n')
-                    fasta.write(start_seq)
-                    fasta.write('\n')
-                    fasta.write('>' + contig_name + '_END\n')
-                    fasta.write(end_seq)
-                    fasta.write('\n')
-
-                # If the contig is short, we look for the whole thing.
-                else:
-                    fasta.write('>' + contig_name + '_WHOLE\n')
-                    fasta.write(seq)
-                    fasta.write('\n')
-
-    # Save the unitigs to a FASTA file. If the segment is circular, then we save it extra sequence
-    # on the end, so we can find contigs which loop. We also save these extended sequences in a
-    # dictionary for later.
-    unitigs_fasta = os.path.join(contig_search_dir, 'unitigs.fasta')
-    extended_unitig_sequences = {}
-    with open(unitigs_fasta, 'wt') as fasta:
-        for seg in sorted(unitig_graph.segments.values(), key=lambda x: x.get_length(),
-                          reverse=True):
-            seg_seq = seg.forward_sequence
-            if unitig_graph.segment_is_circular(seg.full_name):
-                if len(seg_seq) <= longest_contig_seq_len:
-                    seg_seq += seg_seq
-                else:
-                    seg_seq += seg_seq[:longest_contig_seq_len]
-            fasta.write('>' + seg.full_name + '\n')
-            fasta.write(seg_seq)
-            fasta.write('\n')
-            extended_unitig_sequences[seg.full_name] = seg_seq
-
-    # Now we align the contigs using the semi-global read aligning method. In this case, the
-    # 'reads' are the contigs and the 'references' are the unitigs.
-    references = load_references(unitigs_fasta, section_header=None, show_progress=False)
-    read_dict, read_names, read_filename = load_long_reads(contigs_fasta, silent=True)
-    min_alignment_len = settings.CONTIG_SEARCH_END_SIZE * 0.9
-    semi_global_align_long_reads(references, unitigs_fasta, read_dict, read_names, read_filename,
-                                 threads, scoring_scheme, [None], False, min_alignment_len, None,
-                                 None, 10, 3, None, verbosity=log.logger.stdout_verbosity_level)
-    start_positions = {}
-    end_positions = {}
-    for contig_name in read_names:
-        contig_number = int(contig_name.split('_')[1])
-        contig = read_dict[contig_name]
-        if contig.alignments:
-            a = sorted(contig.alignments, key=lambda x: x.scaled_score)[-1]
-            if a.percent_identity < settings.CONTIG_SEARCH_MIN_IDENTITY:
-                continue
-            unitig_name = a.ref.name
-            if contig_name.endswith('_START') or contig_name.endswith('_WHOLE'):
-                if a.rev_comp:  # reverse strand
-                    start_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
-                else:  # forward strand
-                    start_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
-            if contig_name.endswith('_END') or contig_name.endswith('_WHOLE'):
-                if a.rev_comp:  # reverse strand
-                    end_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
-                else:  # forward strand
-                    end_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
-
-    # Gather up the start/end positions for all found contigs.
+    # Use semi-global alignment of contig ends to find the contigs in the unitig graph. We first
+    # look for contigs using relatively large chunks of their ends and progress to smaller chunks
+    # only if they aren't found.
     contig_positions = []
-    for contig_number in contig_numbers:
-        if contig_number in start_positions and contig_number in end_positions:
-            start_unitig_name, start_pos, start_rev_comp = start_positions[contig_number]
-            end_unitig_name, end_pos, end_rev_comp = end_positions[contig_number]
-
-            # Only accept start/ends on the same strand of the same unitig.
-            if start_unitig_name != end_unitig_name:
-                continue
-            if start_rev_comp != end_rev_comp:
-                continue
-
-            unitig_name = start_unitig_name
-            unitig_length = unitig_graph.segments[unitig_name].get_length()
-            circular_unitig = unitig_graph.segment_is_circular(unitig_name)
-            rev_comp = start_rev_comp
-
-            # Make sure each position is in the actual unitig coordinates, not in the overlap past
-            # the end.
-            if start_pos >= unitig_length:
-                start_pos -= unitig_length
-            if end_pos >= unitig_length:
-                end_pos -= unitig_length
-
-            # Fix up start/ends that overlap the end of a circular unitig.
-            if start_pos > end_pos and not rev_comp and circular_unitig:
-                start_pos -= unitig_length
-            if end_pos > start_pos and rev_comp and circular_unitig:
-                end_pos -= unitig_length
-
-            if rev_comp:
-                start_pos, end_pos = end_pos, start_pos
-
-            contig = assembly_graph.segments[contig_number]
-            length_of_contig_in_unitig = end_pos - start_pos
-            length_ratio = length_of_contig_in_unitig / contig.get_length()
-            if length_ratio < settings.FOUND_CONTIG_MIN_RATIO or \
-                    length_ratio > settings.FOUND_CONTIG_MAX_RATIO:
-                continue
-            print(contig_number, 'found in unitig', unitig_name, ':', start_pos, 'to', end_pos, '-' if rev_comp else '+', 'strand')  # TEMP
-            contig_positions.append((start_pos, end_pos, rev_comp, unitig_name, contig_number))
+    contig_numbers = []
+    for seg in sorted(assembly_graph.segments.values(), key=lambda x: x.number):
+        if segment_suitable_for_miniasm_assembly(assembly_graph, seg):
+            contig_numbers.append(seg.number)
+    for contig_search_end_size in settings.CONTIG_SEARCH_END_SIZES:
+        log.log('Searching for contigs using ' + int_to_str(contig_search_end_size) + ' bp of '
+                'contig ends.')
+        log.log('')
+        contig_position_results, not_found_contig_numbers = \
+            find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threads,
+                                        scoring_scheme, contig_search_end_size, contig_numbers)
+        contig_positions += contig_position_results
+        if not_found_contig_numbers:
+            contig_numbers = not_found_contig_numbers
+        else:
+            break
 
     # Now we build a new string graph that consists of contigs and their bridging sequences!
     new_graph = StringGraph(None)
@@ -501,7 +398,7 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
         # We work through each contig separately.
         unitig_name = seg.full_name
         unitig_seq = seg.forward_sequence
-        extended_unitig_seq = extended_unitig_sequences[unitig_name]
+        extended_unitig_seq = unitig_seq + unitig_seq
         unitig_length = len(seg.forward_sequence)
         circular_unitig = unitig_graph.segment_is_circular(unitig_name)
 
@@ -593,10 +490,171 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
                         segment_names.append(seg_name + '+')
 
         # Create links between all the new segments.
-        for i, segment_name in enumerate(segment_names[1:]):
-            prev_segment_name = segment_names[i]
-            new_graph.add_link(prev_segment_name, segment_name, 0, 0)
         if circular_unitig:
-            new_graph.add_link(segment_names[-1], segment_names[0], 0, 0)
+            segment_names.append(segment_names[0])
+        for i, seg_2 in enumerate(segment_names[1:]):
+            seg_1 = segment_names[i]
+
+            seg_1_overlapping_bridge = seg_1.startswith('OVERLAPPING_BRIDGE')
+            seg_2_overlapping_bridge = seg_2.startswith('OVERLAPPING_BRIDGE')
+            assert not (seg_1_overlapping_bridge and seg_2_overlapping_bridge)
+
+            seg_1_seq = new_graph.seq_from_signed_seg_name(seg_1)
+            seg_2_seq = new_graph.seq_from_signed_seg_name(seg_2)
+
+            if seg_1_overlapping_bridge:
+                seg_1_overlap = len(seg_1_seq)
+                seg_2_overlap = start_seq_alignment(seg_1_seq, seg_2_seq, scoring_scheme)
+                new_graph.add_link(seg_1, seg_2, seg_1_overlap, seg_2_overlap)
+            elif seg_2_overlapping_bridge:
+                seg_1_overlap = len(seg_1_seq) - end_seq_alignment(seg_2_seq, seg_1_seq,
+                                                                   scoring_scheme)
+                seg_2_overlap = len(seg_2_seq)
+                new_graph.add_link(seg_1, seg_2, seg_1_overlap, seg_2_overlap)
+            else:  # neither is an overlapping bridge
+                new_graph.add_link(seg_1, seg_2, 0, 0)
 
     return new_graph
+
+
+def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme,
+                                contig_search_end_size, contig_numbers):
+    """
+    This function searches for contig start and end points in the unitig graph.
+    """
+    contig_search_dir = os.path.join(miniasm_dir, 'contig_search')
+    if not os.path.isdir(contig_search_dir):
+        os.makedirs(contig_search_dir)
+
+    # Save the contigs to a FASTA file.
+    contigs_fasta = os.path.join(contig_search_dir, 'contigs.fasta')
+    longest_contig_seq_len = 0
+    with open(contigs_fasta, 'wt') as fasta:
+        for contig_number in contig_numbers:
+            seg = assembly_graph.segments[contig_number]
+            seq = seg.forward_sequence
+            longest_contig_seq_len = max(longest_contig_seq_len, len(seq))
+            contig_name = 'CONTIG_' + str(seg.number)
+
+            # If the contig is long, we just look for the ends.
+            if len(seq) >= contig_search_end_size * 2:
+                start_seq = seq[:contig_search_end_size]
+                end_seq = seq[-contig_search_end_size:]
+                fasta.write('>' + contig_name + '_START\n')
+                fasta.write(start_seq)
+                fasta.write('\n')
+                fasta.write('>' + contig_name + '_END\n')
+                fasta.write(end_seq)
+                fasta.write('\n')
+
+            # If the contig is short, we look for the whole thing.
+            else:
+                fasta.write('>' + contig_name + '_WHOLE\n')
+                fasta.write(seq)
+                fasta.write('\n')
+
+    # Save the unitigs to a FASTA file. If the segment is circular, then we save it extra sequence
+    # on the end, so we can find contigs which loop.
+    unitigs_fasta = os.path.join(contig_search_dir, 'unitigs.fasta')
+    with open(unitigs_fasta, 'wt') as fasta:
+        for seg in sorted(unitig_graph.segments.values(), key=lambda x: x.get_length(),
+                          reverse=True):
+            seg_seq = seg.forward_sequence
+            if unitig_graph.segment_is_circular(seg.full_name):
+                if len(seg_seq) <= longest_contig_seq_len:
+                    seg_seq += seg_seq
+                else:
+                    seg_seq += seg_seq[:longest_contig_seq_len]
+            fasta.write('>' + seg.full_name + '\n')
+            fasta.write(seg_seq)
+            fasta.write('\n')
+
+    # Now we align the contigs using the semi-global read aligning method. In this case, the
+    # 'reads' are the contigs and the 'references' are the unitigs.
+    references = load_references(unitigs_fasta, section_header=None, show_progress=False)
+    read_dict, read_names, read_filename = load_long_reads(contigs_fasta, silent=True)
+    min_alignment_len = contig_search_end_size * 0.9
+    semi_global_align_long_reads(references, unitigs_fasta, read_dict, read_names, read_filename,
+                                 threads, scoring_scheme, [None], False, min_alignment_len, None,
+                                 None, 10, 0, None, verbosity=0)
+    start_positions = {}
+    end_positions = {}
+    for contig_name in read_names:
+        contig_number = int(contig_name.split('_')[1])
+        contig = read_dict[contig_name]
+        if contig.alignments:
+            a = sorted(contig.alignments, key=lambda x: x.scaled_score)[-1]
+            if a.percent_identity < settings.CONTIG_SEARCH_MIN_IDENTITY:
+                continue
+
+            unitig_name = a.ref.name
+            if contig_name.endswith('_START') or contig_name.endswith('_WHOLE'):
+                if a.rev_comp:  # reverse strand
+                    start_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
+                else:  # forward strand
+                    start_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
+            if contig_name.endswith('_END') or contig_name.endswith('_WHOLE'):
+                if a.rev_comp:  # reverse strand
+                    end_positions[contig_number] = (unitig_name, a.ref_start_pos, a.rev_comp)
+                else:  # forward strand
+                    end_positions[contig_number] = (unitig_name, a.ref_end_pos, a.rev_comp)
+
+    # Gather up the start/end positions for all found contigs.
+    contig_positions = []
+    for contig_number in contig_numbers:
+        if contig_number in start_positions and contig_number in end_positions:
+            start_unitig_name, start_pos, start_rev_comp = start_positions[contig_number]
+            end_unitig_name, end_pos, end_rev_comp = end_positions[contig_number]
+
+            # Only accept start/ends on the same strand of the same unitig.
+            if start_unitig_name != end_unitig_name:
+                continue
+            if start_rev_comp != end_rev_comp:
+                continue
+
+            unitig_name = start_unitig_name
+            unitig_length = unitig_graph.segments[unitig_name].get_length()
+            circular_unitig = unitig_graph.segment_is_circular(unitig_name)
+            rev_comp = start_rev_comp
+
+            # Make sure each position is in the actual unitig coordinates, not in the overlap past
+            # the end.
+            if start_pos >= unitig_length:
+                start_pos -= unitig_length
+            if end_pos >= unitig_length:
+                end_pos -= unitig_length
+
+            # Fix up start/ends that overlap the end of a circular unitig.
+            if start_pos > end_pos and not rev_comp and circular_unitig:
+                start_pos -= unitig_length
+            if end_pos > start_pos and rev_comp and circular_unitig:
+                end_pos -= unitig_length
+
+            if rev_comp:
+                start_pos, end_pos = end_pos, start_pos
+
+            contig = assembly_graph.segments[contig_number]
+            length_of_contig_in_unitig = end_pos - start_pos
+            length_ratio = length_of_contig_in_unitig / contig.get_length()
+            if length_ratio < settings.FOUND_CONTIG_MIN_RATIO or \
+                    length_ratio > settings.FOUND_CONTIG_MAX_RATIO:
+                continue
+            contig_positions.append((start_pos, end_pos, rev_comp, unitig_name, contig_number))
+
+    # Display the search results in a table.
+    not_found_contig_numbers = []
+    contig_search_table = [['Contig', 'Result', 'Start pos', 'End pos', 'Strand']]
+    for contig_number in contig_numbers:
+        result = [x for x in contig_positions if x[4] == contig_number]
+        assert len(result) == 0 or len(result) == 1
+        if result:
+            result = result[0]
+            contig_search_table.append([str(contig_number), 'found in unitig ' + result[3],
+                                        str(result[0]), str(result[1]), '-' if result[2] else '+'])
+        else:
+            contig_search_table.append([str(contig_number), 'not found', '', '', ''])
+            not_found_contig_numbers.append(contig_number)
+    print_table(contig_search_table, alignments='LLLRRR', indent=0, sub_colour={'not found': 'red'})
+    log.log('')
+
+    return contig_positions, not_found_contig_numbers

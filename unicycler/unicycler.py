@@ -291,70 +291,11 @@ def main():
     if args.keep > 0:
         graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'), newline=True)
 
-    # Rotate completed replicons in the graph to a standard starting gene.
-    completed_replicons = graph.completed_circular_replicons()
-    if not args.no_rotate and len(completed_replicons) > 0:
-        log.log_section_header('Rotating completed replicons')
+    if not args.no_rotate:
+        rotate_completed_replicons(graph, args, counter)
 
-        rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
-                                  'Strand', 'Identity', 'Coverage']]
-        blast_dir = os.path.join(args.out, 'blast')
-        if not os.path.exists(blast_dir):
-            os.makedirs(blast_dir)
-        completed_replicons = sorted(completed_replicons, reverse=True,
-                                     key=lambda x: graph.segments[x].get_length())
-        rotation_count = 0
-        for completed_replicon in completed_replicons:
-            segment = graph.segments[completed_replicon]
-            sequence = segment.forward_sequence
-            if graph.overlap > 0:
-                sequence = sequence[:-graph.overlap]
-            depth = segment.depth
-            log.log('Segment ' + str(segment.number) + ':', 2)
-            rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
-                                   float_to_str(depth, 2) + 'x']
-            try:
-                blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
-                                            args.start_gene_cov, blast_dir, args.makeblastdb_path,
-                                            args.tblastn_path, args.threads)
-            except CannotFindStart:
-                rotation_result_row += ['none found', '', '', '', '']
-            else:
-                rotation_result_row += [blast_hit.qseqid, int_to_str(blast_hit.start_pos),
-                                        'reverse' if blast_hit.flip else 'forward',
-                                        '%.1f' % blast_hit.pident + '%',
-                                        '%.1f' % blast_hit.query_cov + '%']
-                segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip, graph.overlap)
-                rotation_count += 1
-            rotation_result_table.append(rotation_result_row)
-
-        log.log('', 2)
-        print_table(rotation_result_table, alignments='RRRLRLRR', indent=0,
-                    sub_colour={'none found': 'red'})
-        if rotation_count and args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
-        if args.keep < 3 and os.path.exists(blast_dir):
-            shutil.rmtree(blast_dir)
-
-    # Polish the final assembly!
     if not args.no_pilon:
-        log.log_section_header('Polishing assembly with Pilon')
-        polish_dir = os.path.join(args.out, 'pilon_polish')
-        if not os.path.exists(polish_dir):
-            os.makedirs(polish_dir)
-        starting_dir = os.getcwd()
-        try:
-            polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
-                              args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
-                              args.short1, args.short2, args.threads)
-        except CannotPolish as e:
-            log.log('Unable to polish assembly using Pilon: ' + e.message)
-        else:
-            if args.keep > 0:
-                graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
-        os.chdir(starting_dir)
-        if args.keep < 3 and os.path.exists(polish_dir):
-            shutil.rmtree(polish_dir)
+        final_polish(graph, args, counter)
 
     # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Complete')
@@ -394,9 +335,9 @@ def get_arguments():
 
     # Short read input options
     input_group = parser.add_argument_group('Input')
-    input_group.add_argument('-1', '--short1', required=True,
+    input_group.add_argument('-1', '--short1', required=False,
                              help='FASTQ file of first short reads in each pair (required)')
-    input_group.add_argument('-2', '--short2', required=True,
+    input_group.add_argument('-2', '--short2', required=False,
                              help='FASTQ file of second short reads in each pair (required)')
     input_group.add_argument('-s', '--unpaired', required=False,
                              help='FASTQ file of unpaired short reads (optional)')
@@ -566,6 +507,12 @@ def get_arguments():
     args = parser.parse_args()
     fix_up_arguments(args)
 
+    if (args.short1 and not args.short2) or (args.short2 and not args.short1):
+        quit_with_error('you must use both --short1 and --short2 or neither')
+
+    if not args.short1 and not args.short3 and not args.long:
+        quit_with_error('no input reads provided (--short1, --short2, --long)')
+
     if args.keep < 0 or args.keep > 3:
         quit_with_error('--keep must be between 0 and 3 (inclusive)')
 
@@ -675,17 +622,24 @@ def print_intro_message(args, full_command, out_dir_message):
     """
     log.log_section_header('Starting Unicycler', single_newline=True)
 
+    short_reads_available = bool(args.short1)
+    long_reads_available = bool(args.long)
+
     intro_message = 'Welcome to Unicycler, an assembly pipeline for bacterial genomes. '
-    if args.long:
+    if short_reads_available and long_reads_available:
         intro_message += ('Since you provided both short and long reads, Unicycler will perform a '
                           'hybrid assembly. It will first use SPAdes to make a short read '
                           'assembly graph, and then it will use various approaches to scaffold '
                           'that graph using information from the long reads.')
-    else:
-        intro_message += ('Since you provided both only short reads, Unicycler will essentially '
+    elif short_reads_available:
+        intro_message += ('Since you provided only short reads, Unicycler will essentially '
                           'function as a SPAdes-optimiser. It will try many k-mer sizes, choose '
                           'the best based on contig length and graph connectivity, and scaffold '
                           'the graph using SPAdes repeat resolution.')
+    elif long_reads_available:
+        intro_message += ('Since you provided only long reads, Unicycler will essentially '
+                          'function as a miniasm + Racon pipeline. It will assemble the reads '
+                          'with miniasm and then run repeated polishing rounds using Racon.')
     log.log_explanation(intro_message, extra_empty_lines_after=0)
     log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler',
                         extra_empty_lines_after=0)
@@ -696,25 +650,27 @@ def print_intro_message(args, full_command, out_dir_message):
     log.log('')
     log.log(out_dir_message)
     log.log('', 2)
-    if args.mode == 0:
-        log.log('Bridging mode: conservative', 2)
-        if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:
-            log.log('  using default conservative bridge quality cutoff: ', 2, end='')
-        else:
-            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
-    elif args.mode == 1:
-        log.log('Bridging mode: normal', 2)
-        if args.min_bridge_qual == settings.NORMAL_MIN_BRIDGE_QUAL:
-            log.log('  using default normal bridge quality cutoff: ', 2, end='')
-        else:
-            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
-    else:  # args.mode == 2
-        log.log('Bridging mode: bold', 2)
-        if args.min_bridge_qual == settings.BOLD_MIN_BRIDGE_QUAL:
-            log.log('  using default bold bridge quality cutoff: ', 2, end='')
-        else:
-            log.log('  using user-specified bridge quality cutoff: ', 2, end='')
-    log.log(float_to_str(args.min_bridge_qual, 2), 2)
+
+    if short_reads_available:
+        if args.mode == 0:
+            log.log('Bridging mode: conservative', 2)
+            if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:
+                log.log('  using default conservative bridge quality cutoff: ', 2, end='')
+            else:
+                log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+        elif args.mode == 1:
+            log.log('Bridging mode: normal', 2)
+            if args.min_bridge_qual == settings.NORMAL_MIN_BRIDGE_QUAL:
+                log.log('  using default normal bridge quality cutoff: ', 2, end='')
+            else:
+                log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+        else:  # args.mode == 2
+            log.log('Bridging mode: bold', 2)
+            if args.min_bridge_qual == settings.BOLD_MIN_BRIDGE_QUAL:
+                log.log('  using default bold bridge quality cutoff: ', 2, end='')
+            else:
+                log.log('  using user-specified bridge quality cutoff: ', 2, end='')
+        log.log(float_to_str(args.min_bridge_qual, 2), 2)
 
 
 def check_dependencies(args):
@@ -861,3 +817,68 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
 
 def gfa_path(out_dir, file_num, name):
     return os.path.join(out_dir, str(file_num).zfill(3) + '_' + name + '.gfa')
+
+
+def rotate_completed_replicons(graph, args, counter):
+    completed_replicons = graph.completed_circular_replicons()
+    if len(completed_replicons) > 0:
+        log.log_section_header('Rotating completed replicons')
+
+        rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
+                                  'Strand', 'Identity', 'Coverage']]
+        blast_dir = os.path.join(args.out, 'blast')
+        if not os.path.exists(blast_dir):
+            os.makedirs(blast_dir)
+        completed_replicons = sorted(completed_replicons, reverse=True,
+                                     key=lambda x: graph.segments[x].get_length())
+        rotation_count = 0
+        for completed_replicon in completed_replicons:
+            segment = graph.segments[completed_replicon]
+            sequence = segment.forward_sequence
+            if graph.overlap > 0:
+                sequence = sequence[:-graph.overlap]
+            depth = segment.depth
+            log.log('Segment ' + str(segment.number) + ':', 2)
+            rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
+                                   float_to_str(depth, 2) + 'x']
+            try:
+                blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
+                                            args.start_gene_cov, blast_dir, args.makeblastdb_path,
+                                            args.tblastn_path, args.threads)
+            except CannotFindStart:
+                rotation_result_row += ['none found', '', '', '', '']
+            else:
+                rotation_result_row += [blast_hit.qseqid, int_to_str(blast_hit.start_pos),
+                                        'reverse' if blast_hit.flip else 'forward',
+                                        '%.1f' % blast_hit.pident + '%',
+                                        '%.1f' % blast_hit.query_cov + '%']
+                segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip, graph.overlap)
+                rotation_count += 1
+            rotation_result_table.append(rotation_result_row)
+
+        log.log('', 2)
+        print_table(rotation_result_table, alignments='RRRLRLRR', indent=0,
+                    sub_colour={'none found': 'red'})
+        if rotation_count and args.keep > 0:
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
+        if args.keep < 3 and os.path.exists(blast_dir):
+            shutil.rmtree(blast_dir)
+
+def final_polish(graph, args, counter):
+    log.log_section_header('Polishing assembly with Pilon')
+    polish_dir = os.path.join(args.out, 'pilon_polish')
+    if not os.path.exists(polish_dir):
+        os.makedirs(polish_dir)
+    starting_dir = os.getcwd()
+    try:
+        polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
+                          args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
+                          args.short1, args.short2, args.threads)
+    except CannotPolish as e:
+        log.log('Unable to polish assembly using Pilon: ' + e.message)
+    else:
+        if args.keep > 0:
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
+    os.chdir(starting_dir)
+    if args.keep < 3 and os.path.exists(polish_dir):
+        shutil.rmtree(polish_dir)
