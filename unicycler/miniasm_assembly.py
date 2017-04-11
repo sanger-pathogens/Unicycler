@@ -694,30 +694,17 @@ def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads,
     mapping_quality = 0
 
     if aligner == 'minimap':
-        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 3,
+        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, threads, 3,
                                                      preset_name='find contigs')
         alignments_by_read = load_minimap_alignments(minimap_alignments_str,
                                                      filter_overlaps=True, allowed_overlap=10,
                                                      filter_by_minimisers=True)
-        mapping_quality = 0
-        read_alignments = load_minimap_alignments_basic(minimap_alignments_str)
-        read_names = remove_dupes_preserve_order([x.read_name for x in read_alignments])
         with open(mappings_filename, 'wt') as mappings:
-            for read_name in read_names:
-                if read_name in alignments_by_read:
-                    grouped_alignments = \
-                        combine_close_hits(alignments_by_read[read_name],
-                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MIN_RATIO,
-                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MAX_RATIO)
-                    if grouped_alignments:
-                        best_alignment = sorted(grouped_alignments, key=lambda x: x.matching_bases,
-                                                reverse=True)[0]
-                        frac = best_alignment.fraction_read_aligned()
-                        if frac >= settings.MIN_READ_ALIGN_FRACTION_FOR_RACON_POLISHING or \
-                                best_alignment.overlaps_reference():
-                            mappings.write(best_alignment.paf_line)
-                            mappings.write('\n')
-                        mapping_quality += best_alignment.matching_bases
+            for read_name in sorted(alignments_by_read.keys()):
+                for a in alignments_by_read[read_name]:
+                    mappings.write(a.paf_line)
+                    mappings.write('\n')
+                    mapping_quality += a.matching_bases
 
     elif aligner == 'GraphMap':
         command = ['graphmap', 'align', '-a', 'anchor', '--rebuild-index',
