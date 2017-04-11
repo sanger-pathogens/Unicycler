@@ -265,13 +265,26 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         os.makedirs(polish_dir)
 
     # Save reads to file for polishing. We exclude reads that miniasm decided were chimeras.
-    chimeric_read_names = set()
+    excluded_read_names = set()
     chimeric_read_list_filename = os.path.join(miniasm_dir, 'chimeric_reads.txt')
     if os.path.isfile(chimeric_read_list_filename):
         with open(chimeric_read_list_filename) as chimeric_read_list_file:
             for line in chimeric_read_list_file:
-                chimeric_read_names.add(line.strip())
-    assembly_read_names = [x for x in assembly_read_names if x not in chimeric_read_names]
+                excluded_read_names.add(line.strip())
+
+    # We also exclude reads where too much of the read was clipped off by miniasm.
+    all_read_list_filename = os.path.join(miniasm_dir, 'all_reads.txt')
+    if os.path.isfile(all_read_list_filename):
+        with open(all_read_list_filename) as all_read_list_file:
+            for line in all_read_list_file:
+                read_name, read_range = line.strip().rsplit(':', 1)
+                read_start, read_end = read_range.split('-')
+                end_clip = read_dict[read_name].get_length() - int(read_end)
+                if int(read_start) > settings.MAX_READ_CLIP_FOR_RACON_POLISHING or \
+                        end_clip > settings.MAX_READ_CLIP_FOR_RACON_POLISHING:
+                    excluded_read_names.add(read_name)
+
+    assembly_read_names = [x for x in assembly_read_names if x not in excluded_read_names]
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
     save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph,
                                 settings.RACON_CONTIG_DUPLICATION_COUNT)
@@ -318,9 +331,12 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                     if grouped_alignments:
                         best_alignment = sorted(grouped_alignments, key=lambda x: x.matching_bases,
                                                 reverse=True)[0]
-                        mappings.write(best_alignment.paf_line)
-                        mappings.write('\n')
-                        mapping_quality += best_alignment.matching_bases
+                        frac = best_alignment.fraction_read_aligned()
+                        if frac >= settings.MIN_READ_ALIGN_FRACTION_FOR_RACON_POLISHING or \
+                                best_alignment.overlaps_reference():
+                            mappings.write(best_alignment.paf_line)
+                            mappings.write('\n')
+                            mapping_quality += best_alignment.matching_bases
 
         # # Create the alignments for Racon using GraphMap.
         # mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.sam')
@@ -387,6 +403,16 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         # If even after all those tries Racon still didn't succeed, then we give up!
         if return_code != 0 or not os.path.isfile(post_polish_fasta):
             break
+
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
+
 
         unitig_graph.replace_with_polished_sequences(post_polish_fasta, scoring_scheme)
 
@@ -687,7 +713,7 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
         else:
             contig_search_table.append([str(contig_number), 'not found', '', '', ''])
             not_found_contig_numbers.append(contig_number)
-    print_table(contig_search_table, alignments='LLLRRR', indent=0, sub_colour={'not found': 'red'})
+    print_table(contig_search_table, alignments='RLRRR', indent=0, sub_colour={'not found': 'red'})
     log.log('')
 
     return contig_positions, not_found_contig_numbers

@@ -126,33 +126,55 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
 
     subreads = (ma_sub_t*)calloc(num_reads, sizeof(ma_sub_t));
     for (size_t i = 1, last = 0; i <= n; ++i) {
-        if (i == n || a[i].qns>>32 != a[i-1].qns>>32) { // we come to a new query sequence
-            size_t start = 0;
-            int dp, qid = int(a[i-1].qns>>32);
+
+        // We've come to a new query sequence.
+        if (i == n || a[i].qns>>32 != a[i-1].qns>>32) {
+            size_t start, end;
+            int query_i = int(a[i-1].qns>>32);
 
             ma_sub_t max, max2;
             kv_resize(uint32_t, b, i - last);
             b.n = 0;
-            for (j = last; j < i; ++j) { // collect all starts and ends
+
+            // Collect all starts and ends.
+            for (j = last; j < i; ++j) {
                 uint32_t qs, qe;
-                if (a[j].tn == qid || a[j].ml < a[j].bl * min_iden) continue; // skip self match
-                qs = (uint32_t)a[j].qns + end_clip, qe = a[j].qe - end_clip;
+                int target_i = a[j].tn;
+
+                // skip self match
+                if (target_i == query_i || a[j].ml < a[j].bl * min_iden)
+                    continue;
+
+                qs = (uint32_t)a[j].qns + end_clip;
+                qe = a[j].qe - end_clip;
+
                 if (qe > qs) {
                     kv_push(uint32_t, b, qs<<1);
                     kv_push(uint32_t, b, qe<<1|1);
+
+                    // If the query is a read and the target is an Illumina contig, then we add
+                    // the start/end coordinates two more times. This is because Illumina contigs
+                    // carry a lot of weight and should count more than alignments to other reads.
+                    // E.g. one Illumina contig alignment is enough to get a read over a min depth
+                    // of 3.
+                    if (!is_read_illumina_contig(read_dict, query_i) && is_read_illumina_contig(read_dict, target_i)) {
+                        kv_push(uint32_t, b, qs<<1);
+                        kv_push(uint32_t, b, qe<<1|1);
+                        kv_push(uint32_t, b, qs<<1);
+                        kv_push(uint32_t, b, qe<<1|1);
+                    }
                 }
             }
 
             // If the read is an Illumina contig, then we may not have alignments to the middle of
             // the read. So we don't do the normal miniasm stuff but instead only clip off unaligned
             // parts from its ends.
-            int min_depth;
-            if (is_read_illumina_contig(read_dict, qid)) {
+            if (is_read_illumina_contig(read_dict, query_i)) {
 
                 // If the Illumina contig has no alignments, then we just include the whole thing.
                 if (b.n == 0) {
-                    subreads[qid].s = 0;
-                    subreads[qid].e = read_dict->seq[qid].len;
+                    subreads[query_i].s = 0;
+                    subreads[query_i].e = read_dict->seq[query_i].len;
                 }
                 // If the read has alignments, we use those to clip off unaligned parts.
                 else {
@@ -167,39 +189,57 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
                             min_start = std::min(read_start, min_start);
                         }
                     }
-                    subreads[qid].s = min_start - end_clip;
-                    subreads[qid].e = max_end + end_clip;
+                    subreads[query_i].s = min_start - end_clip;
+                    subreads[query_i].e = max_end + end_clip;
                 }
-                subreads[qid].del = 0;
+                subreads[query_i].del = 0;
                 ++n_remained;
             }
 
             // If the read isn't a contig (i.e. it's a normal read) then we do the standard miniasm
             // behaviour: clip the read to the best depth region.
             else {
-                min_depth = min_dp;
-
                 ks_introsort_uint32_t(b.n, b.a);
                 max.s = max.e = max.del = max2.s = max2.e = max2.del = 0;
+                int dp;
                 for (j = 0, dp = 0; j < b.n; ++j) {
                     int old_dp = dp;
-                    if (b.a[j]&1) --dp;
-                    else ++dp;
-                    if (old_dp < min_depth && dp >= min_depth) {
+                    if (b.a[j]&1)
+                        --dp;
+                    else
+                        ++dp;
+
+                    // If we've just exceeded the minimum depth, set the start.
+                    if (old_dp < min_dp && dp >= min_dp) {
                         start = b.a[j]>>1;
-                    } else if (old_dp >= min_depth && dp < min_depth) {
-                        int len = int((b.a[j]>>1) - start);
-                        if (len > max.e - max.s) max2 = max, max.s = u_int32_t(start), max.e = b.a[j]>>1;
-                        else if (len > max2.e - max2.s) max2.s = u_int32_t(start), max2.e = b.a[j]>>1;
+
+                    // If we've just dropped below the minimum depth, set the end.
+                    } else if (old_dp >= min_dp && dp < min_dp) {
+                        end = b.a[j]>>1;
+                        int len = int(end - start);
+
+                        // Is this depth region a new best?
+                        if (len > max.e - max.s) {
+                            max2 = max;
+                            max.s = u_int32_t(start);
+                            max.e = u_int32_t(end);
+                        }
+                        // Is it a new second-best region? Not sure why we care...
+                        else if (len > max2.e - max2.s) {
+                            max2.s = u_int32_t(start);
+                            max2.e = u_int32_t(end);
+                        }
                     }
                 }
                 if (max.e - max.s > 0) {
-                    assert(qid < num_reads);
-                    subreads[qid].s = max.s - end_clip;
-                    subreads[qid].e = max.e + end_clip;
-                    subreads[qid].del = 0;
+                    assert(query_i < num_reads);
+                    subreads[query_i].s = max.s - end_clip;
+                    subreads[query_i].e = max.e + end_clip;
+                    subreads[query_i].del = 0;
                     ++n_remained;
-                } else subreads[qid].del = 1;
+                }
+                else
+                    subreads[query_i].del = 1;
             }
 
 
@@ -275,14 +315,17 @@ void merge_subreads(size_t n_sub, ma_sub_t *a, const ma_sub_t *b)
         a[i].e = a[i].s + b[i].e, a[i].s += b[i].s;
 }
 
-static inline int is_chimeric(int max_hang, int min_dp, size_t st, size_t en, const ma_hit_t *a, const ma_sub_t *sub, uint32_v c[2])
+static inline int is_chimeric(int max_hang, int min_dp, size_t st, size_t en, const ma_hit_t *a, const ma_sub_t *subreads, uint32_v c[2])
 {
     size_t i;
     int k, chi[2];
     c[0].n = c[1].n = 0;
     for (i = st; i < en; ++i) {
         const ma_hit_t *h = &a[i];
-        int ql = sub[h->qns>>32].e - sub[h->qns>>32].s, tl = sub[h->tn].e - sub[h->tn].s;
+
+        int ql = subreads[h->qns>>32].e - subreads[h->qns>>32].s;
+        int tl = subreads[h->tn].e - subreads[h->tn].s;
+
         int tl5, tl3, ql5 = (uint32_t)h->qns, ql3 = ql - h->qe;
         tl5 = h->rev? tl - h->te : h->ts;
         tl3 = h->rev? h->ts : tl - h->te;
@@ -315,22 +358,31 @@ static inline int is_chimeric(int max_hang, int min_dp, size_t st, size_t en, co
     return (chi[0] > 0 || chi[1] > 0);
 }
 
-size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads, string chimeric_read_list)
+size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads, string chimeric_read_list, string all_read_list)
 {
+    set<string> all_read_names;
     set<string> chimeric_read_names;
 
     size_t i, start = 0, n_chi = 0;
     uint32_v c[2] = {{0,0,0}, {0,0,0}};
     for (i = 1; i <= n; ++i) {
         if (i == n || a[i].qns>>32 != a[start].qns>>32) {
-            if (is_chimeric(max_hang, min_dp, start, i, a, subreads, c)) {
+            int id = int(a[start].qns >> 32);
 
-                // Illumina contigs are exempt from being labelled chimeric.
-                int id = int(a[start].qns>>32);
-                if (!is_read_illumina_contig(read_dict, id)) {
+            // Illumina contigs are exempt from being labelled chimeric.
+            if (!is_read_illumina_contig(read_dict, id)) {
+                string read_name = get_read_name(read_dict, id);
+
+                string full_read_name = read_name + ":";
+                full_read_name += to_string(subreads[id].s + 1);
+                full_read_name += '-';
+                full_read_name += to_string(subreads[id].e);
+                all_read_names.insert(full_read_name);
+
+                if (is_chimeric(max_hang, min_dp, start, i, a, subreads, c)) {
                     subreads[id].del = 1;
                     ++n_chi;
-                    chimeric_read_names.insert(get_read_name(read_dict, id));
+                    chimeric_read_names.insert(read_name);
                 }
             }
             start = i;
@@ -339,11 +391,17 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
     free(c[0].a); free(c[1].a);
     std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] identified " << n_chi << " chimeric reads\n";
 
-    ofstream list_file;
-    list_file.open(chimeric_read_list);
+    ofstream chimeric_list_file;
+    chimeric_list_file.open(chimeric_read_list);
     for (set<string>::iterator it = chimeric_read_names.begin(); it != chimeric_read_names.end(); ++it)
-        list_file << *it << "\n";
-    list_file.close();
+        chimeric_list_file << *it << "\n";
+    chimeric_list_file.close();
+
+    ofstream all_list_file;
+    all_list_file.open(all_read_list);
+    for (set<string>::iterator it = all_read_names.begin(); it != all_read_names.end(); ++it)
+        all_list_file << *it << "\n";
+    all_list_file.close();
 
     return n_chi;
 }

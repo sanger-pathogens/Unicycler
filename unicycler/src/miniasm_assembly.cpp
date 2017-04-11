@@ -67,6 +67,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
     string miniasm_output = outdir + "/miniasm.out";
     string chimeric_read_list = outdir + "/chimeric_reads.txt";
     string contained_read_list = outdir + "/contained_reads.txt";
+    string all_read_list = outdir + "/all_reads.txt";
 
     // Redirect miniasm's output to a stringstream, instead of outputting it to stderr.
     // http://stackoverflow.com/questions/5419356/redirect-stdout-stderr-to-a-string
@@ -126,7 +127,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
     free(subreads_2);
 
     // Toss out chimeric reads.
-    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads, chimeric_read_list);
+    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads, chimeric_read_list, all_read_list);
 
     // Toss out contained reads (this is a big one and gets rid of a lot).
     num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits, contained_read_list);
