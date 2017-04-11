@@ -19,7 +19,8 @@ import shutil
 import subprocess
 import sys
 import itertools
-from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order
+from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order, \
+    reverse_complement
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments_basic, load_minimap_alignments, combine_close_hits
 from .string_graph import StringGraph, StringGraphSegment, \
@@ -87,6 +88,10 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
                                                             miniasm_dir, threads)
     assembly_read_names = get_miniasm_assembly_reads(minimap_alignments)
 
+    # TO DO: if there are quite a lot of long reads, I should filter them here by quality.
+    #        Specifically, throw out reads where their minimum average qscore over a window gets
+    #        too low (i.e. reads with bad parts).
+
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
     before_transitive_reduction_filename = os.path.join(miniasm_dir, '03_raw_string_graph.gfa')
@@ -130,6 +135,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     if keep >= 3:
         string_graph.save_to_gfa(branching_paths_removed_filename)
 
+    log.log('')
     unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph)
     if keep >= 3:
         unitig_graph.save_to_gfa(unitig_graph_filename)
@@ -260,6 +266,9 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                         'are rotated between rounds such that all parts (including the ends) are '
                         'polished well.')
 
+    # Hard-code the aligner used for Racon here: minimap, GraphMap or Unicycler
+    racon_aligner = 'minimap'
+
     polish_dir = os.path.join(miniasm_dir, 'racon_polish')
     if not os.path.isdir(polish_dir):
         os.makedirs(polish_dir)
@@ -284,6 +293,10 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                         end_clip > settings.MAX_READ_CLIP_FOR_RACON_POLISHING:
                     excluded_read_names.add(read_name)
 
+    # TO DO: if there are quite a lot of long reads, I should filter them here by quality.
+    #        Specifically, throw out reads where their minimum average qscore over a window gets
+    #        too low (i.e. reads with bad parts).
+
     assembly_read_names = [x for x in assembly_read_names if x not in excluded_read_names]
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
     save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph,
@@ -293,78 +306,32 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
     col_widths = [6, 12, 14]
     racon_table_header = ['Polish round', 'Assembly size', 'Mapping quality']
     print_table([racon_table_header], fixed_col_widths=col_widths, left_align_header=False,
-                alignments='RRR', indent=0)
+                alignments='LRR', indent=0)
 
-    best_mapping_quality = 0
     best_fasta = None
+    best_unitig_sequences = {}
+    best_mapping_quality = 0
     times_quality_failed_to_beat_best = 0
+
+    counter = itertools.count(start=1)
+    current_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_unpolished_unitigs.fasta')
+    unitig_graph.save_to_fasta(current_fasta)
+
     for polish_round_count in range(settings.RACON_POLISH_LOOP_COUNT):
-        round_num_str = '%02d' % (polish_round_count + 1)
-        previous_round_num_str = '%02d' % polish_round_count
-        pre_polish_fasta = os.path.join(polish_dir, round_num_str + '_1_pre-polish.fasta')
-        mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.paf')
-        racon_log = os.path.join(polish_dir, round_num_str + '_3_racon.log')
-        post_polish_fasta = os.path.join(polish_dir, round_num_str + '_4_post-polish.fasta')
-        if polish_round_count == 0:
-            previous_fasta = pre_polish_fasta
+
+        mappings_filename = os.path.join(polish_dir, ('%03d' % next(counter)) + '_alignments')
+        if racon_aligner == 'minimap':
+            mappings_filename += '.paf'
         else:
-            previous_fasta = os.path.join(polish_dir,
-                                          previous_round_num_str + '_4_post-polish.fasta')
-        if polish_round_count > 0:
-            unitig_graph.rotate_circular_sequences()
-        unitig_graph.save_to_fasta(pre_polish_fasta)
+            mappings_filename += '.sam'
+        racon_log = os.path.join(polish_dir, ('%03d' % next(counter)) + '_racon.log')
+        polished_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_polished.fasta')
+        fixed_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_fixed.fasta')
+        rotated_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_rotated.fasta')
 
-        # Create the alignments for Racon using miniasm.
-        minimap_alignments_str = minimap_align_reads(pre_polish_fasta, polish_reads, 1, 0)
-        alignments_by_read = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
-                                                     allowed_overlap=10)
-        mapping_quality = 0
-        read_alignments = load_minimap_alignments_basic(minimap_alignments_str)
-        read_names = remove_dupes_preserve_order([x.read_name for x in read_alignments])
-        with open(mappings_filename, 'wt') as mappings:
-            for read_name in read_names:
-                if read_name in alignments_by_read:
-                    grouped_alignments = \
-                        combine_close_hits(alignments_by_read[read_name],
-                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MIN_RATIO,
-                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MAX_RATIO)
-                    if grouped_alignments:
-                        best_alignment = sorted(grouped_alignments, key=lambda x: x.matching_bases,
-                                                reverse=True)[0]
-                        frac = best_alignment.fraction_read_aligned()
-                        if frac >= settings.MIN_READ_ALIGN_FRACTION_FOR_RACON_POLISHING or \
-                                best_alignment.overlaps_reference():
-                            mappings.write(best_alignment.paf_line)
-                            mappings.write('\n')
-                            mapping_quality += best_alignment.matching_bases
-
-        # # Create the alignments for Racon using GraphMap.
-        # mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.sam')
-        # command = ['graphmap', 'align', '-a', 'anchor', '--rebuild-index',
-        #            '-B', '0', '-b', '3', '-r', pre_polish_fasta, '-d', polish_reads,
-        #            '-o', mappings_filename, '--extcigar', '-t', str(threads)]
-        # process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # _, _ = process.communicate()
-        # mapping_quality = 0
-        # with open(mappings_filename, 'rt') as sam:
-        #     for sam_line in sam:
-        #         if 'AS:i:' in sam_line:
-        #             mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
-
-        # # Create the alignments for Racon using Unicycler-align.
-        # mappings_filename = os.path.join(polish_dir, round_num_str + '_2_alignments.sam')
-        # references = load_references(pre_polish_fasta, section_header=None, show_progress=False)
-        # read_dict, read_names, read_filename = load_long_reads(polish_reads, silent=True)
-        # min_alignment_len = 1000
-        # semi_global_align_long_reads(references, pre_polish_fasta, read_dict, read_names,
-        #                              read_filename, threads, scoring_scheme, [None], False,
-        #                              min_alignment_len, mappings_filename, None, 10, 0, None,
-        #                              verbosity=0)
-        # mapping_quality = 0
-        # with open(mappings_filename, 'rt') as sam:
-        #     for sam_line in sam:
-        #         if 'AS:i:' in sam_line:
-        #             mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
+        mapping_quality = make_racon_polish_alignments(current_fasta, mappings_filename,
+                                                       polish_reads, threads, scoring_scheme,
+                                                       aligner=racon_aligner)
 
         racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
                            int_to_str(unitig_graph.get_total_segment_length()),
@@ -372,19 +339,23 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
                     alignments='LRR', indent=0, header_format='normal')
 
-        # If we've failed to improve on our best quality for a few rounds, then we're done!
-        if mapping_quality <= best_mapping_quality:
-            times_quality_failed_to_beat_best += 1
-        else:
+        # Do we have a new best?
+        if mapping_quality > best_mapping_quality:
             best_mapping_quality = mapping_quality
-            best_fasta = previous_fasta
+            best_fasta = current_fasta
+            best_unitig_sequences = {name: seg.forward_sequence
+                                     for name, seg in unitig_graph.segments.items()}
             times_quality_failed_to_beat_best = 0
+        else:
+            times_quality_failed_to_beat_best += 1
+
+        # If we've failed to improve on our best quality for a few rounds, then we're done!
         if times_quality_failed_to_beat_best > 2:
             break
 
         # Run Racon. It crashes sometimes, so repeat until its return code is 0.
         command = [racon_path, '--verbose', '9', '-t', str(threads), '--bq', '-1',
-                   polish_reads, mappings_filename, pre_polish_fasta, post_polish_fasta]
+                   polish_reads, mappings_filename, current_fasta, polished_fasta]
         return_code = 1
         for t in range(100):  # Only try a fixed number of times, to prevent an infinite loop.
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -393,33 +364,32 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
                 log_file.write(out)
                 log_file.write(err)
             return_code = process.returncode
-            if return_code == 0 and os.path.isfile(post_polish_fasta):
+            if return_code == 0 and os.path.isfile(polished_fasta):
                 break
-            if os.path.isfile(post_polish_fasta):
-                os.remove(post_polish_fasta)
+            if os.path.isfile(polished_fasta):
+                os.remove(polished_fasta)
             if os.path.isfile(racon_log):
                 os.remove(racon_log)
 
         # If even after all those tries Racon still didn't succeed, then we give up!
-        if return_code != 0 or not os.path.isfile(post_polish_fasta):
+        if return_code != 0 or not os.path.isfile(polished_fasta):
             break
 
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-        # TO DO: swap out obvious contig hits for the actual contig sequences (use minimap).
-
-
-        unitig_graph.replace_with_polished_sequences(post_polish_fasta, scoring_scheme)
+        unitig_graph.replace_with_polished_sequences(polished_fasta, scoring_scheme)
+        unitig_graph.save_to_fasta(fixed_fasta)
+        unitig_graph.rotate_circular_sequences()
+        unitig_graph.save_to_fasta(rotated_fasta)
+        current_fasta = rotated_fasta
 
     log.log('')
     if best_fasta:
         log.log('Best polish: ' + best_fasta)
-        unitig_graph.replace_with_polished_sequences(best_fasta, scoring_scheme)
+        for unitig_name, unitig_seq in best_unitig_sequences.items():
+            segment = unitig_graph.segments[unitig_name]
+            segment.forward_sequence = unitig_seq
+            segment.reverse_sequence = reverse_complement(unitig_seq)
+    else:
+        log.log(red('Polishing failed'))
 
 
 def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme):
@@ -717,3 +687,63 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     log.log('')
 
     return contig_positions, not_found_contig_numbers
+
+
+def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads,
+                                 scoring_scheme, aligner='minimap'):
+    mapping_quality = 0
+
+    if aligner == 'minimap':
+        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, 1, 3,
+                                                     preset_name='find contigs')
+        alignments_by_read = load_minimap_alignments(minimap_alignments_str,
+                                                     filter_overlaps=True, allowed_overlap=10,
+                                                     filter_by_minimisers=True)
+        mapping_quality = 0
+        read_alignments = load_minimap_alignments_basic(minimap_alignments_str)
+        read_names = remove_dupes_preserve_order([x.read_name for x in read_alignments])
+        with open(mappings_filename, 'wt') as mappings:
+            for read_name in read_names:
+                if read_name in alignments_by_read:
+                    grouped_alignments = \
+                        combine_close_hits(alignments_by_read[read_name],
+                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MIN_RATIO,
+                                           settings.COMBINE_MINIMAP_ALIGNMENTS_MAX_RATIO)
+                    if grouped_alignments:
+                        best_alignment = sorted(grouped_alignments, key=lambda x: x.matching_bases,
+                                                reverse=True)[0]
+                        frac = best_alignment.fraction_read_aligned()
+                        if frac >= settings.MIN_READ_ALIGN_FRACTION_FOR_RACON_POLISHING or \
+                                best_alignment.overlaps_reference():
+                            mappings.write(best_alignment.paf_line)
+                            mappings.write('\n')
+                        mapping_quality += best_alignment.matching_bases
+
+    elif aligner == 'GraphMap':
+        command = ['graphmap', 'align', '-a', 'anchor', '--rebuild-index',
+                   '-B', '0', '-b', '3', '-r', current_fasta, '-d', polish_reads,
+                   '-o', mappings_filename, '--extcigar', '-t', str(threads)]
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        _, _ = process.communicate()
+        with open(mappings_filename, 'rt') as sam:
+            for sam_line in sam:
+                if 'AS:i:' in sam_line:
+                    mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
+
+    elif aligner == 'Unicycler':
+        references = load_references(current_fasta, section_header=None, show_progress=False)
+        read_dict, read_names, read_filename = load_long_reads(polish_reads, silent=True)
+        min_alignment_len = 1000
+        semi_global_align_long_reads(references, current_fasta, read_dict, read_names,
+                                     read_filename, threads, scoring_scheme, [None], False,
+                                     min_alignment_len, mappings_filename, None, 10, 0, None,
+                                     verbosity=0)
+        with open(mappings_filename, 'rt') as sam:
+            for sam_line in sam:
+                if 'AS:i:' in sam_line:
+                    mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
+
+    else:
+        assert False
+
+    return mapping_quality
