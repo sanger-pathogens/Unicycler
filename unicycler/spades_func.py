@@ -121,8 +121,22 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     if not best_kmer:
         quit_with_error('none of the SPAdes graphs were suitable for scaffolding in Unicycler')
 
-    # Load and clean the best graph.
-    assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=None,
+    # If the best k-mer is the top k-mer, then SPAdes has already done the repeat resolution and
+    # we can just grab it now. Easy! If the best k-mer was a different k-mer size, then we need
+    # to run SPAdes again to get that repeat resolution.
+    if best_kmer != kmer_range[-1]:
+        new_kmer_range = [x for x in kmer_range if x <= best_kmer]
+        graph_file, insert_size_mean, insert_size_deviation = \
+            spades_assembly(reads, assem_dir, new_kmer_range, threads, spades_path, just_last=True)
+        best_graph_filename = graph_file
+    paths_file = os.path.join(assem_dir, 'contigs.paths')
+    if os.path.isfile(paths_file):
+        copied_paths_file = os.path.join(spades_dir,
+                                         'k' + ('%03d' % best_kmer) + '_contigs.paths')
+        shutil.copyfile(paths_file, copied_paths_file)
+
+    # Now we can load and clean the graph again, this time giving it the SPAdes contig paths.
+    assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
                                    insert_size_mean=insert_size_mean,
                                    insert_size_deviation=insert_size_deviation)
     assembly_graph.clean(read_depth_filter)
