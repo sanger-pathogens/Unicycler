@@ -106,6 +106,15 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     # TO DO: refine these overlaps? Perhaps using Unicycler-align? I suspect that the quality of a
     # miniasm assembly is highly dependent on the input overlaps.
     #
+    # In the process, I could try to identify chimeric reads and throw them out. This was sort of
+    # part of miniasm, but it was removed due to 'not working as intended', so I pulled it out of
+    # my miniasm as well.
+    #
+    # Idea for chimera detection: Look for regions in reads where some alignments end and then
+    # another alignments start shortly after. If the alignments have a lot of overhang in the other
+    # sequence, that's concerning. If a number of these pop in the same spot, then we're probably
+    # looking at a chimera.
+    #
     # I could even try to do more sophisticated stuff, like using the alignments to identify
     # repeat regions, then finding these repeat regions in reads and tossing out alignments which
     # are contained only in repeat regions.
@@ -264,15 +273,11 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
     if not os.path.isdir(polish_dir):
         os.makedirs(polish_dir)
 
-    # Save reads to file for polishing. We exclude reads that miniasm decided were chimeras.
-    excluded_read_names = set()
-    chimeric_read_list_filename = os.path.join(miniasm_dir, 'chimeric_reads.txt')
-    if os.path.isfile(chimeric_read_list_filename):
-        with open(chimeric_read_list_filename) as chimeric_read_list_file:
-            for line in chimeric_read_list_file:
-                excluded_read_names.add(line.strip())
+    # TO DO: I might want to filter the reads used for polishing. In particular, throw out
+    # chimeric reads (if I come up with a good way of spotting them) and reads with a window that
+    # drops below a quality threshold.
 
-    polish_read_names = sorted([x for x in read_dict.keys() if x not in excluded_read_names])
+    polish_read_names = sorted([x for x in read_dict.keys()])
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
     save_assembly_reads_to_file(polish_reads, polish_read_names, read_dict, graph,
                                 settings.RACON_CONTIG_DUPLICATION_COUNT)

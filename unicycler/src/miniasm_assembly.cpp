@@ -63,9 +63,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
     string remove_internal_string_graph = outdir + "/08_after_removing_internal_seqs.gfa";
     string cut_overlaps_string_graph_2 = outdir + "/09_after_cutting_short_overlaps.gfa";
     string final_string_graph = outdir + "/10_final_string_graph.gfa";
-//    string final_unitig_graph = outdir + "/11_unitig_graph.gfa";
     string miniasm_output = outdir + "/miniasm.out";
-    string chimeric_read_list = outdir + "/chimeric_reads.txt";
     string contained_read_list = outdir + "/contained_reads.txt";
     string all_read_list = outdir + "/all_reads.txt";
 
@@ -125,9 +123,7 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
 
     merge_subreads(read_dict->n_seq, subreads, subreads_2);
     free(subreads_2);
-
-    // Toss out chimeric reads.
-    remove_chimeric_reads(max_hang, min_dp, num_hits, hits, read_dict, subreads, chimeric_read_list, all_read_list);
+    save_read_names(num_hits, hits, read_dict, subreads, all_read_list);
 
     // Toss out contained reads (this is a big one and gets rid of a lot).
     num_hits = remove_contained_reads(max_hang, int_frac, min_ovlp, read_dict, subreads, num_hits, hits, contained_read_list);
@@ -179,15 +175,6 @@ void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp
     }
     save_string_graph(string_graph, read_dict, subreads, cut_overlaps_string_graph_2, reads_filename.c_str());
     std::cerr << "\n";
-
-//    ma_ug_t * unitig_graph = 0;
-//    cerr << "===> Step 5: generating unitigs <===\n";
-//    unitig_graph = make_unitig_graph(string_graph);
-//    if (reads_filename.c_str())
-//        generate_unitig_seqs(unitig_graph, read_dict, subreads, reads_filename.c_str());
-//    save_unitig_graph(unitig_graph, read_dict, subreads, final_unitig_graph);
-//    destroy_unitig_graph(unitig_graph);
-//    std::cerr << "\n";
 
     save_string_graph(string_graph, read_dict, subreads, final_string_graph, reads_filename.c_str());
     destroy_string_graph(string_graph);

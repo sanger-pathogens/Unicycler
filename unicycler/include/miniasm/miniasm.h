@@ -67,7 +67,7 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
 size_t filter_hits_using_span(const ma_sub_t *reg, int min_span, size_t n, ma_hit_t *a);
 size_t filter_hits_using_overhang(const ma_sub_t *sub, int max_hang, int min_ovlp, size_t n, ma_hit_t *a, float *cov);
 void merge_subreads(size_t n_sub, ma_sub_t *a, const ma_sub_t *b);
-size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *d, ma_sub_t *sub, std::string chimeric_read_list, std::string all_read_list);
+void save_read_names(size_t n, const ma_hit_t *a, const sdict_t *d, ma_sub_t *sub, std::string all_read_list);
 size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *d, ma_sub_t *sub, size_t n, ma_hit_t *a, std::string contained_read_list);
 std::string get_read_name(const sdict_t *read_dict, int id);
 bool is_read_illumina_contig(const sdict_t *read_dict, int id);

@@ -315,56 +315,10 @@ void merge_subreads(size_t n_sub, ma_sub_t *a, const ma_sub_t *b)
         a[i].e = a[i].s + b[i].e, a[i].s += b[i].s;
 }
 
-static inline int is_chimeric(int max_hang, int min_dp, size_t st, size_t en, const ma_hit_t *a, const ma_sub_t *subreads, uint32_v c[2])
-{
-    size_t i;
-    int k, chi[2];
-    c[0].n = c[1].n = 0;
-    for (i = st; i < en; ++i) {
-        const ma_hit_t *h = &a[i];
-
-        int ql = subreads[h->qns>>32].e - subreads[h->qns>>32].s;
-        int tl = subreads[h->tn].e - subreads[h->tn].s;
-
-        int tl5, tl3, ql5 = (uint32_t)h->qns, ql3 = ql - h->qe;
-        tl5 = h->rev? tl - h->te : h->ts;
-        tl3 = h->rev? h->ts : tl - h->te;
-        if (ql5 < max_hang && ql5 < tl5) {
-            if (ql3 > max_hang && tl3 > max_hang) {
-                kv_push(uint32_t, c[0], (ql - h->qe) << 1 | 1);
-            } else if (ql3 > tl3 && tl3 < max_hang) {
-                kv_push(uint32_t, c[0], (ql - h->qe) << 1 | 0);
-            }
-        } else if (ql3 < max_hang && ql3 < tl3) {
-            if (ql5 > max_hang && tl5 > max_hang) {
-                kv_push(uint32_t, c[1], (uint32_t)h->qns << 1 | 1);
-            } else if (ql5 > tl5 && tl5 < max_hang) {
-                kv_push(uint32_t, c[1], (uint32_t)h->qns << 1 | 0);
-            }
-        }
-    }
-    if (c[0].n < min_dp || c[1].n < min_dp) return 0;
-    chi[0] = chi[1] = -1;
-    for (k = 0; k < 2; ++k) {
-        int cnt[2], max = 0;
-        ks_introsort_uint32_t(c[k].n, c[k].a);
-        cnt[0] = cnt[1] = 0;
-        for (i = 0; i < c[k].n; ++i) {
-            ++cnt[c[k].a[i]&1];
-            max = max > cnt[1] - cnt[0]? max : cnt[1] - cnt[0];
-        }
-        if (max >= min_dp) chi[k] = max;
-    }
-    return (chi[0] > 0 || chi[1] > 0);
-}
-
-size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads, string chimeric_read_list, string all_read_list)
+void save_read_names(size_t n, const ma_hit_t *a, const sdict_t *read_dict, ma_sub_t *subreads, string all_read_list)
 {
     set<string> all_read_names;
-    set<string> chimeric_read_names;
-
-    size_t i, start = 0, n_chi = 0;
-    uint32_v c[2] = {{0,0,0}, {0,0,0}};
+    size_t i, start = 0;
     for (i = 1; i <= n; ++i) {
         if (i == n || a[i].qns>>32 != a[start].qns>>32) {
             int id = int(a[start].qns >> 32);
@@ -376,31 +330,15 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
             full_read_name += to_string(subreads[id].e);
             all_read_names.insert(full_read_name);
 
-            // Illumina contigs are exempt from being labelled chimeric.
-            if (is_chimeric(max_hang, min_dp, start, i, a, subreads, c) && !is_read_illumina_contig(read_dict, id)) {
-                subreads[id].del = 1;
-                ++n_chi;
-                chimeric_read_names.insert(read_name);
-            }
             start = i;
         }
     }
-    free(c[0].a); free(c[1].a);
-    std::cerr << "[M::" << __func__ << "::" << sys_timestamp() << "] identified " << n_chi << " chimeric reads\n";
-
-    ofstream chimeric_list_file;
-    chimeric_list_file.open(chimeric_read_list);
-    for (set<string>::iterator it = chimeric_read_names.begin(); it != chimeric_read_names.end(); ++it)
-        chimeric_list_file << *it << "\n";
-    chimeric_list_file.close();
 
     ofstream all_list_file;
     all_list_file.open(all_read_list);
     for (set<string>::iterator it = all_read_names.begin(); it != all_read_names.end(); ++it)
         all_list_file << *it << "\n";
     all_list_file.close();
-
-    return n_chi;
 }
 
 size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_t *read_dict, ma_sub_t *subreads, size_t n, ma_hit_t *a, string contained_read_list)
