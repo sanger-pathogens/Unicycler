@@ -25,6 +25,7 @@ from .misc import float_to_str, reverse_complement, flip_number_order, score_fun
     print_table, get_right_arrow
 from . import settings
 from .path_finding import get_best_paths_for_seq
+from . import log
 
 try:
     from .cpp_wrappers import consensus_alignment
@@ -430,6 +431,8 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     """
     Makes bridges between single copy segments using the alignments in the long reads.
     """
+    log.log_section_header('Building long read bridges')
+
     single_copy_seg_num_set = set()
     for seg in single_copy_segments:
         single_copy_seg_num_set.add(seg.number)

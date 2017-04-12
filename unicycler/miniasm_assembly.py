@@ -152,9 +152,6 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         unitig_graph.save_to_gfa(contigs_placed_filename)
 
 
-    quit()  # TEMP
-
-
 
     # Build MiniasmBridge objects from the graph.
 
