@@ -41,6 +41,7 @@ from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
     semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
     print_alignment_summary_table
+from .read_ref import get_read_nickname_dict
 from .pilon_func import polish_with_pilon, CannotPolish
 from . import log
 from . import settings
@@ -114,12 +115,13 @@ def main():
 
     # Subsequent bridging steps only apply if we have long reads.
     if args.long:
+        read_dict, read_names, long_read_filename = load_long_reads(args.long)
+        read_nicknames = get_read_nickname_dict(read_names)
 
         # TO DO: TUNE ALIGNMENT PARAMETERS WITH LAST-TRAIN?
         scoring_scheme = AlignmentScoringScheme(args.scores)
 
         # Conduct simple long read bridging.
-        read_dict, read_names, long_read_filename = load_long_reads(args.long)
         bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
                                                    read_dict, long_read_filename, scoring_scheme)
 
@@ -128,7 +130,7 @@ def main():
         if not args.no_miniasm:
             string_graph = make_miniasm_string_graph(graph, args.out, args.keep, args.threads,
                                                      read_dict, long_read_filename, scoring_scheme,
-                                                     args.racon_path)
+                                                     args.racon_path, read_nicknames)
             bridges += create_miniasm_bridges(graph, string_graph)
 
         # Prepare for long read alignment.
@@ -629,8 +631,8 @@ def print_intro_message(args, full_command, out_dir_message):
     if short_reads_available and long_reads_available:
         intro_message += ('Since you provided both short and long reads, Unicycler will perform a '
                           'hybrid assembly. It will first use SPAdes to make a short read '
-                          'assembly graph, and then it will use various approaches to scaffold '
-                          'that graph using information from the long reads.')
+                          'assembly graph, and then it will use various methods to scaffold '
+                          'that graph with the long reads.')
     elif short_reads_available:
         intro_message += ('Since you provided only short reads, Unicycler will essentially '
                           'function as a SPAdes-optimiser. It will try many k-mer sizes, choose '
@@ -641,8 +643,7 @@ def print_intro_message(args, full_command, out_dir_message):
                           'function as a miniasm + Racon pipeline. It will assemble the reads '
                           'with miniasm and then run repeated polishing rounds using Racon.')
     log.log_explanation(intro_message, extra_empty_lines_after=0)
-    log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler',
-                        extra_empty_lines_after=0)
+    log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler')
 
     log.log('Command: ' + bold(full_command))
     log.log('')

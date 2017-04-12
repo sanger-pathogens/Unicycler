@@ -388,3 +388,24 @@ class Read(object):
             alignment_table.append(alignment_row)
         return print_table(alignment_table, alignments='RRRRRRRRR', return_str=True,
                            header_format=None, col_separation=2, indent=2)
+
+
+def get_read_nickname_dict(read_names):
+    """
+    Read names can be quite long, so for the sake of output brevity, this function tries to come
+    up with some shorter nicknames for the reads.
+    """
+    max_read_name_len = max(len(name) for name in read_names)
+    for nickname_length in range(1, max_read_name_len):
+        nicknames = set()
+        for name in read_names:
+            nickname = name[:nickname_length]
+            if nickname in nicknames:
+                break
+            nicknames.add(nickname)
+        else:
+            return {name: name[:nickname_length] for name in read_names}
+
+    # If we couldn't find a length for shorter nicknames, then the nicknames are just the full
+    # names. Oh well.
+    return {name: name for name in read_names}

@@ -19,8 +19,7 @@ import shutil
 import subprocess
 import sys
 import itertools
-from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order, \
-    reverse_complement
+from .misc import green, red, line_iterator, print_table, int_to_str, reverse_complement
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments
 from .string_graph import StringGraph, StringGraphSegment, \
@@ -47,7 +46,7 @@ class MiniasmFailure(Exception):
 
 
 def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                              scoring_scheme, racon_path):
+                              scoring_scheme, racon_path, read_nicknames):
     """
     EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
     * Take all single copy contigs over a certain length and get reads which overlap two or more.
@@ -136,7 +135,7 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         string_graph.save_to_gfa(branching_paths_removed_filename)
 
     log.log('')
-    unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph)
+    unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames)
     if keep >= 3:
         unitig_graph.save_to_gfa(unitig_graph_filename)
 

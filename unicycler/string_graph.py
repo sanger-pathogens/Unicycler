@@ -570,7 +570,7 @@ def get_adjusted_contig_name_and_seq(contig_name, full_seq, start_pos, end_pos):
 
     return adjusted_name, adjusted_seq
 
-def merge_string_graph_segments_into_unitig_graph(string_graph):
+def merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames):
     """
     Creates a unitig graph from a string graph. In essence, reimplements make_unitig_graph function
     in miniasm. Assumes that branching paths have already been removed from the string graph.
@@ -615,7 +615,7 @@ def merge_string_graph_segments_into_unitig_graph(string_graph):
         current_seg = start_seg_name
         name_list = []
         while True:
-            name_list.append(current_seg)
+            name_list.append(get_string_graph_segment_nickname(current_seg, read_nicknames))
             current_seq = string_graph.seq_from_signed_seg_name(current_seg)
             next_seg = string_graph.get_following_segments(current_seg)
             if circular:
@@ -654,3 +654,18 @@ def merge_string_graph_segments_into_unitig_graph(string_graph):
         if circular:
             unitig_graph.add_link(pos_unitig_name, pos_unitig_name, 0, 0)
     return unitig_graph
+
+
+def get_string_graph_segment_nickname(seg_name, read_nicknames):
+    """
+    String graph segments are often made from long reads, which may have unwieldy names. This
+    function shortens them with the read nicknames, if possible.
+    """
+    # Can't shorten contig names.
+    if seg_name.startswith('CONTIG_'):
+        return seg_name
+    name_parts = seg_name.rsplit(':', 1)
+    if name_parts[0] in read_nicknames:
+        return read_nicknames[name_parts[0]] + ':' + name_parts[1]
+    else:
+        return seg_name
