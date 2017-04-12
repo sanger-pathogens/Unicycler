@@ -45,7 +45,7 @@ RACON_POLISH_LOOP_COUNT = 100
 
 # This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
 # if 6, then each contig is included 6 times as a read (3 forward strand 3 reverse).
-RACON_CONTIG_DUPLICATION_COUNT = 10
+RACON_CONTIG_DUPLICATION_COUNT = 1
 
 CONTIG_SEARCH_END_SIZES = [5000, 2500, 1000, 500]
 CONTIG_SEARCH_MIN_IDENTITY = 95.0

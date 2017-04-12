@@ -449,7 +449,7 @@ class StringGraph(object):
             except IndexError:
                 pass
 
-    def rotate_circular_sequences(self):
+    def rotate_circular_sequences(self, shift_fraction=0.70710678118655):
         """
         Rotates the sequence to a new starting point. It shifts by a non-rational (well, almost)
         fraction of the sequence length so repeated executions of this function don't result in
@@ -458,7 +458,7 @@ class StringGraph(object):
         for seg_name, segment in self.segments.items():
             if self.segment_is_circular(seg_name):
                 seq = segment.forward_sequence
-                shift = int(len(seq) * 0.70710678118655)
+                shift = int(len(seq) * shift_fraction)
                 seq = seq[shift:] + seq[:shift]
                 segment.forward_sequence = seq
                 segment.reverse_sequence = reverse_complement(seq)

@@ -22,7 +22,7 @@ import itertools
 from .misc import green, red, line_iterator, print_table, int_to_str, remove_dupes_preserve_order, \
     reverse_complement
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
-    load_minimap_alignments_basic, load_minimap_alignments, combine_close_hits
+    load_minimap_alignments
 from .string_graph import StringGraph, StringGraphSegment, \
     merge_string_graph_segments_into_unitig_graph
 from .read_ref import load_references, load_long_reads
@@ -104,8 +104,8 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph)
 
     # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
-    # alignments are excluded (because single-copy contigs, by definition, should not overlap
-    # each other).
+    # alignments are excluded (because single-copy contigs, by definition, should not
+    # significantly overlap each other).
     minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
                                                  threads, 0, 'read vs read')
     with open(mappings_filename, 'wt') as mappings:
@@ -140,8 +140,8 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     if keep >= 3:
         unitig_graph.save_to_gfa(unitig_graph_filename)
 
-    polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, read_dict, graph,
-                              racon_path, threads, scoring_scheme)
+    polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
+                              scoring_scheme)
     if keep >= 3:
         unitig_graph.save_to_gfa(racon_polished_filename)
 
@@ -209,8 +209,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
                     fastq_name = '@CONTIG_' + str(seg.number)
                     if contig_copy_count > 1:
                         fastq_name += '_' + str(i+1)
-                    fastq.write(fastq_name)
-                    fastq.write('\n')
+                    fastq.write(fastq_name + '\n')
                     if i % 2 == 0:  # evens
                         fastq.write(seg.forward_sequence)
                     else:  # odds
@@ -219,11 +218,12 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
                     fastq.write(qual * seg.get_length())
                     fastq.write('\n')
                 seg_count += 1
-        message = '  ' + str(seg_count) + ' single copy contigs ' + \
-                  str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer'
-        if contig_copy_count > 1:
-            message += ' (duplicated ' + str(contig_copy_count) + ' times)'
-        log.log(message)
+        if contig_copy_count > 0:
+            message = '  ' + str(seg_count) + ' single copy contigs ' + \
+                      str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer'
+            if contig_copy_count > 1:
+                message += ' (duplicated ' + str(contig_copy_count) + ' times)'
+            log.log(message)
 
         # Now save the actual long reads.
         for read_name in read_names:
@@ -232,16 +232,14 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
             if len(seq) < 100:
                 continue
             quals = read.qualities
-            fastq.write('@')
-            fastq.write(read_name)
-            fastq.write('\n')
+            fastq.write('@' + read_name + '\n')
             fastq.write(seq)
             fastq.write('\n+\n')
             fastq.write(quals)
             fastq.write('\n')
-
-        log.log('  ' + str(len(read_names)) + ' overlapping long reads (out of ' +
-                str(len(read_dict)) + ' total long reads)')
+        log.log('  ' + str(len(read_names)) + ' long reads (out of ' + str(len(read_dict)) +
+                ' total long reads)')
+        log.log('')
 
 
 def segment_suitable_for_miniasm_assembly(graph, segment):
@@ -258,8 +256,8 @@ def segment_suitable_for_miniasm_assembly(graph, segment):
     return not graph.is_component_complete([segment.number])
 
 
-def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, read_dict, graph,
-                              racon_path, threads, scoring_scheme):
+def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
+                              scoring_scheme):
     log.log_section_header('Polishing miniasm assembly with Racon')
     log.log_explanation('Unicycler now uses Racon to polish the miniasm assembly. It does '
                         'multiple rounds of polishing to get the best consensus. Circular unitigs '
@@ -281,27 +279,10 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
             for line in chimeric_read_list_file:
                 excluded_read_names.add(line.strip())
 
-    # We also exclude reads where too much of the read was clipped off by miniasm.
-    all_read_list_filename = os.path.join(miniasm_dir, 'all_reads.txt')
-    if os.path.isfile(all_read_list_filename):
-        with open(all_read_list_filename) as all_read_list_file:
-            for line in all_read_list_file:
-                read_name, read_range = line.strip().rsplit(':', 1)
-                read_start, read_end = read_range.split('-')
-                end_clip = read_dict[read_name].get_length() - int(read_end)
-                if int(read_start) > settings.MAX_READ_CLIP_FOR_RACON_POLISHING or \
-                        end_clip > settings.MAX_READ_CLIP_FOR_RACON_POLISHING:
-                    excluded_read_names.add(read_name)
-
-    # TO DO: if there are quite a lot of long reads, I should filter them here by quality.
-    #        Specifically, throw out reads where their minimum average qscore over a window gets
-    #        too low (i.e. reads with bad parts).
-
-    assembly_read_names = [x for x in assembly_read_names if x not in excluded_read_names]
+    polish_read_names = sorted([x for x in read_dict.keys() if x not in excluded_read_names])
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
-    save_assembly_reads_to_file(polish_reads, assembly_read_names, read_dict, graph,
+    save_assembly_reads_to_file(polish_reads, polish_read_names, read_dict, graph,
                                 settings.RACON_CONTIG_DUPLICATION_COUNT)
-    log.log('')
 
     col_widths = [6, 12, 14]
     racon_table_header = ['Polish round', 'Assembly size', 'Mapping quality']
@@ -395,7 +376,10 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, assembly_read_names, re
 def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme):
     log.log('', verbosity=2)
     log.log_explanation('Unicycler now places the single copy contigs back into the unitig '
-                        'graph so it can extract bridging sequences between these contigs.',
+                        'graph. This serves two purposes: a) it replaces long read assembly '
+                        'sequences (which may be error prone) with Illumina assembly sequence '
+                        '(which is probably quite accurate), improving the assembly quality, and '
+                        'b) it defines inter-contig sequences for use in building bridges.',
                         verbosity=2)
 
     # Use semi-global alignment of contig ends to find the contigs in the unitig graph. We first
@@ -602,7 +586,8 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     # 'reads' are the contigs and the 'references' are the unitigs.
     references = load_references(unitigs_fasta, section_header=None, show_progress=False)
     read_dict, read_names, read_filename = load_long_reads(contigs_fasta, silent=True)
-    min_alignment_len = contig_search_end_size * 0.9
+    min_alignment_len = min(contig_search_end_size * 0.9,
+                            settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING * 0.9)
     semi_global_align_long_reads(references, unitigs_fasta, read_dict, read_names, read_filename,
                                  threads, scoring_scheme, [None], False, min_alignment_len, None,
                                  None, 10, 0, None, verbosity=0)
