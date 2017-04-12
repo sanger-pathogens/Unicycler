@@ -646,12 +646,12 @@ def merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames):
     # Build and return the unitig graph using the sequences we just made.
     unitig_sequences = sorted(unitig_sequences, key=lambda x: len(x[0]), reverse=True)
     unitig_graph = StringGraph(None)
-    for i, unitig_seq_circular in enumerate(unitig_sequences):
-        unitig_seq, circular = unitig_seq_circular
+    for i, unitig_sequence in enumerate(unitig_sequences):
+        unitig_seq, circular_or_linear = unitig_sequence
         unitig_name = str(i+1)
         pos_unitig_name = unitig_name + '+'
         unitig_graph.segments[unitig_name] = StringGraphSegment(unitig_name, unitig_seq)
-        if circular:
+        if circular_or_linear == 'circular':
             unitig_graph.add_link(pos_unitig_name, pos_unitig_name, 0, 0)
     return unitig_graph
 
