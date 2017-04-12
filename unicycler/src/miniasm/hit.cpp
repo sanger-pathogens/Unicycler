@@ -30,7 +30,7 @@ void ma_hit_sort(size_t n, ma_hit_t *a)
     radix_sort_hit(a, a + n);
 }
 
-void ma_hit_mark_unused(sdict_t *read_dict, int n, const ma_hit_t *a)
+void ma_hit_mark_unused(sdict_t *read_dict, size_t n, const ma_hit_t *a)
 {
     size_t i;
     for (i = 0; i < read_dict->n_seq; ++i)
