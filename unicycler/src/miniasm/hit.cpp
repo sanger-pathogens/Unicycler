@@ -369,21 +369,18 @@ size_t remove_chimeric_reads(int max_hang, int min_dp, size_t n, const ma_hit_t 
         if (i == n || a[i].qns>>32 != a[start].qns>>32) {
             int id = int(a[start].qns >> 32);
 
+            string read_name = get_read_name(read_dict, id);
+            string full_read_name = read_name + ":";
+            full_read_name += to_string(subreads[id].s + 1);
+            full_read_name += '-';
+            full_read_name += to_string(subreads[id].e);
+            all_read_names.insert(full_read_name);
+
             // Illumina contigs are exempt from being labelled chimeric.
-            if (!is_read_illumina_contig(read_dict, id)) {
-                string read_name = get_read_name(read_dict, id);
-
-                string full_read_name = read_name + ":";
-                full_read_name += to_string(subreads[id].s + 1);
-                full_read_name += '-';
-                full_read_name += to_string(subreads[id].e);
-                all_read_names.insert(full_read_name);
-
-                if (is_chimeric(max_hang, min_dp, start, i, a, subreads, c)) {
-                    subreads[id].del = 1;
-                    ++n_chi;
-                    chimeric_read_names.insert(read_name);
-                }
+            if (is_chimeric(max_hang, min_dp, start, i, a, subreads, c) && !is_read_illumina_contig(read_dict, id)) {
+                subreads[id].del = 1;
+                ++n_chi;
+                chimeric_read_names.insert(read_name);
             }
             start = i;
         }

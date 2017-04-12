@@ -47,16 +47,6 @@ class MiniasmFailure(Exception):
 
 def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_read_filename,
                               scoring_scheme, racon_path, read_nicknames):
-    """
-    EXTRACT READS USEFUL FOR LONG READ ASSEMBLY.
-    * Take all single copy contigs over a certain length and get reads which overlap two or more.
-      * While I'm at it, I should throw out reads which look like chimeras based on incompatible
-        mapping.
-    * Create a file of "long reads" which contains:
-      * real long reads as found (and possibly split) by the above step
-      * single copy contigs in FASTQ form (with a high quality, 'I' or something)
-
-    """
     log.log_section_header('Assembling contigs and long reads with miniasm')
     log.log_explanation('Unicycler uses miniasm to construct a string graph '
                         'assembly using both the short read contigs and the long reads. It can '
@@ -114,7 +104,11 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
                 mappings.write('\n')
 
     # TO DO: refine these overlaps? Perhaps using Unicycler-align? I suspect that the quality of a
-    # miniasm assembly is highly dependent on the quality of the input overlaps.
+    # miniasm assembly is highly dependent on the input overlaps.
+    #
+    # I could even try to do more sophisticated stuff, like using the alignments to identify
+    # repeat regions, then finding these repeat regions in reads and tossing out alignments which
+    # are contained only in repeat regions.
 
     # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
     log.log('Assembling reads with miniasm... ', end='')
@@ -393,6 +387,19 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
         log.log('Searching for contigs using ' + int_to_str(contig_search_end_size) + ' bp of '
                 'contig ends.')
         log.log('')
+
+
+
+        # TO DO: This method (using semi-global alignment) works well for contigs that don't end in
+        # junk. But contigs which end with a dead end often do, so we should be willing to clip.
+        #
+        # I therefore need to:
+        #   * identify which ends of which contigs are dead ends in the assembly graph
+        #   * look in miniasm's all_reads.txt for the trim size on those ends
+        #   * only search for the trimmed contigs in the unitig graph, not the whole contigs
+
+
+
         contig_position_results, not_found_contig_numbers = \
             find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threads,
                                         scoring_scheme, contig_search_end_size, contig_numbers)

@@ -148,7 +148,7 @@ def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, t
     segments_fasta = os.path.join(working_dir, 'all_segments.fasta')
     log.log('Aligning long reads to graph using minimap', 1)
     graph.save_to_fasta(segments_fasta, verbosity=2)
-    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 0,
+    minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 3,
                                                  'default')
     minimap_alignments = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
                                                  allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
