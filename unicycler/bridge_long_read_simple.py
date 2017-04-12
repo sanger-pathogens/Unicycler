@@ -355,7 +355,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                 votes_against = 0
             else:
                 second_best_votes = results[1][1]
-                votes_against = sum(r[1] for r in results)
+                votes_against = sum(r[1] for r in results) - winning_votes
             if winning_loop_count == -1:
                 loop_table_row += ['bad reads', '']
             elif winning_votes == second_best_votes:
