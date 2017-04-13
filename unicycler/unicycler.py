@@ -19,7 +19,6 @@ import argparse
 import os
 import sys
 import shutil
-import copy
 import random
 import itertools
 from .assembly_graph import AssemblyGraph
@@ -87,13 +86,7 @@ def main():
         if args.keep > 0:
             graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True, newline=True)
 
-        # Trim off the SPAdes k-mer overlaps so graph segments adjoin directly.
-        graph.remove_all_overlaps()
-        graph.remove_zero_length_segs()
-        graph.merge_small_segments(5)
-        graph.normalise_read_depths()
-        graph.renumber_segments()
-        graph.sort_link_order()
+        clean_up_spades_graph(graph)
         if args.keep > 2:
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
@@ -114,7 +107,6 @@ def main():
         if args.mode != 0:
             bridges += create_spades_contig_bridges(graph, single_copy_segments)
             bridges += create_loop_unrolling_bridges(graph)
-            graph = copy.deepcopy(graph)
             if not bridges:
                 log.log('none found', 1)
 
@@ -906,3 +898,12 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
             'th percentile of full read alignments: ' + float_to_str(min_scaled_score, 2), 2)
 
     return read_names, min_scaled_score, min_alignment_length
+
+
+def clean_up_spades_graph(graph):
+    graph.remove_all_overlaps()
+    graph.remove_zero_length_segs()
+    graph.merge_small_segments(5)
+    graph.normalise_read_depths()
+    graph.renumber_segments()
+    graph.sort_link_order()

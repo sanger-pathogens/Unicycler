@@ -352,7 +352,6 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
         ma_hit_t *h = &a[i];
 
         int query_i = int(h->qns>>32);
-        uint32_t qs = uint32_t(h->qns);
         int target_i = h->tn;
         ma_sub_t *query_subread = &subreads[query_i];
         ma_sub_t *target_subread = &subreads[target_i];
@@ -360,18 +359,10 @@ size_t remove_contained_reads(int max_hang, float int_frac, int min_ovlp, sdict_
         r = ma_hit2arc(h, query_subread->e - query_subread->s, target_subread->e - target_subread->s, max_hang, int_frac, min_ovlp, &t);
 
         if (r == MA_HT_QCONT) {  // If the query is contained in the target
-            if (is_read_illumina_contig(read_dict, query_i)) {
-                std::cerr << "CONTAINED CONTIG\t" << get_read_name(read_dict, query_i) << "\t" <<
-                    get_read_name(read_dict, target_i) << "\t" << h->ts << "\t" << h->te << "\n";
-            }
             query_subread->del = 1;
             contained_read_names.insert(get_read_name(read_dict, query_i));
         }
         else if (r == MA_HT_TCONT) {  // If the target is contained in the query
-            if (is_read_illumina_contig(read_dict, target_i)) {
-                std::cerr << "CONTAINED CONTIG\t" << get_read_name(read_dict, target_i) << "\t" <<
-                    get_read_name(read_dict, query_i) << "\t" << qs << "\t" << h->qe << "\n";
-            }
             target_subread->del = 1;
             contained_read_names.insert(get_read_name(read_dict, target_i));
         }
