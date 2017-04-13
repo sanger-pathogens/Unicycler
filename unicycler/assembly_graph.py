@@ -336,11 +336,12 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, newline=False, min_length=1, verbosity=1):
+    def save_to_fasta(self, filename, newline=False, min_length=1, verbosity=1, silent=False):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
+        if not silent:
+            log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
@@ -350,11 +351,12 @@ class AssemblyGraph(object):
                     fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     @staticmethod
-    def save_specific_segments_to_fasta(filename, segments):
+    def save_specific_segments_to_fasta(filename, segments, silent=False):
         """
         Saves single copy segments (only forward sequences) to a FASTA file.
         """
-        log.log('Saving ' + filename)
+        if not silent:
+            log.log('Saving ' + filename)
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(segments, key=lambda x: x.number)
             for segment in sorted_segments:

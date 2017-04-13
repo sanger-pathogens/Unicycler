@@ -149,6 +149,12 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
                                 'Neither votes', 'Final op.', 'Bridge quality']]
 
     junctions = graph.find_simple_two_way_junctions(settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING)
+
+    if not junctions:
+        log.log('No suitable two-way junctions present')
+        log.log('')
+        return []
+
     for junction in junctions:
         table_row = [junction]
 
@@ -276,13 +282,19 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                         'count it agrees best with, and Unicycler creates a bridge using the '
                         'most voted for count.')
 
+    loops = sorted(graph.find_all_simple_loops())
+
+    if not loops:
+        log.log('No suitable simple loops present')
+        log.log('')
+        return []
+
     col_widths = [5, 6, 6, 5, 5, 18, 5, 7]
     loop_table_header = ['Start', 'Repeat', 'Middle', 'End', 'Read count', 'Read votes',
                          'Loop count', 'Bridge quality']
     print_table([loop_table_header], fixed_col_widths=col_widths, left_align_header=False,
                 alignments='RRRRRLRR', indent=0)
 
-    loops = sorted(graph.find_all_simple_loops())
     for start, end, middle, repeat in loops:
         start_len = graph.segments[abs(start)].get_length()
         end_len = graph.segments[abs(end)].get_length()

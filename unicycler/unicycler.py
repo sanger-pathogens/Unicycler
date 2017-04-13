@@ -778,7 +778,6 @@ def final_polish(graph, args, counter):
 
 
 def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command):
-    # Prepare for long read alignment.
     alignment_dir = os.path.join(args.out, 'read_alignment')
     graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
     single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
@@ -786,12 +785,13 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
     alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
     scoring_scheme = AlignmentScoringScheme(args.scores)
     min_alignment_length = graph.overlap * settings.MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP
-    if args.long:
-        if not os.path.exists(alignment_dir):
-            os.makedirs(alignment_dir)
-            graph.save_to_fasta(graph_fasta)
-            graph.save_specific_segments_to_fasta(single_copy_segments_fasta, single_copy_segments)
-    references = load_references(graph_fasta, section_header='Loading single copy segments')
+
+    if not os.path.exists(alignment_dir):
+        os.makedirs(alignment_dir)
+    graph.save_to_fasta(graph_fasta, silent=True)
+    graph.save_specific_segments_to_fasta(single_copy_segments_fasta, single_copy_segments,
+                                          silent=True)
+    references = load_references(graph_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
     read_dict, read_names, long_read_filename = load_long_reads(args.long)
 
