@@ -83,7 +83,6 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
 
     assembly_reads_filename = os.path.join(miniasm_dir, '01_assembly_reads.fastq')
     mappings_filename = os.path.join(miniasm_dir, '02_mappings.paf')
-    before_transitive_reduction_filename = os.path.join(miniasm_dir, '03_raw_string_graph.gfa')
     string_graph_filename = os.path.join(miniasm_dir, '10_final_string_graph.gfa')
     branching_paths_removed_filename = os.path.join(miniasm_dir, '11_branching_paths_removed.gfa')
     unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
@@ -123,11 +122,14 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     log.log('Assembling reads with miniasm... ', end='')
     min_depth = 3
     miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir, min_depth)
-    if not (os.path.isfile(string_graph_filename) and
-            os.path.isfile(before_transitive_reduction_filename)):
+    if not os.path.isfile(string_graph_filename):
         log.log(red('failed'))
         raise MiniasmFailure('miniasm failed to generate a string graph')
     string_graph = StringGraph(string_graph_filename)
+    if len(string_graph.segments) == 0:
+        log.log(red('empty result'))
+        log.log('')
+        return None
 
     log.log(green('success'))
     log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +

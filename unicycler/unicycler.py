@@ -138,8 +138,13 @@ def main():
     else:
         string_graph = None
 
+    # If there aren't short reads and the miniasm assembly failed, then there's nothing we can do!
+    if not short_reads_available and string_graph is None:
+        quit_with_error('miniasm assembly failed')
+
     if short_reads_available and long_reads_available:
-        bridges += create_miniasm_bridges(graph, string_graph)
+        if string_graph is not None:
+            bridges += create_miniasm_bridges(graph, string_graph)
 
         read_names, min_scaled_score, min_alignment_length = \
             align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command)
