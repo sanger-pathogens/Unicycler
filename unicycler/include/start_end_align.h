@@ -9,19 +9,23 @@
 // Public License for more details. You should have received a copy of the GNU General Public
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef MINIMAP_ALIGN_H
-#define MINIMAP_ALIGN_H
+#ifndef START_END_ALIGN_H
+#define START_END_ALIGN_H
 
-#include "minimap/minimap.h"
-#include "minimap/kseq.h"
-#include <string>
+
+#include <seqan/sequence.h>
+
+using namespace seqan;
 
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
 extern "C" {
-
-    char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
-                             int sensitivityLevel, int preset);
+    int startAlignment(char * s1, char * s2,
+                       int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore);
+    int endAlignment(char * s1, char * s2,
+                     int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore);
 }
 
-#endif // MINIMAP_ALIGN_H
+int startEndAlignment(char * s1, char * s2, bool start,
+                      int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore);
 
+#endif // START_END_ALIGN_H

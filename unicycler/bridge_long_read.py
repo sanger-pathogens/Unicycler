@@ -18,13 +18,20 @@ from multiprocessing.dummy import Pool as ThreadPool
 import time
 import math
 import statistics
+import sys
 from collections import defaultdict
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
 from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
     print_table, get_right_arrow
-from .cpp_wrappers import consensus_alignment
 from . import settings
 from .path_finding import get_best_paths_for_seq
+from . import log
+
+try:
+    from .cpp_wrappers import consensus_alignment
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully built the library file using make?')
 
 
 class LongReadBridge(object):
@@ -413,7 +420,7 @@ class LongReadBridge(object):
     @staticmethod
     def get_type_name():
         """
-        Returns the of the bridge types.
+        Returns the name of the bridge type.
         """
         return 'long read'
 
@@ -424,6 +431,8 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     """
     Makes bridges between single copy segments using the alignments in the long reads.
     """
+    log.log_section_header('Building long read bridges')
+
     single_copy_seg_num_set = set()
     for seg in single_copy_segments:
         single_copy_seg_num_set.add(seg.number)

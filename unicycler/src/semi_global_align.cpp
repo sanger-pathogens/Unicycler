@@ -362,8 +362,6 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                                                        index);
     PointSet pointSet(nearbyPoints.begin(), nearbyPoints.end());
 
-//    std::cout << "STARTING LINE TRACE\n" << std::flush;  // TEMP
-
     // Trace the line forward then backward.
     int directions[2] = {1, -1};
     for (auto const & direction : directions) {
@@ -396,9 +394,7 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
                 break;
         }
     }
-
     pointSetScore = scorePointSet(pointSet, traceDots, failedLine);
-//    std::cout << "pointSetScore = " << pointSetScore << "\n" << std::flush;  // TEMP
 
     if (verbosity > 2) {
         output += "    line " + std::to_string(lineNum + 1) + ": ";
@@ -433,9 +429,6 @@ Point shiftPointDown(Point p, int steps) {
 Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tree_t & index,
                                 PointSet & pointsNearLine, bool leftAlignmentRectangle) {
 
-//    std::cout << "\n";  // TEMP
-//    std::cout << "  starting point: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
-
     int radius = int(TRACE_LINE_STEP_DISTANCE * 1.1);
     PointVector pointsNearP1 = radiusSearchAroundPoint(p1, radius, cloud, index);
     PointVector pointsNearP2 = radiusSearchAroundPoint(p2, radius, cloud, index);
@@ -451,10 +444,6 @@ Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tr
     double mutatedUpScore = scoreLineSegment(p1, p2Up, pointsNearLine);
     double mutatedDownScore = scoreLineSegment(p1, p2Down, pointsNearLine);
 
-//    std::cout << "  unmutatedScore: " << unmutatedScore << "\n" << std::flush;  // TEMP
-//    std::cout << "  mutatedUpScore: " << mutatedUpScore << "\n" << std::flush;  // TEMP
-//    std::cout << "  mutatedDownScore: " << mutatedDownScore << "\n" << std::flush;  // TEMP
-
     while (true) {
         // If neither mutation helps, then we're done!
         if (unmutatedScore >= mutatedUpScore && unmutatedScore >= mutatedDownScore)
@@ -467,7 +456,6 @@ Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tr
             unmutatedScore = mutatedUpScore;
             p2Up = shiftPointUp(p2, TRACE_LINE_MUTATION_SIZE);
             mutatedUpScore = scoreLineSegment(p1, p2Up, pointsNearLine);
-//            std::cout << "  mutated up: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
         }
 
         else if (mutatedDownScore > unmutatedScore) {
@@ -477,7 +465,6 @@ Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tr
             unmutatedScore = mutatedDownScore;
             p2Down = shiftPointDown(p2, TRACE_LINE_MUTATION_SIZE);
             mutatedDownScore = scoreLineSegment(p1, p2Down, pointsNearLine);
-//            std::cout << "  mutated down: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
         }
     }
     return p2;
@@ -492,18 +479,13 @@ double scoreLineSegment(Point p1, Point p2, PointSet & pointsNearLine) {
         slope = 1.0 / slope;
     double slopeScore = (MAX_SLOPE_SCORE / (1.0 - MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE)) *
                         (slope - MIN_ACCEPTABLE_LINE_SEGMENT_SLOPE);
-//    std::cout << "  slopeScore: " << slopeScore << "\n" << std::flush;  // TEMP
-
     double maxScorePerPoint = MAX_POINTS_SCORE / TRACE_LINE_STEP_DISTANCE;
     double pointDistanceScore = 0.0;
     for (auto const & p : pointsNearLine) {
         double dist = distanceToLineSegment(p, p1, p2);
         pointDistanceScore += maxScorePerPoint / (dist + 1.0);
     }
-//    std::cout << "  pointDistanceScore: " << pointDistanceScore << "\n" << std::flush;  // TEMP
-
     double finalScore = slopeScore + pointDistanceScore;
-//    std::cout << "  finalScore: " << finalScore << "\n" << std::flush;  // TEMP
     return finalScore;
 }
 
@@ -579,11 +561,9 @@ PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
 
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq) {
-    PointVector points = getPointsInHighestDensityRegion(densityRadius * 2, trimmedRefSeq, readSeq,
-                                                         cloud, index);
-    Point highestDensityPoint = points[0];
+    Point highestDensityPoint = cloud.pts[0];
     double highestDensityScore = 0.0;
-    for (auto const & point : points) {
+    for (auto const & point : cloud.pts) {
         double densityScore = getPointDensityScore(densityRadius, point, cloud, index);
         if (densityScore > highestDensityScore) {
             highestDensityScore = densityScore;
@@ -594,55 +574,17 @@ Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t
 }
 
 
-PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
-                                            std::string * readSeq, PointCloud & cloud,
-                                            my_kd_tree_t & index) {
-    int xStepCount = int(ceil(readSeq->length() / double(searchRadius)));
-    int yStepCount = int(ceil(trimmedRefSeq.length() / double(searchRadius)));
-    double xStepSize = double(readSeq->length()) / xStepCount;
-    double yStepSize = double(trimmedRefSeq.length()) / yStepCount;
-
-    nanoflann::SearchParams params;
-    double highestDensity = 0.0;
-    PointVector pointsInHighestDensity;
-
-    for (int i = 0; i <= xStepCount; ++i) {
-        int xCentre = int(0.5 + i * xStepSize);
-
-        for (int j = 0; j <= yStepCount; ++j) {
-            int yCentre = int(0.5 + j * yStepSize);
-
-            const int query_pt[2] = {xCentre, yCentre};
-
-            std::vector<std::pair<size_t,int> > ret_matches;
-            const size_t nMatches = index.radiusSearch(query_pt, searchRadius, ret_matches, params);
-            double density = double(nMatches);
-
-            // Search regions on the edge will have less density than they should (because the
-            // region has less area). This biases the search away from the edges, but that's okay
-            // because alignments often get tricky and repetitive near the edges (i.e. the ends of
-            // contigs) and so we probably don't want to start our line tracing there.
-
-            if (density > highestDensity) {
-                highestDensity = density;
-                pointsInHighestDensity.clear();
-                for (auto const & k : ret_matches)
-                    pointsInHighestDensity.push_back(cloud.pts[k.first]);
-            }
-        }
-    }
-    return pointsInHighestDensity;
-}
-
-
+// For a given point, the function scores it based on the density of nearby points. Specifically,
+// it rewards points that have lots of neighbours close to the diagonal, but it punishes points
+// with too many neighbours away from the diagonal.
 double getPointDensityScore(int densityRadius, Point p, PointCloud & cloud, my_kd_tree_t & index) {
     PointVector neighbourPoints = radiusSearchAroundPoint(p, densityRadius, cloud, index);
+    double a = 1.0 / SCORE_DISTANCE_FROM_DIAGONAL;
     double densityScore = 0.0;
     for (auto const & neighbourPoint : neighbourPoints) {
         int xDiff = neighbourPoint.x - p.x;
         int yDiff = neighbourPoint.y - p.y;
-        if (xDiff + yDiff > 0)
-            densityScore += 1.0 / (abs(xDiff-yDiff) + 1.0);
+        densityScore += ((1.0 + a) / (abs(xDiff-yDiff) + 1.0)) - a;
     }
     return densityScore;
 }
@@ -799,12 +741,10 @@ double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failed
 
     // More points is better.
     double pointCount = double(pointSet.size());
-//    std::cout << "pointCount = " << pointCount << "\n" << std::flush;  // TEMP
 
     // Slopes near 1 are better.
     double worstSlope = getWorstSlope(traceDots);
     double worstSlopeScore = worstSlope * 0.9 + 0.1;
-//    std::cout << "worstSlopeScore = " << worstSlopeScore << "\n" << std::flush;  // TEMP
 
     // A good line should have points evenly distributed over its length.
     std::vector<double> xPlusY;
@@ -824,8 +764,6 @@ double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failed
     double varianceScore = thisVariance / uniformDistributionVariance;
     if (varianceScore > 1.0)
         varianceScore = 1.0 / varianceScore;
-
-//    std::cout << "varianceScore = " << varianceScore << "\n" << std::flush;  // TEMP
 
     // If the slope and variance look week, we say the line has failed.
     failedLine = (worstSlopeScore * varianceScore) < 0.8;

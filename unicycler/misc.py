@@ -29,6 +29,19 @@ from . import settings
 from . import log
 
 
+REV_COMP_DICT = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G',
+                 'a': 't', 't': 'a', 'g': 'c', 'c': 'g',
+                 'R': 'Y', 'Y': 'R', 'S': 'S', 'W': 'W',
+                 'K': 'M', 'M': 'K', 'B': 'V', 'V': 'B',
+                 'D': 'H', 'H': 'D', 'N': 'N',
+                 'r': 'y', 'y': 'r', 's': 's', 'w': 'w',
+                 'k': 'm', 'm': 'k', 'b': 'v', 'v': 'b',
+                 'd': 'h', 'h': 'd', 'n': 'n',
+                 '.': '.', '-': '-', '?': '?'}
+
+RANDOM_SEQ_DICT = {0: 'A', 1: 'C', 2: 'G', 3: 'T'}
+
+
 def float_to_str(num, decimals, max_num=0):
     """
     Converts a number to a string. Will add left padding based on the max value to ensure numbers
@@ -74,6 +87,8 @@ def check_input_files(args):
         check_file_exists(args.unpaired)
     if args.long:
         check_file_exists(args.long)
+    if args.short1 == args.short2:
+        quit_with_error('first and second read pair files cannot be the same file')
 
 
 def check_file_exists(filename):
@@ -197,57 +212,31 @@ def reverse_complement(seq):
     """
     Given a DNA sequences, this function returns the reverse complement sequence.
     """
-    return ''.join([complement_base(seq[i]) for i in range(len(seq) - 1, -1, -1)])
+    return ''.join([complement_base(x) for x in seq][::-1])
 
 
 def complement_base(base):
     """
     Given a DNA base, this returns the complement.
     """
-    if base == 'A':
-        return 'T'
-    if base == 'T':
-        return 'A'
-    if base == 'G':
-        return 'C'
-    if base == 'C':
-        return 'G'
-    if base == 'a':
-        return 't'
-    if base == 't':
-        return 'a'
-    if base == 'g':
-        return 'c'
-    if base == 'c':
-        return 'g'
-    forward = 'RYSWKMryswkmBDHVbdhvNn.-?'
-    reverse = 'YRSWMKyrswmkVHDBvhdbNn.-?N'
-    return reverse[forward.find(base)]
+    try:
+        return REV_COMP_DICT[base]
+    except KeyError:
+        return 'N'
 
 
 def get_random_base():
     """
     Returns a random base with 25% probability of each.
     """
-    rand_int = random.randint(0, 3)
-    if rand_int == 0:
-        return 'A'
-    elif rand_int == 1:
-        return 'C'
-    elif rand_int == 2:
-        return 'G'
-    elif rand_int == 3:
-        return 'T'
+    return RANDOM_SEQ_DICT[random.randint(0, 3)]
 
 
 def get_random_sequence(length):
     """
     Returns a random sequence of the given length.
     """
-    sequence = ''
-    for _ in range(length):
-        sequence += get_random_base()
-    return sequence
+    return ''.join([get_random_base() for _ in range(length)])
 
 
 def get_percentile(unsorted_list, percentile):
@@ -528,10 +517,21 @@ class MyHelpFormatter(argparse.HelpFormatter):
             return argparse.HelpFormatter._fill_text(self, text, width, indent)
 
 
+END_FORMATTING = '\033[0m'
+BOLD = '\033[1m'
+UNDERLINE = '\033[4m'
+RED = '\033[31m'
+GREEN = '\033[32m'
+MAGENTA = '\033[35m'
+YELLOW = '\033[93m'
+DIM = '\033[2m'
+
+
 def print_table(table, alignments='', max_col_width=30, col_separation=3, indent=2,
                 row_colour=None, sub_colour=None, row_extra_text=None, leading_newline=False,
                 subsequent_indent='', return_str=False, header_format='underline',
-                hide_header=False, fixed_col_widths=None, left_align_header=True, verbosity=1):
+                hide_header=False, fixed_col_widths=None, left_align_header=True,
+                bottom_align_header=True, verbosity=1):
     """
     Args:
         table: a list of lists of strings (one row is one list, all rows should be the same length)
@@ -549,6 +549,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
         hide_header: if True, the header is not printed
         fixed_col_widths: a list to specify exact column widths (automatic if not used)
         left_align_header: if False, the header will follow the column alignments
+        bottom_align_header: if False, the header will align to the top, like other rows
         verbosity: the table will only be logged if the logger verbosity is >= this value
     """
     column_count = len(table[0])
@@ -578,6 +579,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
     indenter = ' ' * indent
     full_table_str = ''
     for i, row in enumerate(table):
+        row = [str(x) for x in row]
         if hide_header and i == 0:
             continue
 
@@ -591,12 +593,18 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
             wrapper = textwrap.TextWrapper(subsequent_indent=subsequent_indent, width=max_col_width)
             wrapped_row = [wrapper.wrap(x) for x in row]
 
-        for j in range(max(len(x) for x in wrapped_row)):
+        row_rows = max(len(x) for x in wrapped_row)
+        if i == 0 and bottom_align_header:
+            wrapped_row = [[''] * (row_rows - len(x)) + x for x in wrapped_row]
+
+        for j in range(row_rows):
             row_line = [x[j] if j < len(x) else '' for x in wrapped_row]
             aligned_row = []
             for value, col_width, alignment in zip(row_line, col_widths, alignments):
                 if alignment == 'L' or (i == 0 and left_align_header):
                     aligned_row.append(value.ljust(col_width))
+                elif alignment == 'C':
+                    aligned_row.append(value.center(col_width))
                 else:
                     aligned_row.append(value.rjust(col_width))
             row_str = separator.join(aligned_row)
@@ -608,22 +616,14 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
                 row_str = colour(row_str, row_colour[i])
             for text, colour_name in sub_colour.items():
                 row_str = row_str.replace(text, colour(text, colour_name))
+            if j < row_rows - 1 and UNDERLINE in row_str:
+                row_str = re.sub('\033\[4m', '', row_str)
             if return_str:
                 full_table_str += indenter + row_str + '\n'
             else:
                 log.log(indenter + row_str, verbosity)
     if return_str:
         return full_table_str
-
-
-END_FORMATTING = '\033[0m'
-BOLD = '\033[1m'
-UNDERLINE = '\033[4m'
-RED = '\033[31m'
-GREEN = '\033[32m'
-MAGENTA = '\033[35m'
-YELLOW = '\033[93m'
-DIM = '\033[2m'
 
 
 def colour(text, text_colour):
@@ -707,7 +707,10 @@ def bold_red_underline(text):
 
 
 def len_without_format(text):
-    return len(remove_formatting(text))
+    try:
+        return len(remove_formatting(text))
+    except TypeError:
+        return len(str(text))
 
 
 def remove_formatting(text):
@@ -830,6 +833,20 @@ def spades_path_and_version(spades_path):
         version, status = '?', 'too old'
 
     return spades_path, version, status
+
+
+def racon_path_and_version(racon_path):
+    racon_path = shutil.which(racon_path)
+    if racon_path is None:
+        return '', '', 'not found'
+    command = [racon_path]
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    if 'racon [options] <reads.fastq> <overlaps.paf> <raw_contigs.fasta> <out_consensus.fasta>' \
+            in out.decode():
+        return racon_path, '-', 'good'
+    else:
+        return racon_path, '-', 'bad'
 
 
 def makeblastdb_path_and_version(makeblastdb_path):
@@ -964,3 +981,76 @@ def pilon_path_and_version(pilon_path, java_path, args):
     except (ValueError, IndexError):
         version, status = '?', 'too old'
     return os.path.abspath(pilon_path), version, 'good'
+
+
+def line_iterator(string_with_line_breaks):
+    """Iterates over a string containing line breaks, one line at a time."""
+    prev_newline = -1
+    while True:
+        next_newline = string_with_line_breaks.find('\n', prev_newline + 1)
+        if next_newline < 0:
+            break
+        yield string_with_line_breaks[prev_newline + 1:next_newline]
+        prev_newline = next_newline
+
+
+def range_overlap(x1, x2, y1, y2):
+    """
+    Returns true if the range (x1, x2) overlaps with the range (y1, y2).
+    """
+    return x1 < y2 and y1 < x2
+
+
+def range_is_contained(test_range, other_ranges):
+    """
+    Returns True if test_range is entirely contained within any range in other_ranges.
+    """
+    start, end = test_range
+    for other_range in other_ranges:
+        if other_range[0] <= start and other_range[1] >= end:
+            return True
+    return False
+
+
+def range_overlap_size(test_range, other_ranges):
+    start, end = test_range
+    max_overlap = 0
+    for other_range in other_ranges:
+        max_overlap = max(max_overlap, min(end, other_range[1]) - max(start, other_range[0]))
+    return max_overlap
+
+
+def simplify_ranges(ranges):
+    """
+    Collapses overlapping ranges together. Input ranges are tuples of (start, end) in the normal
+    Python manner where the end isn't included.
+    """
+    fixed_ranges = []
+    for int_range in ranges:
+        if int_range[0] > int_range[1]:
+            fixed_ranges.append((int_range[1], int_range[0]))
+        elif int_range[0] < int_range[1]:
+            fixed_ranges.append(int_range)
+    starts_ends = [(x[0], 1) for x in fixed_ranges]
+    starts_ends += [(x[1], -1) for x in fixed_ranges]
+    starts_ends.sort(key=lambda x: x[0])
+    current_sum = 0
+    cumulative_sum = []
+    for start_end in starts_ends:
+        current_sum += start_end[1]
+        cumulative_sum.append((start_end[0], current_sum))
+    prev_depth = 0
+    start = 0
+    combined = []
+    for pos, depth in cumulative_sum:
+        if prev_depth == 0:
+            start = pos
+        elif depth == 0:
+            combined.append((start, pos))
+        prev_depth = depth
+    return combined
+
+
+def remove_dupes_preserve_order(lst):
+    seen = set()
+    return [x for x in lst if not (x in seen or seen.add(x))]

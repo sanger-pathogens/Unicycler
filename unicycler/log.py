@@ -17,6 +17,8 @@ import sys
 import os
 import datetime
 import re
+import shutil
+import textwrap
 
 
 class Log(object):
@@ -35,11 +37,14 @@ class Log(object):
 
         if self.log_filename:
             log_file_exists = os.path.isfile(self.log_filename)
-            self.log_file = open(self.log_filename, 'at', 1)  # line buffering
+            self.log_file = open(self.log_filename, 'at', 1, encoding='utf8')  # line buffering
+
+            # If the log file already exists, we pad out a bit of space before appending to it.
             if log_file_exists:
-                self.log_file.write('\n\n\n\n\n\n\n\n')
+                self.log_file.write('\n\n\n\n\n\n\n\n\n\n\n\n')
         else:
             self.log_file = None
+
 
     def __del__(self):
         if self.log_file and not self.log_file.closed:
@@ -97,6 +102,41 @@ def log_progress_line(completed, total, base_pairs=None, end_newline=False):
     log('\r' + progress_str, end=end_char, write_to_log_file=False)
     if end_newline:
         log(progress_str, print_to_screen=False)
+
+
+def log_explanation(text, verbosity=1, print_to_screen=True, write_to_log_file=True,
+                    extra_empty_lines_after=1, indent_size=4):
+    """
+    This function writes explanatory text to the screen. It is wrapped to the terminal width for
+    stdout but not wrapped for the log file.
+    """
+    text = ' ' * indent_size + text
+    if print_to_screen:
+        terminal_width = shutil.get_terminal_size().columns
+        for line in textwrap.wrap(text, width=terminal_width - 1):
+            formatted_text = dim(line)
+            log(formatted_text, verbosity=verbosity, print_to_screen=True, write_to_log_file=False)
+    if write_to_log_file:
+        log(text, verbosity=verbosity, print_to_screen=False, write_to_log_file=True)
+
+    for _ in range(extra_empty_lines_after):
+        log('', verbosity=verbosity, print_to_screen=print_to_screen,
+            write_to_log_file=write_to_log_file)
+
+
+def log_number_list(numbers, verbosity=1, print_to_screen=True, write_to_log_file=True,
+                    indent_size=4):
+    """
+    Some lists of numbers are long, so this function makes them wrap nicely when displayed on
+    stdout.
+    """
+    text = ' ' * indent_size + ', '.join(str(x) for x in numbers)
+    if print_to_screen:
+        terminal_width = shutil.get_terminal_size().columns
+        for line in textwrap.wrap(text, width=terminal_width - 1):
+            log(line, verbosity=verbosity, print_to_screen=True, write_to_log_file=False)
+    if write_to_log_file:
+        log(text, verbosity=verbosity, print_to_screen=False, write_to_log_file=True)
 
 
 def int_to_str(num, max_num=0):

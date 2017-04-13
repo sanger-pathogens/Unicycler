@@ -13,6 +13,50 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
+
+# Simple bridging will only proceed for single-copy segments above a certain length. This is to
+# ensure that it does not occur for complex areas of the assembly graph.
+MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING = 2000
+
+# When aligning minimap reads to the graph (which is overlap-free), we still want to allow a tiny
+# bit of overlap because minimap alignments are a bit course.
+ALLOWED_MINIMAP_OVERLAP = 5
+
+# When aligning minimap reads to the graph, we can exclude hits that are too much worse than the
+# best hit.
+MAX_TO_MIN_MINIMISER_RATIO = 10
+
+# When testing various repeat counts using fully global alignment in Seqan, we use this band size
+# to make the alignment faster.
+SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 50
+
+# Only single copy segments longer than this will be included as 'reads' in the miniasm assembly.
+MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
+
+# Illumina contigs are used as 'reads' in the miniasm and Racon steps. They are given this as a
+# qscore at each base.
+CONTIG_READ_QSCORE = 40
+
+MAX_READ_CLIP_FOR_RACON_POLISHING = 5000
+MIN_READ_ALIGN_FRACTION_FOR_RACON_POLISHING = 0.75
+
+# This is the maximum number of times a bridge will be Racon polished
+RACON_POLISH_LOOP_COUNT = 100
+
+# This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
+# if 6, then each contig is included 6 times as a read (3 forward strand 3 reverse).
+RACON_CONTIG_DUPLICATION_COUNT = 1
+
+CONTIG_SEARCH_END_SIZES = [5000, 2500, 1000, 500]
+CONTIG_SEARCH_MIN_IDENTITY = 95.0
+FOUND_CONTIG_MIN_RATIO = 0.9
+FOUND_CONTIG_MAX_RATIO = 1.11111
+FOUND_CONTIG_MAX_OVERLAP_SIZE = 250
+
+COMBINE_MINIMAP_ALIGNMENTS_MIN_RATIO = 0.9
+COMBINE_MINIMAP_ALIGNMENTS_MAX_RATIO = 1.11111
+
+
 # Unicycler will only work with read alignments if they are long enough. This values specifies
 # the threshold relative to the graph overlap. E.g. if this value is 2 and the graph used was a
 # SPAdes 95-mer graph, it would have an overlap of 95 bp and so the minimum used alignment would
@@ -138,3 +182,5 @@ MAX_AUTO_THREAD_COUNT = 8
 
 # The default sequence line wrapping length (e.g. for use in FASTA files).
 BASES_PER_FASTA_LINE = 70
+
+COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH = 35

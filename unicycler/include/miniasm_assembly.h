@@ -9,19 +9,16 @@
 // Public License for more details. You should have received a copy of the GNU General Public
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef MINIMAP_ALIGN_H
-#define MINIMAP_ALIGN_H
+#ifndef MINIASM_ASSEMBLY_H
+#define MINIASM_ASSEMBLY_H
 
-#include "minimap/minimap.h"
-#include "minimap/kseq.h"
-#include <string>
+#include "miniasm/miniasm.h"
 
 // Functions that are called by the Python script must have C linkage, not C++ linkage.
 extern "C" {
 
-    char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
-                             int sensitivityLevel, int preset);
+    void miniasmAssembly(char * reads, char * overlaps, char * outputDir, int min_dp);
 }
 
-#endif // MINIMAP_ALIGN_H
+#endif // MINIASM_ASSEMBLY_H
 

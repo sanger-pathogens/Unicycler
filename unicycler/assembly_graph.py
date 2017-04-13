@@ -16,8 +16,9 @@ not, see <http://www.gnu.org/licenses/>.
 import math
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
-from .misc import int_to_str, float_to_str, weighted_average_list, score_function,\
-    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow
+from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
+    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow, \
+    remove_dupes_preserve_order
 from .bridge_long_read import LongReadBridge
 from . import settings
 from . import log
@@ -225,7 +226,7 @@ class AssemblyGraph(object):
         depth down to half the median.
         """
         median_depth = self.get_median_read_depth()
-        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2)
+        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2, end='')
         bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
                                                                     median_depth * 0.6)
         bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
@@ -238,7 +239,7 @@ class AssemblyGraph(object):
             single_copy_depth = median_depth / 2.0
         else:
             single_copy_depth = median_depth
-        log.log('Single copy depth:  ' + float_to_str(median_depth, 2), 2)
+        log.log(', single copy depth: ' + float_to_str(median_depth, 2), 2)
         return single_copy_depth
 
     def get_base_count_in_depth_range(self, min_depth, max_depth):
@@ -335,11 +336,11 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, newline=False, min_length=1):
+    def save_to_fasta(self, filename, newline=False, min_length=1, verbosity=1):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        log.log(('\n' if newline else '') + 'Saving ' + filename)
+        log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
@@ -448,6 +449,9 @@ class AssemblyGraph(object):
             if all_segments_are_one_base(component_segments):
                 segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
+        if segment_nums_to_remove:
+            log.log('\nRemoved homopolymer_loops:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_segments(self, nums_to_remove):
         """
@@ -480,16 +484,30 @@ class AssemblyGraph(object):
         self.forward_links = remove_nums_from_links(self.forward_links, nums_to_remove)
         self.reverse_links = remove_nums_from_links(self.reverse_links, nums_to_remove)
 
-        # Rebuild paths which might contain deleted segments.
-        paths_to_delete = set()
-        neg_nums_to_remove = [-x for x in nums_to_remove]
-        for path_name, path_nums in self.paths.items():
-            if len(list(set(nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-            if len(list(set(neg_nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-        for path_to_delete in paths_to_delete:
-            del self.paths[path_to_delete]
+        self.remove_segments_from_paths(nums_to_remove)
+
+    def remove_segments_from_paths(self, seg_nums):
+        """
+        Deletes the given segment numbers (regardless of sign) from the paths. If this results in
+        an invalid path, then the whole path is deleted.
+        """
+        fixed_paths = {}
+        for path_name, path in self.paths.items():
+            fixed_path = [x for x in path if x not in seg_nums and -x not in seg_nums]
+            if len(fixed_path) > 1 and self.is_path_valid(fixed_path):
+                fixed_paths[path_name] = fixed_path
+        self.paths = fixed_paths
+
+    def is_path_valid(self, path):
+        """
+        Returns True/False based on whether or not the given path is in the graph.
+        """
+        for i, seg_num in enumerate(path):
+            if i > 0:
+                prev_seg_num = path[i - 1]
+                if seg_num not in self.forward_links[prev_seg_num]:
+                    return False
+        return True
 
     def remove_small_components(self, min_component_size):
         """
@@ -509,8 +527,8 @@ class AssemblyGraph(object):
             segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
         if segment_nums_to_remove:
-            log.log('Removed small components:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+            log.log('\nRemoved small components:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_small_dead_ends(self, min_dead_end_size):
         """
@@ -529,7 +547,8 @@ class AssemblyGraph(object):
             else:
                 break
         if removed_segments:
-            log.log('\nRemoved small dead ends:  ' + ', '.join(str(x) for x in removed_segments), 2)
+            log.log('\nRemoved small dead ends:', 2)
+            log.log_number_list(removed_segments, 2)
 
     def merge_all_possible(self, single_copy_segments, bridging_mode):
         """
@@ -991,13 +1010,23 @@ class AssemblyGraph(object):
             return ''
         return '\n'.join(['%.3f' % x for x in self.copy_depths[segment.number]])
 
+    def get_copy_number(self, segment):
+        """
+        Returns the segment's copy number (0 if copy number determination did not occur for this
+        segment).
+        """
+        if segment.number not in self.copy_depths:
+            return 0
+        return len(self.copy_depths[segment.number])
+
+    def get_copy_number_from_segment_number(self, seg_num):
+        return self.get_copy_number(self.segments[abs(seg_num)])
+
     def get_copy_number_colour(self, segment):
         """
         Given a particular segment, this function returns a colour string based on the copy number.
         """
-        if segment.number not in self.copy_depths:
-            return 'grey'
-        copy_number = len(self.copy_depths[segment.number])
+        copy_number = self.get_copy_number(segment)
         if copy_number == 0:
             return 'grey'
         elif copy_number == 1:
@@ -1369,8 +1398,8 @@ class AssemblyGraph(object):
 
         if removed_segments:
             removed_segments = sorted(list(set(removed_segments)))
-            log.log('Removed segments used in bridges:\n' +
-                    ', '.join(str(x) for x in removed_segments), 2)
+            log.log('Removed segments used in bridges:', 2)
+            log.log_number_list(removed_segments, 2)
 
         # Now that clean up is finished, we no longer want to allow depths below zero.
         for segment in self.segments.values():
@@ -1396,8 +1425,8 @@ class AssemblyGraph(object):
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components with no single copy segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components with no single copy segments:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges):
@@ -1413,8 +1442,8 @@ class AssemblyGraph(object):
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components used in bridges:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components used in bridges:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_unbridging_segments(self, single_copy_seg_nums):
@@ -1429,8 +1458,8 @@ class AssemblyGraph(object):
                     self.search(-seg_num, single_copy_seg_nums)):
                 segment_nums_to_remove.append(seg_num)
         if segment_nums_to_remove:
-            log.log('Removed unbridging segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed unbridging segments:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
         self.remove_segments(segment_nums_to_remove)
 
     def get_usedupness_score(self, seg_num, unbridged_graph):
@@ -2029,9 +2058,10 @@ class AssemblyGraph(object):
                     self.add_link(upstream_seg, downstream_seg)
                 segs_to_remove.append(seg_num)
 
-        self.remove_segments(segs_to_remove)
         if segs_to_remove and not suppress_log:
-            log.log('Removed zero-length segments: ' + ', '.join(str(x) for x in segs_to_remove))
+            self.remove_segments(segs_to_remove)
+            log.log('\nRemoved zero-length segments:')
+            log.log_number_list(segs_to_remove)
 
     def merge_small_segments(self, max_merge_size):
         """
@@ -2082,7 +2112,8 @@ class AssemblyGraph(object):
             self.remove_zero_length_segs(suppress_log=True)
 
         if merged_seg_nums:
-            log.log('Merged small segments: ' + ', '.join(str(x) for x in merged_seg_nums))
+            log.log('\nMerged small segments:')
+            log.log_number_list(merged_seg_nums)
 
     def starts_with_dead_end(self, signed_seg_num):
         """
@@ -2130,6 +2161,37 @@ class AssemblyGraph(object):
         # If the code got here, then the bridging mode is level 1 (normal). If the segment has
         # become single copy, then it's okay to merge.
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
+
+    def find_simple_two_way_junctions(self, min_single_copy_seg_len):
+        """
+        This function returns a list of segment numbers that are simple two-way junctions.
+        Simple two-way junctions are defined as cases where two single copy segments join and then
+        split. The single copy segments must exceed the minimum length parameter. Also, the single
+        copy segments do not have to be unique, e.g. a loop can count as a two-way junction (the
+        same segment is in inputs and outputs.
+        """
+        simple_two_way_junctions = []
+        for segment in self.segments.values():
+            if self.get_copy_number(segment) != 2:
+                continue
+            seg_num = segment.number
+            input_count = (
+            len(self.reverse_links[seg_num]) if seg_num in self.reverse_links else 0)
+            output_count = (
+            len(self.forward_links[seg_num]) if seg_num in self.forward_links else 0)
+            if input_count != 2 or output_count != 2:
+                continue
+            exclusive_input_count = len(self.get_exclusive_inputs(seg_num))
+            exclusive_output_count = len(self.get_exclusive_outputs(seg_num))
+            if exclusive_input_count != 2 or exclusive_output_count != 2:
+                continue
+            neighbour_segments = self.get_connected_segments(seg_num)
+            long_enough = all(self.segments[x].get_length() > min_single_copy_seg_len
+                              for x in neighbour_segments)
+            if not long_enough:
+                continue
+            simple_two_way_junctions.append(seg_num)
+        return simple_two_way_junctions
 
 
 def get_headers_and_sequences(filename):
@@ -2463,6 +2525,3 @@ def get_overlap_from_gfa_link(filename):
     return 0
 
 
-def remove_dupes_preserve_order(lst):
-    seen = set()
-    return [x for x in lst if not (x in seen or seen.add(x))]

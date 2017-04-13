@@ -10,9 +10,9 @@
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
 #define LEVEL_0_MINIMAP_KMER_SIZE 15
-#define LEVEL_1_MINIMAP_KMER_SIZE 15
-#define LEVEL_2_MINIMAP_KMER_SIZE 14
-#define LEVEL_3_MINIMAP_KMER_SIZE 13
+#define LEVEL_1_MINIMAP_KMER_SIZE 14
+#define LEVEL_2_MINIMAP_KMER_SIZE 13
+#define LEVEL_3_MINIMAP_KMER_SIZE 12
 
 #define LEVEL_0_KMER_SIZE 10
 #define LEVEL_1_KMER_SIZE 10
@@ -71,3 +71,8 @@
 // If a Seqan seed chain contains a gap with an area larger than this, then we don't go ahead with
 // the alignment (because it would take too long and probably not be good anyway).
 #define MAX_BANDED_ALIGNMENT_GAP_AREA 100000000
+
+// When searching for a line tracing starting point, neighbouring points too far from the diagonal
+// are penalised. This controls how far a point can be from the diagonal before its contribution
+// drops to 0.
+#define SCORE_DISTANCE_FROM_DIAGONAL 5.0

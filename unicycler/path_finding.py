@@ -14,10 +14,16 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
+import sys
 from collections import defaultdict
 from .misc import weighted_average, reverse_complement, get_num_agreement
-from .cpp_wrappers import fully_global_alignment, path_alignment
 from . import settings
+
+try:
+    from .cpp_wrappers import fully_global_alignment, path_alignment
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully built the library file using make?')
 
 
 class TooManyPaths(Exception):

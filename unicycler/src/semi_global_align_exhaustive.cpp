@@ -9,25 +9,24 @@
 // Public License for more details. You should have received a copy of the GNU General Public
 // License along with Unicycler. If not, see <http://www.gnu.org/licenses/>.
 
-#include "global_align.h"
+#include "semi_global_align_exhaustive.h"
 
 #include <seqan/align.h>
 #include "semi_global_align.h"
 
 
 
-char * fullyGlobalAlignment(char * s1, char * s2,
-                            int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore,
-                            bool useBanding, int bandSize) {
+char * semiGlobalAlignmentExhaustive(char * s1, char * s2,
+                                     int matchScore, int mismatchScore,
+                                     int gapOpenScore, int gapExtensionScore) {
 
     // Change the sequences to C++ strings.
     std::string sequence1(s1);
     std::string sequence2(s2);
 
-    ScoredAlignment * alignment = fullyGlobalAlignment(sequence1, sequence2,
-                                                       matchScore, mismatchScore, gapOpenScore, gapExtensionScore,
-                                                       useBanding, bandSize);
-
+    ScoredAlignment * alignment = semiGlobalAlignmentExhaustive(sequence1, sequence2,
+                                                                matchScore, mismatchScore,
+                                                                gapOpenScore, gapExtensionScore);
     if (alignment != 0) {
         std::string returnString = alignment->getFullString();
         delete alignment;
@@ -37,10 +36,10 @@ char * fullyGlobalAlignment(char * s1, char * s2,
         return cppStringToCString("");
 }
 
-// This function runs a global alignment between two sequences.
-ScoredAlignment * fullyGlobalAlignment(std::string s1, std::string s2,
-                                       int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore,
-                                       bool useBanding, int bandSize) {
+
+ScoredAlignment * semiGlobalAlignmentExhaustive(std::string s1, std::string s2,
+                                                int matchScore, int mismatchScore,
+                                                int gapOpenScore, int gapExtensionScore) {
     long long startTime = getTime();
 
     Dna5String sequenceH(s1);
@@ -52,34 +51,12 @@ ScoredAlignment * fullyGlobalAlignment(std::string s1, std::string s2,
     assignSource(row(alignment, 1), sequenceV);
     Score<int, Simple> scoringScheme(matchScore, mismatchScore, gapExtensionScore, gapOpenScore);
 
-    AlignConfig<false, false, false, false> alignConfig;
-    if (useBanding) {
-        int lowerDiagonal = -bandSize;
-        int upperDiagonal = bandSize;
-        int lengthDifference = length(s2) - length(s1);
-
-        // If s2 is longer, then we need to expand the lower diagonal a bit.
-        if (lengthDifference > 0)
-            lowerDiagonal -= lengthDifference;
-
-        // If s1 is longer, then we need to expand the upper diagonal a bit.
-        else if (lengthDifference < 0)
-            upperDiagonal -= lengthDifference;
-
-        try {
-            globalAlignment(alignment, scoringScheme, alignConfig, lowerDiagonal, upperDiagonal);
-        }
-        catch (...) {
-            return 0;
-        }
+    AlignConfig<true, true, true, true> alignConfig;
+    try {
+        globalAlignment(alignment, scoringScheme, alignConfig);
     }
-    else {
-        try {
-            globalAlignment(alignment, scoringScheme, alignConfig);
-        }
-        catch (...) {
-            return 0;
-        }
+    catch (...) {
+        return 0;
     }
 
     std::string s1Name = "s1";

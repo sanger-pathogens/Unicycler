@@ -18,18 +18,21 @@ import gzip
 import os
 import math
 from .misc import quit_with_error, get_nice_header, get_compression_type, get_sequence_file_type,\
-    strip_read_extensions, print_table, float_to_str
+    strip_read_extensions, print_table, float_to_str, range_is_contained, range_overlap_size, \
+    simplify_ranges
 from . import settings
 from . import log
 
 
-def load_references(fasta_filename, contamination=False, section_header='Loading references'):
+def load_references(fasta_filename, contamination=False, section_header='Loading references',
+                    show_progress=True):
     """
     This function loads in sequences from a FASTA file and returns a list of Reference objects.
     """
     references = []
     total_bases = 0
-    log.log_section_header(section_header)
+    if section_header:
+        log.log_section_header(section_header)
     try:
         if get_sequence_file_type(fasta_filename) != 'FASTA':
             quit_with_error(fasta_filename + ' is not in FASTA format')
@@ -45,7 +48,8 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
         num_refs = sum(1 for line in fasta if line.startswith('>'))
     if not num_refs:
         quit_with_error('There are no references sequences in ' + fasta_filename)
-    log.log_progress_line(0, num_refs)
+    if show_progress:
+        log.log_progress_line(0, num_refs)
 
     fasta_file = open_func(fasta_filename, 'rt')
     name = ''
@@ -65,7 +69,8 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
                 progress = 100.0 * len(references) / num_refs
                 progress_rounded_down = math.floor(progress / step) * step
                 if progress == 100.0 or progress_rounded_down > last_progress:
-                    log.log_progress_line(len(references), num_refs, total_bases)
+                    if show_progress:
+                        log.log_progress_line(len(references), num_refs, total_bases)
                     last_progress = progress_rounded_down
                 sequence = ''
             name = get_nice_header(line[1:])
@@ -77,14 +82,15 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
             name = 'CONTAMINATION_' + name
         references.append(Reference(name, sequence))
         total_bases += len(sequence)
-        log.log_progress_line(len(references), num_refs, total_bases)
-
-    log.log_progress_line(len(references), len(references), total_bases, end_newline=True)
+        if show_progress:
+            log.log_progress_line(len(references), num_refs, total_bases)
+    if show_progress:
+        log.log_progress_line(len(references), len(references), total_bases, end_newline=True)
 
     return references
 
 
-def load_long_reads(filename):
+def load_long_reads(filename, silent=False):
     """
     This function loads in long reads from a FASTQ file and returns a dictionary where key = read
     name and value = Read object. It also returns a list of read names, in the order they are in
@@ -101,7 +107,8 @@ def load_long_reads(filename):
     else:  # plain text
         open_func = open
 
-    log.log_section_header('Loading reads')
+    if not silent:
+        log.log_section_header('Loading reads')
 
     read_dict = {}
     read_names = []
@@ -118,12 +125,18 @@ def load_long_reads(filename):
             num_reads = sum(1 for line in fasta if line.startswith('>'))
     if not num_reads:
         quit_with_error('There are no read sequences in ' + filename)
-    log.log_progress_line(0, num_reads)
+    if not silent:
+        log.log_progress_line(0, num_reads)
 
     if file_type == 'FASTQ':
         with open_func(filename, 'rt') as fastq:
             for line in fastq:
-                original_name = line.strip()[1:].split()[0]
+                stripped_line = line.strip()
+                if len(stripped_line) == 0:
+                    continue
+                if not stripped_line.startswith('@'):
+                    continue
+                original_name = stripped_line[1:].split()[0]
                 sequence = next(fastq).strip()
                 _ = next(fastq)
                 qualities = next(fastq).strip()
@@ -142,7 +155,8 @@ def load_long_reads(filename):
                 progress = 100.0 * len(read_dict) / num_reads
                 progress_rounded_down = math.floor(progress / step) * step
                 if progress == 100.0 or progress_rounded_down > last_progress:
-                    log.log_progress_line(len(read_dict), num_reads, total_bases)
+                    if not silent:
+                        log.log_progress_line(len(read_dict), num_reads, total_bases)
                     last_progress = progress_rounded_down
 
     else:  # file_type == 'FASTA'
@@ -162,7 +176,8 @@ def load_long_reads(filename):
                         progress = 100.0 * len(read_dict) / num_reads
                         progress_rounded_down = math.floor(progress / step) * step
                         if progress == 100.0 or progress_rounded_down > last_progress:
-                            log.log_progress_line(len(read_dict), num_reads, total_bases)
+                            if not silent:
+                                log.log_progress_line(len(read_dict), num_reads, total_bases)
                             last_progress = progress_rounded_down
                         sequence = ''
                     name = get_nice_header(line[1:])
@@ -172,17 +187,20 @@ def load_long_reads(filename):
                 read_dict[name] = Read(name, sequence, None)
                 read_names.append(name)
                 total_bases += len(sequence)
-                log.log_progress_line(len(read_dict), num_reads, total_bases)
+                if not silent:
+                    log.log_progress_line(len(read_dict), num_reads, total_bases)
 
-    log.log_progress_line(len(read_dict), len(read_dict), total_bases, end_newline=True)
+    if not silent:
+        log.log_progress_line(len(read_dict), len(read_dict), total_bases, end_newline=True)
 
     # If there were duplicate read names, then we save the reads back out to file with their fixed
     # names.
     if duplicate_read_names_found:
         no_dup_filename = os.path.abspath(strip_read_extensions(filename) +
                                           '_no_duplicates.fastq.gz')
-        log.log('\nDuplicate read names found. Saving duplicate-free file:')
-        log.log(no_dup_filename)
+        if not silent:
+            log.log('\nDuplicate read names found. Saving duplicate-free file:')
+            log.log(no_dup_filename)
         with gzip.open(no_dup_filename, 'wb') as f:
             for read_name in read_names:
                 read = read_dict[read_name]
@@ -191,59 +209,6 @@ def load_long_reads(filename):
         no_dup_filename = filename
 
     return read_dict, read_names, no_dup_filename
-
-
-def simplify_ranges(ranges):
-    """
-    Collapses overlapping ranges together. Input ranges are tuples of (start, end) in the normal
-    Python manner where the end isn't included.
-    """
-    fixed_ranges = []
-    for int_range in ranges:
-        if int_range[0] > int_range[1]:
-            fixed_ranges.append((int_range[1], int_range[0]))
-        elif int_range[0] < int_range[1]:
-            fixed_ranges.append(int_range)
-    starts_ends = [(x[0], 1) for x in fixed_ranges]
-    starts_ends += [(x[1], -1) for x in fixed_ranges]
-    starts_ends.sort(key=lambda x: x[0])
-    current_sum = 0
-    cumulative_sum = []
-    for start_end in starts_ends:
-        current_sum += start_end[1]
-        cumulative_sum.append((start_end[0], current_sum))
-    prev_depth = 0
-    start = 0
-    combined = []
-    for pos, depth in cumulative_sum:
-        if prev_depth == 0:
-            start = pos
-        elif depth == 0:
-            combined.append((start, pos))
-        prev_depth = depth
-    return combined
-
-
-def range_is_contained(test_range, other_ranges):
-    """
-    Returns True if test_range is entirely contained within any range in other_ranges.
-    """
-    start, end = test_range
-    for other_range in other_ranges:
-        if other_range[0] <= start and other_range[1] >= end:
-            return True
-    return False
-
-
-def range_overlap(test_range, other_ranges):
-    """
-    Returns the size of the overlap (integer) between the two ranges.
-    """
-    start, end = test_range
-    max_overlap = 0
-    for other_range in other_ranges:
-        max_overlap = max(max_overlap, min(end, other_range[1]) - max(start, other_range[0]))
-    return max_overlap
 
 
 class Reference(object):
@@ -315,7 +280,7 @@ class Read(object):
                 continue
 
             # Don't keep alignments which overlap too much with existing alignments.
-            if range_overlap(this_range, kept_alignment_ranges) > allowed_overlap:
+            if range_overlap_size(this_range, kept_alignment_ranges) > allowed_overlap:
                 continue
 
             # Don't keep alignments that seem to be very similar to an already kept alignment.
@@ -423,3 +388,24 @@ class Read(object):
             alignment_table.append(alignment_row)
         return print_table(alignment_table, alignments='RRRRRRRRR', return_str=True,
                            header_format=None, col_separation=2, indent=2)
+
+
+def get_read_nickname_dict(read_names):
+    """
+    Read names can be quite long, so for the sake of output brevity, this function tries to come
+    up with some shorter nicknames for the reads.
+    """
+    max_read_name_len = max(len(name) for name in read_names)
+    for nickname_length in range(1, max_read_name_len):
+        nicknames = set()
+        for name in read_names:
+            nickname = name[:nickname_length]
+            if nickname in nicknames:
+                break
+            nicknames.add(nickname)
+        else:
+            return {name: name[:nickname_length] for name in read_names}
+
+    # If we couldn't find a length for shorter nicknames, then the nicknames are just the full
+    # names. Oh well.
+    return {name: name for name in read_names}
