@@ -62,7 +62,7 @@ def main():
 
     check_input_files(args)
     print_intro_message(args, full_command, out_dir_message)
-    check_dependencies(args)
+    check_dependencies(args, short_reads_available, long_reads_available)
 
     # Files are numbered in chronological order
     counter = itertools.count(start=1)
@@ -404,7 +404,7 @@ def get_arguments():
     if (args.short1 and not args.short2) or (args.short2 and not args.short1):
         quit_with_error('you must use both --short1 and --short2 or neither')
 
-    if not args.short1 and not args.short3 and not args.long:
+    if not args.short1 and not args.short2 and not args.long:
         quit_with_error('no input reads provided (--short1, --short2, --long)')
 
     if args.keep < 0 or args.keep > 3:
@@ -433,8 +433,10 @@ def get_arguments():
 
     # Change some arguments to full paths.
     args.out = os.path.abspath(args.out)
-    args.short1 = os.path.abspath(args.short1)
-    args.short2 = os.path.abspath(args.short2)
+    if args.short1:
+        args.short1 = os.path.abspath(args.short1)
+    if args.short2:
+        args.short2 = os.path.abspath(args.short2)
     if args.unpaired:
         args.unpaired = os.path.abspath(args.unpaired)
     if args.long:
@@ -531,8 +533,7 @@ def print_intro_message(args, full_command, out_dir_message):
                           'the best based on contig length and graph connectivity, and scaffold '
                           'the graph using SPAdes repeat resolution.')
     elif long_reads_available:
-        intro_message += ('Since you provided only long reads, Unicycler will essentially '
-                          'function as a miniasm + Racon pipeline. It will assemble the reads '
+        intro_message += ('Since you provided only long reads, Unicycler will assemble the reads '
                           'with miniasm and then run repeated polishing rounds using Racon.')
     log.log_explanation(intro_message, extra_empty_lines_after=0)
     log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler')
@@ -566,7 +567,7 @@ def print_intro_message(args, full_command, out_dir_message):
         log.log(float_to_str(args.min_bridge_qual, 2), 2)
 
 
-def check_dependencies(args):
+def check_dependencies(args, short_reads_available, long_reads_available):
     """
     This function prints a table of Unicycler's dependencies and checks their version number.
     It will end the program with an error message if there are any problems.
@@ -577,7 +578,10 @@ def check_dependencies(args):
     else:
         program_table = [['Program', 'Version', 'Status', 'Path']]
 
-    spades_path, spades_version, spades_status = spades_path_and_version(args.spades_path)
+    if not short_reads_available:
+        spades_path, spades_version, spades_status = '', '', 'not used'
+    else:
+        spades_path, spades_version, spades_status = spades_path_and_version(args.spades_path)
     spades_row = ['spades.py', spades_version, spades_status]
     if args.verbosity > 1:
         spades_row.append(spades_path)
@@ -610,7 +614,7 @@ def check_dependencies(args):
     program_table.append(tblastn_row)
 
     # Polishing dependencies
-    if args.no_pilon:
+    if args.no_pilon or not short_reads_available:
         bowtie2_build_path, bowtie2_build_version, bowtie2_build_status = '', '', 'not used'
         bowtie2_path, bowtie2_version, bowtie2_status = '', '', 'not used'
         samtools_path, samtools_version, samtools_status = '', '', 'not used'

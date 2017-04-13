@@ -81,13 +81,15 @@ def check_input_files(args):
     """
     Checks to make sure all files in the list are present and either program, as needed.
     """
-    check_file_exists(args.short1)
-    check_file_exists(args.short2)
+    if args.short1:
+        check_file_exists(args.short1)
+    if args.short2:
+        check_file_exists(args.short2)
     if args.unpaired:
         check_file_exists(args.unpaired)
     if args.long:
         check_file_exists(args.long)
-    if args.short1 == args.short2:
+    if args.short1 and args.short2 and args.short1 == args.short2:
         quit_with_error('first and second read pair files cannot be the same file')
 
 
