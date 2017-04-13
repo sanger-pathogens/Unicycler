@@ -631,3 +631,16 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(read_end, 46710)  # end of read
         self.assertTrue(abs(alignment.ref_start_pos - 109308) < self.pos_margin_of_error)
         self.assertTrue(abs(alignment.ref_end_pos - 159675) < self.pos_margin_of_error)
+
+    def test_tough_alignment_14(self):
+        """
+        This read caused a crash before I added made a few fixes to the line tracing code. It won't
+        produce an alignment, but this test will confirm that it doesn't crash.
+        """
+        self.do_alignment('14', 1)
+        read = self.aligned_reads['14']
+        self.assertEqual(len(read.alignments), 1)
+        alignment = read.alignments[0]
+        self.assertEqual(alignment.read.name, '14')
+        self.assertTrue(alignment.raw_score >= 204)
+        self.assertTrue(alignment.scaled_score > 93.0)

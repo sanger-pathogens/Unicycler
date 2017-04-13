@@ -246,6 +246,10 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
             break;
     }
 
+    std::vector<ScoredAlignment *> alignments;
+    if (bestPointSet.size() == 0)
+        return alignments;
+
     // Now add the points to Seqan and get a global chain so we can do a banded alignment. We sort
     // them first so they're added in a consistent order.
     String<TSeed> seeds;
@@ -269,7 +273,6 @@ std::vector<ScoredAlignment *> alignReadToReferenceRange(SeqMap * refSeqs, std::
 
     // If the seed chain contains too much gap area, then we don't proceed - it would take too long
     // to align and is probably not a good alignment anyway.
-    std::vector<ScoredAlignment *> alignments;
     int seedChainLength = length(seedChain);
     if (seedChainLength == 0)
         return alignments;
@@ -365,23 +368,31 @@ PointSet lineTracingWithNanoflann(std::vector<CommonKmer> & commonKmers, PointSe
     int directions[2] = {1, -1};
     for (auto const & direction : directions) {
         p = startPoint;
+//        std::cout << "  starting point: " << p.x << "," << p.y << "\n" << std::flush;  // TEMP
         int maxX = readLen;
         int maxY = int(trimmedRefSeq.length());
         while (true) {
             int step = direction * TRACE_LINE_STEP_DISTANCE;
             Point previousP = p;
             Point newP(p.x + step, p.y + step);
+//            std::cout << "  stepped point: " << newP.x << "," << newP.y << "\n" << std::flush;  // TEMP
+
+            bool leftAlignmentRectangle = false;
+            if (direction == 1 && (newP.x > maxX || newP.y > maxY))
+                leftAlignmentRectangle = true;
+            if (direction == -1 && (newP.x < 0 || newP.y < 0))
+                leftAlignmentRectangle = true;
+//            std::cout << "  leftAlignmentRectangle: " << leftAlignmentRectangle << "\n" << std::flush;  // TEMP
 
             PointSet pointsNearLine;
-            p = mutateLineToBestFitPoints(previousP, newP, cloud, index, pointsNearLine);
+            p = mutateLineToBestFitPoints(previousP, newP, cloud, index, pointsNearLine, leftAlignmentRectangle);
+//            std::cout << "  mutated point: " << p.x << "," << p.y << "\n" << std::flush;  // TEMP
+
             traceDots.push_back(p);
             addPointsNearLine(previousP, p, pointsNearLine, pointSet,
                               TRACE_LINE_COLLECTION_DISTANCE);
 
-            // Quit advancing when we've left the alignment rectangle.
-            if (direction == 1 && (p.x > maxX || p.y > maxY))
-                break;
-            if (direction == -1 && (p.x < 0 || p.y < 0))
+            if (leftAlignmentRectangle)
                 break;
         }
     }
@@ -420,7 +431,7 @@ Point shiftPointDown(Point p, int steps) {
 
 
 Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tree_t & index,
-                                PointSet & pointsNearLine) {
+                                PointSet & pointsNearLine, bool leftAlignmentRectangle) {
 
 //    std::cout << "\n";  // TEMP
 //    std::cout << "  starting point: " << p2.x << "," << p2.y << "\n" << std::flush;  // TEMP
@@ -430,6 +441,9 @@ Point mutateLineToBestFitPoints(Point p1, Point p2, PointCloud & cloud, my_kd_tr
     PointVector pointsNearP2 = radiusSearchAroundPoint(p2, radius, cloud, index);
     pointsNearLine.insert(pointsNearP1.begin(), pointsNearP1.end());
     pointsNearLine.insert(pointsNearP2.begin(), pointsNearP2.end());
+
+    if (leftAlignmentRectangle)
+        return p2;
 
     Point p2Up = shiftPointUp(p2, TRACE_LINE_MUTATION_SIZE);
     Point p2Down = shiftPointDown(p2, TRACE_LINE_MUTATION_SIZE);
@@ -778,6 +792,10 @@ double variance(std::vector<double> & v) {
 // This function gives a point set a quality score so we can choose between alternative point sets
 // for an alignment. It also labels the point set as failed or not.
 double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failedLine) {
+
+    // If there's only one point, we can't proceed.
+    if (pointSet.size() == 1)
+        return 0.0;
 
     // More points is better.
     double pointCount = double(pointSet.size());

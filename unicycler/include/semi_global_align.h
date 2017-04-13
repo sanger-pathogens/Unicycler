@@ -153,7 +153,8 @@ double scorePointSet(PointSet & pointSet, PointVector & traceDots, bool & failed
 double getWorstSlope(PointVector traceDots);
 
 Point mutateLineToBestFitPoints(Point previousP, Point newP, PointCloud & cloud,
-                                my_kd_tree_t & index, PointSet & pointsNearLine);
+                                my_kd_tree_t & index, PointSet & pointsNearLine,
+                                bool leftAlignmentRectangle);
 
 void addPointsNearLine(Point p1, Point p2, PointSet & pointsNearLine, PointSet & pointSet,
                        double radius);
