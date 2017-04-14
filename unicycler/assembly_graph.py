@@ -14,6 +14,7 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import math
+import copy
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
 from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
@@ -1076,10 +1077,12 @@ class AssemblyGraph(object):
             prev_segment_number = seg_num
         return path_sequence
 
-    def apply_bridges(self, bridges, verbosity, min_bridge_qual, unbridged_graph):
+    def apply_bridges(self, bridges, verbosity, min_bridge_qual):
         """
         Uses the supplied bridges to simplify the graph.
         """
+        unbridged_graph = copy.deepcopy(self)
+
         # Each segment can have only one bridge per side, so we will track which segments have had
         # a bridge applied off one side or the other.
         right_bridged = set()
@@ -1174,10 +1177,10 @@ class AssemblyGraph(object):
         start = bridge.start_segment
         end = bridge.end_segment
         if start in self.forward_links:
-            for link in self.forward_links[start]:
+            for link in [x for x in self.forward_links[start]]:
                 self.remove_link(start, link)
         if end in self.reverse_links:
-            for link in self.reverse_links[end]:
+            for link in [x for x in self.reverse_links[end]]:
                 self.remove_link(link, end)
 
         # Create a new bridge segment.

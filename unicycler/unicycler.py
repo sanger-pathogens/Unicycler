@@ -19,7 +19,6 @@ import argparse
 import os
 import sys
 import shutil
-import copy
 import random
 import itertools
 from .assembly_graph import AssemblyGraph
@@ -92,7 +91,6 @@ def main():
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True)
-        unbridged_graph = copy.deepcopy(graph)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -114,7 +112,6 @@ def main():
 
     else:  # short reads not available
         graph = None
-        unbridged_graph = None
         single_copy_segments = []
 
     if short_reads_available and long_reads_available:
@@ -163,7 +160,7 @@ def main():
     if short_reads_available:
         log.log_section_header('Applying bridges')
         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
-                                                       args.min_bridge_qual, unbridged_graph)
+                                                       args.min_bridge_qual,)
         if args.keep > 0:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'bridges_applied'),
                               save_seg_type_info=True, save_copy_depth_info=True, newline=True)

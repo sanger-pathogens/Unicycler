@@ -36,16 +36,13 @@ def get_best_paths_for_seq(graph, start_seg, end_seg, target_length, sequence, s
     Given a sequence and target length, this function finds the best paths from the start
     segment to the end segment.
     """
+    assert graph.overlap == 0
+
     # Limit the path search to lengths near the target.
     min_length = min(int(round(target_length * settings.MIN_RELATIVE_PATH_LENGTH)),
                      target_length - settings.RELATIVE_PATH_LENGTH_BUFFER_SIZE)
     max_length = max(int(round(target_length * settings.MAX_RELATIVE_PATH_LENGTH)),
                      target_length + settings.RELATIVE_PATH_LENGTH_BUFFER_SIZE)
-
-    # The overlap isn't present in the consensus sequence, so we need to add it on.
-    if sequence:
-        sequence = graph.seq_from_signed_seg_num(start_seg)[-graph.overlap:] + sequence + \
-                   graph.seq_from_signed_seg_num(end_seg)[:graph.overlap]
 
     # If there are few enough possible paths, we just try aligning to them all.
     try:
@@ -116,8 +113,7 @@ def all_paths(graph, start, end, min_length, max_length):
     start_seg = graph.segments[abs(start)]
     end_seg = graph.segments[abs(end)]
     start_end_depth = weighted_average(start_seg.depth, end_seg.depth,
-                                       start_seg.get_length_no_overlap(graph.overlap),
-                                       end_seg.get_length_no_overlap(graph.overlap))
+                                       start_seg.get_length(), end_seg.get_length())
     working_paths = [[x] for x in graph.forward_links[start]]
     final_paths = []
     while working_paths:
@@ -171,8 +167,7 @@ def progressive_path_find(graph, start, end, min_length, max_length, sequence, s
     start_seg = graph.segments[abs(start)]
     end_seg = graph.segments[abs(end)]
     start_end_depth = weighted_average(start_seg.depth, end_seg.depth,
-                                       start_seg.get_length_no_overlap(graph.overlap),
-                                       end_seg.get_length_no_overlap(graph.overlap))
+                                       start_seg.get_length(), end_seg.get_length())
 
     # If one of the two directions gets clogged, then only the other direction will be advanced.
     # If both directions get clogged, then the culling score fraction will be increased (brought
