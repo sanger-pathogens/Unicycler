@@ -26,12 +26,12 @@ import unicycler.unicycler
 import unicycler.assembly_graph
 import unicycler.misc
 import test.fake_reads
+import random
 
 col_widths = [22, 10, 9, 80]
 
 
 def main():
-    random.seed(0)
     print()
     header_row = ['Test type', 'Seq length', 'Time (ms)', 'Command']
     unicycler.misc.print_table([header_row], col_separation=2, header_format='underline', indent=0,
@@ -49,24 +49,32 @@ def main():
             shutil.rmtree(temp_dir)
 
 
-def run_unicycler(out_dir, option_code, verbosity=None):
+def run_unicycler(out_dir, verbosity=None):
     """
-    This function runs Unicycler. It uses different options, based on the iteration.
+    This function runs Unicycler. It randomly uses different options.
     """
     unicycler_runner = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                     'unicycler-runner.py')
+
     reads_1 = os.path.join(out_dir, 'reads_1.fastq')
     reads_2 = os.path.join(out_dir, 'reads_2.fastq')
+    unpaired_reads = os.path.join(out_dir, 'reads_unpaired.fastq')
 
-    unicycler_cmd = [unicycler_runner, '-1', reads_1, '-2', reads_2, '-o', out_dir]
-    if option_code % 5 == 1:
+    using_paired_reads = os.path.isfile(reads_1) and os.path.isfile(reads_2)
+    using_unpaired_reads = os.path.isfile(unpaired_reads)
+
+    unicycler_cmd = [unicycler_runner, '-o', out_dir]
+    if using_paired_reads:
+        unicycler_cmd += ['-1', reads_1, '-2', reads_2]
+    if using_unpaired_reads:
+        unicycler_cmd += ['-s', unpaired_reads]
+
+    if one_third_chance():
         unicycler_cmd.append('--no_rotate')
-    if option_code % 5 == 2:
+    if one_third_chance():
         unicycler_cmd.append('--no_pilon')
-    if option_code % 5 == 3:
+    if one_third_chance():
         unicycler_cmd.append('--no_correct')
-    if option_code % 5 == 4:
-        unicycler_cmd += ['--no_rotate', '--no_pilon', '--no_correct']
     if verbosity is not None:
         unicycler_cmd += ['--verbosity', str(verbosity)]
 
@@ -104,9 +112,8 @@ def test_circular_no_repeat():
     random_seq_length = random.randint(8, 20) ** 4
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)
     out_dir = test.fake_reads.make_fake_reads(random_seq)
-    option_code = random.randint(0, 4)
-    stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
-    assert bool(stderr) is False
+    stdout, stderr, cmd_string, ms = run_unicycler(out_dir)
+    assert bool(stderr) is False, stderr
     fasta, graph = get_assembly_fasta_and_graph(out_dir)
     assert len(fasta) == 1
     assembled_seq = fasta[0][1]
@@ -120,7 +127,7 @@ def test_circular_no_repeat():
     table_row = ['circular_no_repeat', str(random_seq_length), '%.1f' % ms, cmd_string]
     unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
                                alignments='LRRL', fixed_col_widths=col_widths,
-                               left_align_header=False)
+                               left_align_header=False, bottom_align_header=False)
     shutil.rmtree(out_dir)
 
 
@@ -133,9 +140,9 @@ def test_circular_one_repeat():
     seq_2 = unicycler.misc.get_random_sequence(non_repeat_length_2)
     random_seq = seq_1 + repeat + seq_2 + repeat
     out_dir = test.fake_reads.make_fake_reads(random_seq)
-    option_code = random.randint(0, 4)
-    stdout, stderr, cmd_string, ms = run_unicycler(out_dir, option_code)
-    assert bool(stderr) is False
+    stdout, stderr, cmd_string, ms = run_unicycler(out_dir)
+    assert bool(stderr) is False, stderr
+
     fasta, graph = get_assembly_fasta_and_graph(out_dir)
     assert len(fasta) == 3
     seq_1 = fasta[0][1]
@@ -172,28 +179,32 @@ def test_circular_one_repeat():
     table_row = ['circular_one_repeat', str(random_seq_length), '%.1f' % ms, cmd_string]
     unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
                                alignments='LRRL', fixed_col_widths=col_widths,
-                               left_align_header=False)
+                               left_align_header=False, bottom_align_header=False)
     shutil.rmtree(out_dir)
 
 
 def test_stdout_size():
     stdout_sizes = []
+    random_seq_length = random.randint(1000, 5000)
+    random_seq = unicycler.misc.get_random_sequence(random_seq_length)
     for verbosity in range(4):
-        random_seq_length = random.randint(1000, 5000)
-        random_seq = unicycler.misc.get_random_sequence(random_seq_length)
         out_dir = test.fake_reads.make_fake_reads(random_seq)
-        stdout, stderr, cmd_string, ms = run_unicycler(out_dir, 0, verbosity)
-        assert bool(stderr) is False
+        stdout, stderr, cmd_string, ms = run_unicycler(out_dir, verbosity)
+        assert bool(stderr) is False, stderr
         stdout_sizes.append(len(stdout))
         shutil.rmtree(out_dir)
         table_row = ['stdout_size', str(random_seq_length), '%.1f' % ms, cmd_string]
         unicycler.misc.print_table([table_row], col_separation=2, header_format='normal', indent=0,
                                    alignments='LRRL', fixed_col_widths=col_widths,
-                                   left_align_header=False)
+                                   left_align_header=False, bottom_align_header=False)
     assert stdout_sizes[0] == 0
     assert stdout_sizes[1] > 0
     assert stdout_sizes[2] >= stdout_sizes[1]
     assert stdout_sizes[3] >= stdout_sizes[2]
+
+
+def one_third_chance():
+    return random.randint(0, 2) == 0
 
 
 if __name__ == '__main__':

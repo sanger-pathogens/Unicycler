@@ -63,6 +63,7 @@ def main():
         unicycler.misc.print_table([[compiler, location, version, make_command, build, run]],
                                    col_separation=2, header_format='normal', indent=0,
                                    alignments='LLLLL', fixed_col_widths=col_widths,
+                                   bottom_align_header = False,
                                    sub_colour={'success': 'green', 'failed': 'red',
                                                'not found': 'dim'})
 

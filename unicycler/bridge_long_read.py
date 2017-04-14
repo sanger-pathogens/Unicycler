@@ -647,7 +647,7 @@ def print_long_read_bridge_table_row(alignments, col_widths, output, completed_c
         sub_colour[quality_str] = 'red'
     print_table([table_row], col_separation=2, header_format='normal', indent=0,
                 left_align_header=False, alignments=alignments, fixed_col_widths=col_widths,
-                sub_colour=sub_colour)
+                sub_colour=sub_colour, bottom_align_header=False)
 
 
 def get_single_copy_alignments(read, single_copy_num_set, min_scaled_score):

@@ -408,8 +408,8 @@ def get_arguments():
     if (args.short1 and not args.short2) or (args.short2 and not args.short1):
         quit_with_error('you must use both --short1 and --short2 or neither')
 
-    if not args.short1 and not args.short2 and not args.long:
-        quit_with_error('no input reads provided (--short1, --short2, --long)')
+    if not args.short1 and not args.short2 and not args.unpaired and not args.long:
+        quit_with_error('no input reads provided (--short1, --short2, --unpaired, --long)')
 
     if args.keep < 0 or args.keep > 3:
         quit_with_error('--keep must be between 0 and 3 (inclusive)')

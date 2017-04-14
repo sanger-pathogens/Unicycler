@@ -308,7 +308,7 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
                            int_to_str(unitig_graph.get_total_segment_length()),
                            int_to_str(mapping_quality)]
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
-                    alignments='LRR', indent=0, header_format='normal')
+                    alignments='LRR', indent=0, header_format='normal', bottom_align_header=False)
 
         # Do we have a new best?
         if mapping_quality > best_mapping_quality:

@@ -117,7 +117,7 @@ def check_one_graph_overlap(out_dir, k_size, output_line):
     table_row = output_line + [str(seg_count), str(edge_count), str(k_size), '%.1f' % milliseconds]
     unicycler.misc.print_table([table_row], col_separation=3, header_format='normal', indent=0,
                                alignments='RRRRRR', fixed_col_widths=col_widths, verbosity=0,
-                               left_align_header=False)
+                               left_align_header=False, bottom_align_header=False)
 
 
 if __name__ == '__main__':
