@@ -494,7 +494,7 @@ def sam_references_match(sam_filename, assembly_graph):
     Returns True if the references in the SAM header exactly match the graph segment numbers.
     """
     sam_file = open(sam_filename, 'rt')
-    ref_numbers_in_sam = []
+    ref_numbers_in_sam = set()
     for line in sam_file:
         if not line.startswith('@'):
             break
@@ -507,13 +507,12 @@ def sam_references_match(sam_filename, assembly_graph):
         if len(ref_name_parts) < 2:
             continue
         try:
-            ref_numbers_in_sam.append(int(ref_name_parts[1]))
+            ref_numbers_in_sam.add(int(ref_name_parts[1]))
         except ValueError:
             pass
 
-    ref_numbers_in_sam = sorted(ref_numbers_in_sam)
-    seg_numbers_in_graph = sorted(assembly_graph.segments.keys())
-    return ref_numbers_in_sam == seg_numbers_in_graph
+    seg_numbers_in_graph = set(assembly_graph.segments.keys())
+    return ref_numbers_in_sam.issubset(seg_numbers_in_graph)
 
 
 def print_intro_message(args, full_command, out_dir_message):
