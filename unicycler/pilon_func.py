@@ -32,10 +32,13 @@ class CannotPolish(Exception):
 
 
 def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_path, samtools_path,
-                      min_polish_size, polish_dir, short_1, short_2, threads):
+                      min_polish_size, polish_dir, short_1, short_2, unpaired, threads):
     """
     Runs Pilon on the graph to hopefully fix up small mistakes.
     """
+    using_paired_reads = bool(short_1) and bool(short_2)
+    using_unpaired_reads = bool(unpaired)
+
     segments_to_polish = [x for x in graph.segments.values() if x.get_length() >= min_polish_size]
     if not segments_to_polish:
         raise CannotPolish('no segments are long enough to polish')
@@ -64,8 +67,12 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     raw_sam_filename = os.path.join(polish_dir, 'alignments_raw.sam')
     bowtie2_command = [bowtie2_path, '--end-to-end', '--very-sensitive', '--threads', str(threads),
                        '--no-discordant', '--no-mixed', '--no-unal', '-I', '0', '-X', '2000',
-                       '-x', 'polish_input.fasta', '-1', short_1, '-2', short_2,
-                       '-S', raw_sam_filename]
+                       '-x', 'polish_input.fasta', '-S', raw_sam_filename]
+    if using_paired_reads:
+        bowtie2_command += ['-1', short_1, '-2', short_2]
+    if using_unpaired_reads:
+        bowtie2_command += ['-U', unpaired]
+
     log.log('Aligning short reads to assembly using Bowtie2')
     log.log('  ' + ' '.join(bowtie2_command), 2)
     try:
@@ -74,42 +81,58 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
         raise CannotPolish('Bowtie2 encountered an error:\n' + e.output.decode())
 
     # Loop through alignments_raw.sam once to collect the insert sizes.
-    insert_sizes = []
-    raw_sam = open(raw_sam_filename, 'rt')
-    for sam_line in raw_sam:
-        try:
-            insert_size = float(sam_line.split('\t')[8])
-            if insert_size > 0.0:
-                insert_sizes.append(insert_size)
-        except (ValueError, IndexError):
-            pass
-    raw_sam.close()
-    if not insert_sizes:
-        raise CannotPolish('no read pairs aligned')
-    insert_mean = statistics.mean(insert_sizes)
-    log.log('', 2)
-    log.log('Mean fragment size = ' + float_to_str(insert_mean, 1) + ' bp')
-    insert_sizes = sorted(insert_sizes)
-    insert_size_5th = get_percentile_sorted(insert_sizes, 5.0)
-    log.log('Fragment size 5th percentile = ' + float_to_str(insert_size_5th, 0) + ' bp', 2)
-    insert_size_95th = get_percentile_sorted(insert_sizes, 95.0)
-    log.log('Fragment size 95th percentile = ' + float_to_str(insert_size_95th, 0) + ' bp', 2)
+    if using_paired_reads:
+        insert_sizes = []
+        raw_sam = open(raw_sam_filename, 'rt')
+        for sam_line in raw_sam:
+            try:
+                sam_parts = sam_line.split('\t')
+                sam_flags = int(sam_parts[1])
+                if sam_flags & 2:  # if read mapped in proper pair
+                    insert_size = float(sam_parts[8])
+                    if insert_size > 0.0:
+                        insert_sizes.append(insert_size)
+            except (ValueError, IndexError):
+                pass
+        raw_sam.close()
+        if not insert_sizes:
+            raise CannotPolish('no read pairs aligned')
+        insert_mean = statistics.mean(insert_sizes)
+        log.log('', 2)
+        log.log('Mean fragment size = ' + float_to_str(insert_mean, 1) + ' bp')
+        insert_sizes = sorted(insert_sizes)
+        insert_size_5th = get_percentile_sorted(insert_sizes, 5.0)
+        log.log('Fragment size 5th percentile = ' + float_to_str(insert_size_5th, 0) + ' bp', 2)
+        insert_size_95th = get_percentile_sorted(insert_sizes, 95.0)
+        log.log('Fragment size 95th percentile = ' + float_to_str(insert_size_95th, 0) + ' bp', 2)
 
-    # Produce a new sam file including only the pairs with an appropriate insert size.
-    filtered_sam_filename = os.path.join(polish_dir, 'alignments_filtered.sam')
-    log.log('Filtering alignments to fragment size range: ' +
-            float_to_str(insert_size_5th, 0) + ' to ' + float_to_str(insert_size_95th, 0))
-    filtered_sam = open(filtered_sam_filename, 'w')
-    raw_sam = open(raw_sam_filename, 'rt')
-    for sam_line in raw_sam:
-        try:
-            insert_size = abs(float(sam_line.split('\t')[8]))
-            if insert_size_5th <= insert_size <= insert_size_95th:
+        # Produce a new sam file including only the pairs with an appropriate insert size.
+        filtered_sam_filename = os.path.join(polish_dir, 'alignments_filtered.sam')
+        log.log('Filtering alignments to fragment size range: ' +
+                float_to_str(insert_size_5th, 0) + ' to ' + float_to_str(insert_size_95th, 0))
+        filtered_sam = open(filtered_sam_filename, 'w')
+        raw_sam = open(raw_sam_filename, 'rt')
+        for sam_line in raw_sam:
+            try:
+                sam_parts = sam_line.split('\t')
+                sam_flags = int(sam_parts[1])
+
+                if sam_flags & 1:  # paired read
+                    properly_paired = bool(sam_flags & 2)
+                    insert_size = abs(float(sam_parts[8]))
+                    good_insert_size = (insert_size_5th <= insert_size <= insert_size_95th)
+                    if properly_paired and good_insert_size:
+                        filtered_sam.write(sam_line)
+                else:  # unpaired read
+                    filtered_sam.write(sam_line)
+            except (ValueError, IndexError):
                 filtered_sam.write(sam_line)
-        except (ValueError, IndexError):
-            filtered_sam.write(sam_line)
-    raw_sam.close()
-    filtered_sam.close()
+        raw_sam.close()
+        filtered_sam.close()
+
+    # If there are no paired reads, then we just use all the alignments.
+    else:
+        filtered_sam_filename = raw_sam_filename
 
     # Sort the alignments.
     bam_filename = os.path.join(polish_dir, 'alignments.bam')

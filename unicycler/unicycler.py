@@ -110,6 +110,9 @@ def main():
             if not bridges:
                 log.log('none found', 1)
 
+        # Now that we've made short read bridges, we no longer need the paths in the graph.
+        graph.paths = {}
+
     else:  # short reads not available
         graph = None
         single_copy_segments = []
@@ -194,7 +197,7 @@ def main():
 
     # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Complete')
-    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'))
+    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'), include_insert_size=False)
     graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), min_length=args.min_fasta_length)
     log.log('')
 
@@ -771,7 +774,7 @@ def final_polish(graph, args, counter):
     try:
         polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
                           args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
-                          args.short1, args.short2, args.threads)
+                          args.short1, args.short2, args.unpaired, args.threads)
     except CannotPolish as e:
         log.log('Unable to polish assembly using Pilon: ' + e.message)
     else:

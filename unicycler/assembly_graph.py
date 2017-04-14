@@ -241,6 +241,7 @@ class AssemblyGraph(object):
         else:
             single_copy_depth = median_depth
         log.log(', single copy depth: ' + float_to_str(median_depth, 2), 2)
+        log.log('', 2)
         return single_copy_depth
 
     def get_base_count_in_depth_range(self, min_depth, max_depth):
@@ -365,7 +366,7 @@ class AssemblyGraph(object):
                 fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     def save_to_gfa(self, filename, verbosity=1, save_copy_depth_info=False,
-                    save_seg_type_info=False, newline=False):
+                    save_seg_type_info=False, newline=False, include_insert_size=True):
         """
         Saves whole graph to a GFA file.
         """
@@ -396,7 +397,8 @@ class AssemblyGraph(object):
                 gfa.write('\t')
                 gfa.write(','.join([overlap_cigar] * (len(segment_list) - 1)))
                 gfa.write('\n')
-            if self.insert_size_mean is not None and self.insert_size_deviation is not None:
+            if include_insert_size and self.insert_size_mean is not None and \
+                    self.insert_size_deviation is not None:
                 gfa.write('i\t')
                 gfa.write(str(self.insert_size_mean))
                 gfa.write('\t')
@@ -505,10 +507,10 @@ class AssemblyGraph(object):
         """
         Returns True/False based on whether or not the given path is in the graph.
         """
-        for i, seg_num in enumerate(path):
+        for i, seg_2 in enumerate(path):
             if i > 0:
-                prev_seg_num = path[i - 1]
-                if seg_num not in self.forward_links[prev_seg_num]:
+                seg_1 = path[i - 1]
+                if seg_1 not in self.forward_links or seg_2 not in self.forward_links[seg_1]:
                     return False
         return True
 
@@ -904,7 +906,7 @@ class AssemblyGraph(object):
         """
         This function cleans up the final assembled graph, in preparation for saving.
         """
-        log.log_section_header('Finalising graph')
+        log.log_section_header('Finalising graph', single_newline=True)
         if self.overlap:
             try:
                 self.remove_all_overlaps()
