@@ -118,56 +118,51 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         log.log(red('failed'))
         raise MiniasmFailure('miniasm failed to generate a string graph')
     string_graph = StringGraph(string_graph_filename)
+
     if len(string_graph.segments) == 0:
         log.log(red('empty result'))
-        return None
+        unitig_graph = None
 
-    log.log(green('success'))
-    log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
-            str(len(string_graph.links) // 2) + ' links', verbosity=2)
+    else:
+        log.log(green('success'))
+        log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
+                str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
-    string_graph.remove_branching_paths()
-    if keep >= 3:
-        string_graph.save_to_gfa(branching_paths_removed_filename)
-
-    log.log('')
-    unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames)
-    if keep >= 3:
-        unitig_graph.save_to_gfa(unitig_graph_filename)
-
-    polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
-                              scoring_scheme)
-    if keep >= 3:
-        unitig_graph.save_to_gfa(racon_polished_filename)
-
-    if graph is not None:
-        unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, threads, scoring_scheme)
+        string_graph.remove_branching_paths()
         if keep >= 3:
-            unitig_graph.save_to_gfa(contigs_placed_filename)
+            string_graph.save_to_gfa(branching_paths_removed_filename)
+
+        log.log('')
+        unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames)
+        if keep >= 3:
+            unitig_graph.save_to_gfa(unitig_graph_filename)
+
+        polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
+                                  scoring_scheme)
+        if keep >= 3:
+            unitig_graph.save_to_gfa(racon_polished_filename)
+
+        if graph is not None:
+            unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, threads, scoring_scheme)
+            if keep >= 3:
+                unitig_graph.save_to_gfa(contigs_placed_filename)
 
 
 
-    # Build MiniasmBridge objects from the graph.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        # Build MiniasmBridge objects from the graph.
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
+        # TO DO
 
 
 
