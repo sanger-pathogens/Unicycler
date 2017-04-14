@@ -399,12 +399,11 @@ All files and directories are described in the table below. Intermediate output 
 File                           | Description                                                                                       | `--keep` level
 ------------------------------ | ------------------------------------------------------------------------------------------------- | --------------
 spades_assembly/               | directory containing all SPAdes files and each k-mer graph                                        | 3
-unbridged_graph.gfa            | short read assembly graph before any bridges have been applied                                    | 1
-short_read_bridges_applied.gfa | SPAdes contig bridges applied, before any cleaning or merging                                     | 1
-cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
-merged.gfa                     | contigs merged together where possible                                                            | 3
-long_read_bridges_applied.gfa  | long read bridges applied, before any cleaning or merging                                         | 1
-read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 2
+best_spades_graph.gfa          | the best SPAdes short read assembly graph, with a bit of graph clean-up                           | 1
+overlaps_removed.gfa           | overlap-free version of the SPAdes graph, with some more graph clean-up                           | 3
+miniasm_assembly/              | directory containing miniasm string graphs and unitig graphs                                      | 3
+read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 3
+bridges_applied.gfa            | bridges applied, before any cleaning or merging                                                   | 1
 cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
 merged.gfa                     | contigs merged together where possible                                                            | 3
 final_clean.gfa                | more redundant contigs removed                                                                    | 1
