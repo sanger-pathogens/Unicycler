@@ -60,9 +60,8 @@ class SpadesContigBridge(object):
         self.end_segment = self.graph_path.pop()
 
         # If there are segments in between the start and end (there usually will be), then they
-        # provide the bridge sequence. If not (i.e. if the start and end directly connect),
-        # then the bridge sequence is just the overlapping sequence between them.
-        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
+        # provide the bridge sequence.
+        self.bridge_sequence = graph.get_path_sequence(self.graph_path)
 
         # The start segment and end segment should agree in depth. If they don't, that's bad.
         start_seg = graph.segments[abs(self.start_segment)]

@@ -57,7 +57,7 @@ def main():
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
     out_dir_message = make_output_directory(args.out, args.verbosity)
-    short_reads_available = bool(args.short1)
+    short_reads_available = bool(args.short1) or bool(args.unpaired)
     long_reads_available = bool(args.long)
 
     check_input_files(args)
@@ -147,14 +147,15 @@ def main():
             bridges += create_miniasm_bridges(graph, string_graph)
 
         read_names, min_scaled_score, min_alignment_length = \
-            align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command)
+            align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command,
+                                               read_dict, read_names, long_read_filename)
 
         expected_linear_seqs = args.linear_seqs > 0
         bridges += create_long_read_bridges(graph, read_dict, read_names,
-                                           single_copy_segments, args.verbosity, bridges,
-                                           min_scaled_score, args.threads, scoring_scheme,
-                                           min_alignment_length, expected_linear_seqs,
-                                           args.min_bridge_qual)
+                                            single_copy_segments, args.verbosity, bridges,
+                                            min_scaled_score, args.threads, scoring_scheme,
+                                            min_alignment_length, expected_linear_seqs,
+                                            args.min_bridge_qual)
 
     if short_reads_available:
         log.log_section_header('Applying bridges')
@@ -781,7 +782,8 @@ def final_polish(graph, args, counter):
         shutil.rmtree(polish_dir)
 
 
-def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command):
+def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command,
+                                       read_dict, read_names, long_read_filename):
     alignment_dir = os.path.join(args.out, 'read_alignment')
     graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
     single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
@@ -797,7 +799,6 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
                                           silent=True)
     references = load_references(graph_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
-    read_dict, read_names, long_read_filename = load_long_reads(args.long)
 
     # Load existing alignments if available.
     if os.path.isfile(alignments_sam) and sam_references_match(alignments_sam, graph):

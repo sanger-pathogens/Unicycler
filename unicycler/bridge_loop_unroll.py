@@ -101,7 +101,7 @@ class LoopUnrollingBridge(object):
         self.graph_path = [repeat]
         for _ in range(self.loop_count):
             self.graph_path += [middle, repeat]
-        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
+        self.bridge_sequence = graph.get_path_sequence(self.graph_path)
 
         # We finalise the quality to a range of 0 to 100. We also use the sqrt function to pull
         # the scores up a bit (otherwise they tend to hang near the bottom of the range).

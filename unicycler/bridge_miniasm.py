@@ -415,7 +415,7 @@ class MiniasmBridge(object):
         Returns a score indicating the relative importance of the bridge types:
         LongReadBridge = 2, SpadesContigBridge = 1, LoopUnrollingBridge = 0
         """
-        return 1.5
+        return 2
 
     @staticmethod
     def get_type_name():

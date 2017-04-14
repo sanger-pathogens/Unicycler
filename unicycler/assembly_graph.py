@@ -1076,18 +1076,6 @@ class AssemblyGraph(object):
             prev_segment_number = seg_num
         return path_sequence
 
-    def get_bridge_path_sequence(self, path_segments, start_seg):
-        """
-        This function behaves like get_path_sequence but also handles the case where there are no
-        segments in the path (i.e. the bridge is a direct connection between two segments. In that
-        case we don't want to return an empty sequence, but rather the overlap between the two
-        segments.
-        """
-        if path_segments:
-            return self.get_path_sequence(path_segments)
-        else:
-            return self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
-
     def apply_bridges(self, bridges, verbosity, min_bridge_qual, unbridged_graph):
         """
         Uses the supplied bridges to simplify the graph.
@@ -1130,7 +1118,7 @@ class AssemblyGraph(object):
                 # path of a different bridge. That alone isn't necessarily a problem, and since
                 # single copy determination can make mistakes we want to allow for this sort of
                 # thing. But it is a problem if the start or end segment has been used in a
-                # bridge that happens starts or ends in this bridge. That arrangement (two bridges,
+                # bridge that happens to start or end in this bridge. That arrangement (two bridges,
                 # each of which end inside the other's path) can break up the graph if they are
                 # both applied, so don't apply this bridge if such a case exists.
                 bridges_using_this_segment = []

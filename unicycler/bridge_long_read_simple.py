@@ -66,9 +66,8 @@ class SimpleLongReadBridge(object):
         self.segments_reduced_depth = []
 
         # If there are segments in between the start and end (there usually will be), then they
-        # provide the bridge sequence. If not (i.e. if the start and end directly connect),
-        # then the bridge sequence is just the overlapping sequence between them.
-        self.bridge_sequence = graph.get_bridge_path_sequence(self.graph_path, self.start_segment)
+        # provide the bridge sequence.
+        self.bridge_sequence = graph.get_path_sequence(self.graph_path)
 
         # The start segment and end segment should agree in depth. If they don't, that's bad.
         start_seg = graph.segments[abs(self.start_segment)]
@@ -97,7 +96,7 @@ class SimpleLongReadBridge(object):
         Returns a score indicating the relative importance of the bridge types:
         LongReadBridge = 2, SpadesContigBridge = 1, LoopUnrollingBridge = 0
         """
-        return 3
+        return 2
 
     @staticmethod
     def get_type_name():
