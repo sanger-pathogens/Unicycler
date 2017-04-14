@@ -19,6 +19,7 @@ import argparse
 import os
 import sys
 import shutil
+import copy
 import random
 import itertools
 from .assembly_graph import AssemblyGraph
@@ -71,11 +72,11 @@ def main():
     if short_reads_available:
 
         # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
-        unbridged_graph_filename = gfa_path(args.out, next(counter), 'best_spades_graph')
-        if os.path.isfile(unbridged_graph_filename):
+        best_spades_graph = gfa_path(args.out, next(counter), 'best_spades_graph')
+        if os.path.isfile(best_spades_graph):
             log.log('\nSPAdes graph already exists. Will use this graph instead of running '
-                    'SPAdes:\n  ' + unbridged_graph_filename)
-            graph = AssemblyGraph(unbridged_graph_filename, None)
+                    'SPAdes:\n  ' + best_spades_graph)
+            graph = AssemblyGraph(best_spades_graph, None)
         else:
             graph = get_best_spades_graph(args.short1, args.short2, args.unpaired, args.out,
                                           settings.READ_DEPTH_FILTER, args.verbosity,
@@ -84,13 +85,14 @@ def main():
                                           args.no_correct, args.linear_seqs)
         single_copy_segments = get_single_copy_segments(graph, 0)
         if args.keep > 0:
-            graph.save_to_gfa(unbridged_graph_filename, save_copy_depth_info=True, newline=True)
+            graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True)
 
         clean_up_spades_graph(graph)
         if args.keep > 2:
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True)
+        unbridged_graph = copy.deepcopy(graph)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -112,6 +114,7 @@ def main():
 
     else:  # short reads not available
         graph = None
+        unbridged_graph = None
         single_copy_segments = []
 
     if short_reads_available and long_reads_available:
@@ -160,7 +163,7 @@ def main():
     if short_reads_available:
         log.log_section_header('Applying bridges')
         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
-                                                       args.min_bridge_qual, graph)
+                                                       args.min_bridge_qual, unbridged_graph)
         if args.keep > 0:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'bridges_applied'),
                               save_seg_type_info=True, save_copy_depth_info=True, newline=True)
