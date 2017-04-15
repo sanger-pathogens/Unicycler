@@ -34,7 +34,7 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
     tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
     samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
-    racon_path_and_version
+    racon_path_and_version, gfa_path
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -68,6 +68,7 @@ def main():
     counter = itertools.count(start=1)
     bridges = []
 
+    # If we have short reads, do all the SPAdes stuff.
     if short_reads_available:
 
         # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
@@ -84,13 +85,14 @@ def main():
                                           args.no_correct, args.linear_seqs)
         single_copy_segments = get_single_copy_segments(graph, 0)
         if args.keep > 0:
-            graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True)
+            graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
+                              include_insert_size=True)
 
         clean_up_spades_graph(graph)
         if args.keep > 2:
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
-                              newline=True)
+                              newline=True, include_insert_size=True)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -137,7 +139,7 @@ def main():
     if long_reads_available:
         string_graph = make_miniasm_string_graph(graph, args.out, args.keep, args.threads,
                                                  read_dict, long_read_filename, scoring_scheme,
-                                                 args.racon_path, read_nicknames)
+                                                 args.racon_path, read_nicknames, counter)
     else:
         string_graph = None
 
@@ -197,7 +199,7 @@ def main():
 
     # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Complete')
-    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'), include_insert_size=False)
+    graph.save_to_gfa(os.path.join(args.out, 'assembly.gfa'))
     graph.save_to_fasta(os.path.join(args.out, 'assembly.fasta'), min_length=args.min_fasta_length)
     log.log('')
 
@@ -715,8 +717,6 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     quit_with_error('Unspecified error with Unicycler dependencies')
 
 
-def gfa_path(out_dir, file_num, name):
-    return os.path.join(out_dir, str(file_num).zfill(3) + '_' + name + '.gfa')
 
 
 def rotate_completed_replicons(graph, args, counter):
@@ -735,12 +735,15 @@ def rotate_completed_replicons(graph, args, counter):
         for completed_replicon in completed_replicons:
             segment = graph.segments[completed_replicon]
             sequence = segment.forward_sequence
-            if graph.overlap > 0:
-                sequence = sequence[:-graph.overlap]
-            depth = segment.depth
-            log.log('Segment ' + str(segment.number) + ':', 2)
-            rotation_result_row = [str(segment.number), int_to_str(len(sequence)),
-                                   float_to_str(depth, 2) + 'x']
+
+            try:
+                seg_name = str(segment.number)
+            except AttributeError:
+                seg_name = segment.full_name
+
+            log.log('Segment ' + seg_name + ':', 2)
+            rotation_result_row = [seg_name, int_to_str(len(sequence)),
+                                   float_to_str(segment.depth, 2) + 'x']
             try:
                 blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
                                             args.start_gene_cov, blast_dir, args.makeblastdb_path,
@@ -752,7 +755,7 @@ def rotate_completed_replicons(graph, args, counter):
                                         'reverse' if blast_hit.flip else 'forward',
                                         '%.1f' % blast_hit.pident + '%',
                                         '%.1f' % blast_hit.query_cov + '%']
-                segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip, graph.overlap)
+                segment.rotate_sequence(blast_hit.start_pos, blast_hit.flip)
                 rotation_count += 1
             rotation_result_table.append(rotation_result_row)
 

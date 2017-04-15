@@ -19,7 +19,8 @@ import shutil
 import subprocess
 import sys
 import itertools
-from .misc import green, red, line_iterator, print_table, int_to_str, reverse_complement
+import collections
+from .misc import green, red, line_iterator, print_table, int_to_str, reverse_complement, gfa_path
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments
 from .string_graph import StringGraph, StringGraphSegment, \
@@ -46,7 +47,7 @@ class MiniasmFailure(Exception):
 
 
 def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                              scoring_scheme, racon_path, read_nicknames):
+                              scoring_scheme, racon_path, read_nicknames, counter):
     log.log_section_header('Assembling contigs and long reads with miniasm')
     if graph is not None:
         log.log_explanation('Unicycler uses miniasm to construct a string graph '
@@ -66,6 +67,8 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
         os.makedirs(miniasm_dir)
+
+    short_reads_available = graph is not None
 
     assembly_read_names = get_miniasm_assembly_reads(graph, read_dict, long_read_filename,
                                                      miniasm_dir, threads)
@@ -128,44 +131,34 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
                 str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
+        if not short_reads_available and keep > 0:
+            shutil.copyfile(string_graph_filename, gfa_path(out_dir, next(counter), 'string_graph'))
+
         string_graph.remove_branching_paths()
         if keep >= 3:
-            string_graph.save_to_gfa(branching_paths_removed_filename)
+            string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
         log.log('')
         unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames)
         if keep >= 3:
-            unitig_graph.save_to_gfa(unitig_graph_filename)
+            unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
+
+        if not short_reads_available and keep > 0:
+            shutil.copyfile(unitig_graph_filename, gfa_path(out_dir, next(counter), 'unitig_graph'))
 
         polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
                                   scoring_scheme)
         if keep >= 3:
             unitig_graph.save_to_gfa(racon_polished_filename)
 
-        if graph is not None:
+        if not short_reads_available and keep > 0:
+            shutil.copyfile(racon_polished_filename,
+                            gfa_path(out_dir, next(counter), 'racon_polished'))
+
+        if short_reads_available:
             unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, threads, scoring_scheme)
             if keep >= 3:
-                unitig_graph.save_to_gfa(contigs_placed_filename)
-
-
-
-        # Build MiniasmBridge objects from the graph.
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-        # TO DO
-
-
-
+                unitig_graph.save_to_gfa(contigs_placed_filename, include_depth=False)
 
     if keep < 3:
         shutil.rmtree(miniasm_dir)
@@ -300,9 +293,9 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
         fixed_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_fixed.fasta')
         rotated_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_rotated.fasta')
 
-        mapping_quality = make_racon_polish_alignments(current_fasta, mappings_filename,
-                                                       polish_reads, threads, scoring_scheme,
-                                                       aligner=racon_aligner)
+        mapping_quality, unitig_depths = \
+            make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads,
+                                         scoring_scheme, aligner=racon_aligner)
 
         racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
                            int_to_str(unitig_graph.get_total_segment_length()),
@@ -359,6 +352,9 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
             segment = unitig_graph.segments[unitig_name]
             segment.forward_sequence = unitig_seq
             segment.reverse_sequence = reverse_complement(unitig_seq)
+            if unitig_name in unitig_depths:
+                segment.depth = unitig_depths[unitig_name]
+        unitig_graph.normalise_read_depths()
     else:
         log.log(red('Polishing failed'))
 
@@ -680,6 +676,7 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
 def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads,
                                  scoring_scheme, aligner='minimap'):
     mapping_quality = 0
+    unitig_depths = collections.defaultdict(float)
 
     if aligner == 'minimap':
         minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, threads, 3,
@@ -693,6 +690,7 @@ def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads,
                     mappings.write(a.paf_line)
                     mappings.write('\n')
                     mapping_quality += a.matching_bases
+                    unitig_depths[a.ref_name] += a.fraction_ref_aligned()
 
     elif aligner == 'GraphMap':
         command = ['graphmap', 'align', '-a', 'anchor', '--rebuild-index',
@@ -721,4 +719,4 @@ def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads,
     else:
         assert False
 
-    return mapping_quality
+    return mapping_quality, unitig_depths

@@ -302,8 +302,10 @@ class AssemblyGraph(object):
         than 1.
         """
         median_depth = self.get_median_read_depth()
+        if median_depth == 0.0:
+            return
         for segment in self.segments.values():
-            segment.divide_depth(median_depth)
+            segment.depth /= median_depth
 
     def get_total_length(self):
         """
@@ -348,7 +350,7 @@ class AssemblyGraph(object):
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for segment in sorted_segments:
-                if len(segment.forward_sequence) >= min_length:
+                if segment.get_length() >= min_length:
                     fasta.write(segment.get_fasta_name_and_description_line(circular_seg_nums))
                     fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
@@ -366,7 +368,7 @@ class AssemblyGraph(object):
                 fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     def save_to_gfa(self, filename, verbosity=1, save_copy_depth_info=False,
-                    save_seg_type_info=False, newline=False, include_insert_size=True):
+                    save_seg_type_info=False, newline=False, include_insert_size=False):
         """
         Saves whole graph to a GFA file.
         """

@@ -1056,3 +1056,7 @@ def simplify_ranges(ranges):
 def remove_dupes_preserve_order(lst):
     seen = set()
     return [x for x in lst if not (x in seen or seen.add(x))]
+
+
+def gfa_path(out_dir, file_num, name):
+    return os.path.join(out_dir, str(file_num).zfill(3) + '_' + name + '.gfa')

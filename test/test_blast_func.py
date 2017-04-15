@@ -61,7 +61,7 @@ class TestBlastFunc(unittest.TestCase):
 
         length_before_rotate = len(seq)
         seg = unicycler.assembly_graph_segment.Segment(1, 1.0, seq, True)
-        seg.rotate_sequence(hit.start_pos, hit.flip, 0)
+        seg.rotate_sequence(hit.start_pos, hit.flip)
 
         self.assertEqual(len(seg.forward_sequence), length_before_rotate)
         self.assertTrue(seg.forward_sequence.startswith('ATGCAGGAACGCATTAAAGCGTGCTTTACCGAAAG'))
@@ -79,7 +79,7 @@ class TestBlastFunc(unittest.TestCase):
 
         length_before_rotate = len(seq)
         seg = unicycler.assembly_graph_segment.Segment(1, 1.0, seq, True)
-        seg.rotate_sequence(hit.start_pos, hit.flip, 0)
+        seg.rotate_sequence(hit.start_pos, hit.flip)
 
         self.assertEqual(len(seg.forward_sequence), length_before_rotate)
         self.assertTrue(seg.forward_sequence.startswith('ATGCAGGAACGCATTAAAGCGTGCTTTACCGAAAG'))

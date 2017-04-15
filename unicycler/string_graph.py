@@ -73,16 +73,23 @@ class StringGraph(object):
                     self.links[rev_link_tuple].seg_2_overlap = seg_1_to_seg_2_overlap
             self.reverse_links = build_reverse_links(self.forward_links)
 
-    def save_to_gfa(self, filename, verbosity=1, newline=False):
+    def save_to_gfa(self, filename, verbosity=1, newline=False, include_depth=True):
         """
         Saves whole graph to a GFA file.
         """
         log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         with open(filename, 'w') as gfa:
             for segment in sorted(self.segments.values(), key=lambda x: x.full_name):
-                gfa.write(segment.gfa_segment_line())
+                gfa.write(segment.gfa_segment_line(include_depth))
             for link in sorted(self.links.keys()):
                 gfa.write(self.links[link].gfa_link_line())
+
+    def save_to_fasta(self, filename, min_length=1):
+        with open(filename, 'w') as fasta:
+            for segment in sorted(self.segments.values(), reverse=True,
+                                  key=lambda x: x.get_length()):
+                if segment.get_length() >= min_length:
+                    fasta.write(segment.fasta_record())
 
     def get_preceding_segments(self, seg_name):
         if seg_name not in self.reverse_links:
@@ -259,12 +266,6 @@ class StringGraph(object):
         else:
             return self.segments[unsigned_seg_name].reverse_sequence
 
-    def save_to_fasta(self, filename):
-        with open(filename, 'w') as fasta:
-            for segment in sorted(self.segments.values(), reverse=True,
-                                  key=lambda x: x.get_length()):
-                fasta.write(segment.fasta_record())
-
     def save_non_contigs_to_file(self, filename, min_length):
         """
         Saves all graph segments which are not short read contigs to a FASTA file.
@@ -351,6 +352,17 @@ class StringGraph(object):
         preceding_seg_name = preceding_segments[0]
         following_seg_name = following_segments[0]
         return preceding_seg_name == pos_seg_name and following_seg_name == pos_seg_name
+
+
+    def completed_circular_replicons(self):
+        completed_components = []
+        single_segment_components = [x for x in self.get_connected_components() if len(x) == 1]
+        for component in single_segment_components:
+            seg = component[0]
+            if self.segment_is_circular(seg):
+                completed_components.append(seg)
+        return completed_components
+
 
     def get_connected_components(self):
         """
@@ -466,6 +478,29 @@ class StringGraph(object):
     def get_total_segment_length(self):\
         return sum(s.get_length() for s in self.segments.values())
 
+    def get_median_read_depth(self):
+        """
+        Returns the assembly graph's median read depth (by base).
+        """
+        sorted_segments = sorted(self.segments.values(), key=lambda x: x.depth)
+        total_length = 0
+        for segment in sorted_segments:
+            total_length += segment.get_length()
+        halfway_length = total_length // 2
+        length_so_far = 0
+        for segment in sorted_segments:
+            length_so_far += segment.get_length()
+            if length_so_far >= halfway_length:
+                return segment.depth
+        return 0.0
+
+    def normalise_read_depths(self):
+        median_depth = self.get_median_read_depth()
+        if median_depth == 0.0:
+            return
+        for segment in self.segments.values():
+            segment.depth /= median_depth
+
 
 class StringGraphSegment(object):
 
@@ -473,6 +508,7 @@ class StringGraphSegment(object):
         self.full_name = full_name
         self.forward_sequence = sequence
         self.reverse_sequence = reverse_complement(sequence)
+        self.depth = 1.0
 
         # Miniasm trims reads and puts the start/end positions in the name...
         try:
@@ -507,12 +543,32 @@ class StringGraphSegment(object):
     def get_length(self):
         return len(self.forward_sequence)
 
-    def gfa_segment_line(self):
-        return '\t'.join(['S', self.full_name, self.forward_sequence]) + '\n'
+    def gfa_segment_line(self, include_depth=True):
+        s_line_parts = ['S', self.full_name, self.forward_sequence, 'LN:i:', str(self.get_length())]
+        if include_depth:
+            s_line_parts += ['dp:f:', str(self.depth)]
+        return '\t'.join(s_line_parts) + '\n'
 
     def fasta_record(self):
         return ''.join(['>', self.full_name, '\n',
                         add_line_breaks_to_sequence(self.forward_sequence, 70)])
+
+    def rotate_sequence(self, start_pos, flip):
+        """
+        Rotates the sequence so it begins at start_pos. If flip is True, it also switches the
+        forward and reverse strands. This function assumes that the segment is a circular
+        completed replicon with no overlap.
+        """
+        unrotated_seq = self.forward_sequence
+        rotated_seq = unrotated_seq[start_pos:] + unrotated_seq[:start_pos]
+        rev_comp_rotated_seq = reverse_complement(rotated_seq)
+
+        if flip:
+            self.forward_sequence = rev_comp_rotated_seq
+            self.reverse_sequence = rotated_seq
+        else:
+            self.forward_sequence = rotated_seq
+            self.reverse_sequence = rev_comp_rotated_seq
 
 
 class StringGraphLink(object):

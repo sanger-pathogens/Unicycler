@@ -60,9 +60,6 @@ class Segment(object):
         if not self.reverse_sequence:
             self.reverse_sequence = reverse_complement(self.forward_sequence)
 
-    def divide_depth(self, divisor):
-        self.depth /= divisor
-
     def get_length(self):
         return len(self.forward_sequence)
 
@@ -184,18 +181,14 @@ class Segment(object):
         self.forward_sequence = ''
         self.reverse_sequence = ''
 
-    def rotate_sequence(self, start_pos, flip, overlap):
+    def rotate_sequence(self, start_pos, flip):
         """
         Rotates the sequence so it begins at start_pos. If flip is True, it also switches the
         forward and reverse strands. This function assumes that the segment is a circular
-        completed replicon.
+        completed replicon with no overlap.
         """
         unrotated_seq = self.forward_sequence
-        if overlap > 0:
-            unrotated_seq = unrotated_seq[:-overlap]
         rotated_seq = unrotated_seq[start_pos:] + unrotated_seq[:start_pos]
-        if overlap > 0:
-            rotated_seq += rotated_seq[:overlap]
         rev_comp_rotated_seq = reverse_complement(rotated_seq)
 
         if flip:
