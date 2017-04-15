@@ -592,8 +592,8 @@ def check_dependencies(args, short_reads_available, long_reads_available):
         spades_row.append(spades_path)
     program_table.append(spades_row)
 
-    # Rotation dependencies
-    if args.no_miniasm:
+    # Miniasm/Racon dependencies
+    if args.no_miniasm or not long_reads_available:
         racon_path, racon_version, racon_status = '', '', 'not used'
     else:
         racon_path, racon_version, racon_status = racon_path_and_version(args.racon_path)
