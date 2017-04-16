@@ -131,6 +131,7 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
 
         // We've come to a new query sequence.
         if (i == n || a[i].qns>>32 != a[i-1].qns>>32) {
+            size_t start, end;
             int query_i = int(a[i-1].qns>>32);
 
             ma_sub_t max, max2;
@@ -209,7 +210,6 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
                         --dp;
                     else
                         ++dp;
-                    size_t start = 0;
 
                     // If we've just exceeded the minimum depth, set the start.
                     if (old_dp < min_dp && dp >= min_dp) {
@@ -217,7 +217,7 @@ ma_sub_t *filter_reads_using_depth(int min_dp, float min_iden, int end_clip, siz
 
                     // If we've just dropped below the minimum depth, set the end.
                     } else if (old_dp >= min_dp && dp < min_dp) {
-                        size_t end = b.a[j]>>1;
+                        end = b.a[j]>>1;
                         int len = int(end - start);
 
                         // Is this depth region a new best?
