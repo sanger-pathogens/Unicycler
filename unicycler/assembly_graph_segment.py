@@ -19,6 +19,8 @@ from .misc import reverse_complement, add_line_breaks_to_sequence
 from .bridge_long_read import LongReadBridge
 from .bridge_spades_contig import SpadesContigBridge
 from .bridge_loop_unroll import LoopUnrollingBridge
+from .bridge_long_read_simple import SimpleLongReadBridge
+from .bridge_miniasm import MiniasmBridge
 
 
 # noinspection PyAugmentAssignment
@@ -120,6 +122,10 @@ class Segment(object):
             label = 'Loop unrolling bridge'
         elif isinstance(self.bridge, LongReadBridge):
             label = 'Long read bridge'
+        elif isinstance(self.bridge, SimpleLongReadBridge):
+            label = 'Simple long read bridge'
+        elif isinstance(self.bridge, MiniasmBridge):
+            label = 'Miniasm bridge'
         else:
             raise TypeError("unknown bridge type")
         if self.graph_path:
