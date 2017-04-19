@@ -129,6 +129,7 @@ COPY_PROPAGATION_TOLERANCE = 0.5
 MIN_SINGLE_COPY_LENGTH = 1000
 MIN_HALF_MEDIAN_FOR_DIPLOID = 0.1
 MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS = 10000
+COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH = 35
 
 # When Unicycler is cleaning up the graph after bridging, it can delete graph paths and graph
 # components which are mostly (but not entirely) used up in bridges. This value controls the
@@ -183,4 +184,7 @@ MAX_AUTO_THREAD_COUNT = 8
 # The default sequence line wrapping length (e.g. for use in FASTA files).
 BASES_PER_FASTA_LINE = 70
 
-COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH = 35
+
+# Pilon is run multiple times to polish things up as nice as possible. It will stop when no more
+# changes are made or this limit is hit.
+MAX_PILON_POLISH_COUNT = 10

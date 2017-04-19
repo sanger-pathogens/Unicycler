@@ -41,7 +41,7 @@ from .unicycler_align import add_aligning_arguments, fix_up_arguments, Alignment
     semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
     print_alignment_summary_table
 from .read_ref import get_read_nickname_dict
-from .pilon_func import polish_with_pilon, CannotPolish
+from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
 from . import log
 from . import settings
 from .version import __version__
@@ -770,21 +770,17 @@ def rotate_completed_replicons(graph, args, counter):
 def final_polish(graph, args, counter):
     log.log_section_header('Polishing assembly with Pilon')
     polish_dir = os.path.join(args.out, 'pilon_polish')
-    if not os.path.exists(polish_dir):
-        os.makedirs(polish_dir)
-    starting_dir = os.getcwd()
     try:
-        polish_with_pilon(graph, args.bowtie2_path, args.bowtie2_build_path, args.pilon_path,
-                          args.java_path, args.samtools_path, args.min_polish_size, polish_dir,
-                          args.short1, args.short2, args.unpaired, args.threads)
+        polish_with_pilon_multiple_rounds(graph, args.bowtie2_path, args.bowtie2_build_path,
+                                          args.pilon_path, args.java_path, args.samtools_path,
+                                          args.min_polish_size, polish_dir, args.short1,
+                                          args.short2, args.unpaired, args.threads,
+                                          settings.MAX_PILON_POLISH_COUNT, args.keep)
     except CannotPolish as e:
         log.log('Unable to polish assembly using Pilon: ' + e.message)
     else:
         if args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'), newline=True)
-    os.chdir(starting_dir)
-    if args.keep < 3 and os.path.exists(polish_dir):
-        shutil.rmtree(polish_dir)
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'))
 
 
 def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command,
