@@ -2190,6 +2190,18 @@ class AssemblyGraph(object):
             simple_two_way_junctions.append(seg_num)
         return simple_two_way_junctions
 
+    def rotate_circular_sequences(self, shift_fraction=0.70710678118655):
+        """
+        Rotates the sequence to a new starting point. It shifts by a non-rational (well, almost)
+        fraction of the sequence length so repeated executions of this function don't result in
+        repeated starting positions.
+        """
+        completed_replicons = self.completed_circular_replicons()
+        for completed_replicon in completed_replicons:
+            segment = self.segments[completed_replicon]
+            shift = int(segment.get_length() * shift_fraction)
+            segment.rotate_sequence(shift, False)
+
 
 def get_headers_and_sequences(filename):
     """

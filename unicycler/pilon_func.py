@@ -45,6 +45,8 @@ def polish_with_pilon_multiple_rounds(graph, bowtie2_path, bowtie2_build_path, p
         get_insert_size_range(graph, bowtie2_path, bowtie2_build_path, polish_dir, min_polish_size,
                               short_1, short_2, threads, keep)
     for i in range(max_polish_count):
+        if i > 0:
+            graph.rotate_circular_sequences()
         change_count = polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path,
                                          java_path, samtools_path, min_polish_size, polish_dir,
                                          short_1, short_2, unpaired, threads, insert_size_1st,

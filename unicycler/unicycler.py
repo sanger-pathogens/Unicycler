@@ -191,11 +191,11 @@ def main():
     else:  # only long reads available
         graph = string_graph
 
-    if not args.no_rotate:
-        rotate_completed_replicons(graph, args, counter)
-
     if short_reads_available and not args.no_pilon:
         final_polish(graph, args, counter)
+
+    if not args.no_rotate:
+        rotate_completed_replicons(graph, args, counter)
 
     # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Complete')
