@@ -908,13 +908,7 @@ class AssemblyGraph(object):
         """
         This function cleans up the final assembled graph, in preparation for saving.
         """
-        log.log_section_header('Finalising graph', single_newline=True)
-        if self.overlap:
-            try:
-                self.remove_all_overlaps()
-                log.log('Successfully removed all graph overlaps')
-            except CannotTrimOverlaps:
-                log.log('Unable to remove graph overlaps')
+        assert self.overlap == 0
         self.remove_zero_length_segs()
         self.merge_small_segments(5)
         self.reassign_read_depths()

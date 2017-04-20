@@ -797,17 +797,16 @@ def get_default_thread_count():
 
 
 def spades_path_and_version(spades_path):
-    spades_path = shutil.which(spades_path)
-    if spades_path is None:
-        return '', '', 'not found'
-
-    command = [spades_path, '-v']
+    found_spades_path = shutil.which(spades_path)
+    if found_spades_path is None:
+        return spades_path, '', 'not found'
+    command = [found_spades_path, '-v']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     out = out.decode()
 
     if not out or 'Verification of expression' in out:
-        return spades_path, '', 'bad'
+        return found_spades_path, '', 'bad'
 
     if '-v not recognized' in out:
         version = out.split('SPAdes genome assembler v.')[-1].split()[0]
@@ -834,29 +833,28 @@ def spades_path_and_version(spades_path):
     except (ValueError, IndexError):
         version, status = '?', 'too old'
 
-    return spades_path, version, status
+    return found_spades_path, version, status
 
 
 def racon_path_and_version(racon_path):
-    racon_path = shutil.which(racon_path)
-    if racon_path is None:
-        return '', '', 'not found'
-    command = [racon_path]
+    found_racon_path = shutil.which(racon_path)
+    if found_racon_path is None:
+        return racon_path, '', 'not found'
+    command = [found_racon_path]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     if 'racon [options] <reads.fastq> <overlaps.paf> <raw_contigs.fasta> <out_consensus.fasta>' \
             in out.decode():
-        return racon_path, '-', 'good'
+        return found_racon_path, '-', 'good'
     else:
-        return racon_path, '-', 'bad'
+        return found_racon_path, '-', 'bad'
 
 
 def makeblastdb_path_and_version(makeblastdb_path):
-    makeblastdb_path = shutil.which(makeblastdb_path)
-    if makeblastdb_path is None:
-        return '', '', 'not found'
-
-    command = [makeblastdb_path, '-version']
+    found_makeblastdb_path = shutil.which(makeblastdb_path)
+    if found_makeblastdb_path is None:
+        return makeblastdb_path, '', 'not found'
+    command = [found_makeblastdb_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('makeblastdb: ')[-1].split()[0]
@@ -864,15 +862,29 @@ def makeblastdb_path_and_version(makeblastdb_path):
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return makeblastdb_path, version, 'good'
+    return found_makeblastdb_path, version, 'good'
+
+
+def bcftools_path_and_version(bcftools_path):
+    found_bcftools_path = shutil.which(bcftools_path)
+    if found_bcftools_path is None:
+        return bcftools_path, '', 'not found'
+    command = [found_bcftools_path, '--version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    try:
+        version = out.decode().split('bcftools ')[1].split()[0]
+        int(version.split('.')[0]), int(version.split('.')[1])
+    except (ValueError, IndexError):
+        version, status = '?', 'too old'
+    return found_bcftools_path, version, 'good'
 
 
 def tblastn_path_and_version(tblastn_path):
-    tblastn_path = shutil.which(tblastn_path)
-    if tblastn_path is None:
-        return '', '', 'not found'
-
-    command = [tblastn_path, '-version']
+    found_tblastn_path = shutil.which(tblastn_path)
+    if found_tblastn_path is None:
+        return tblastn_path, '', 'not found'
+    command = [found_tblastn_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('tblastn: ')[-1].split()[0]
@@ -880,15 +892,14 @@ def tblastn_path_and_version(tblastn_path):
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return tblastn_path, version, 'good'
+    return found_tblastn_path, version, 'good'
 
 
 def bowtie2_build_path_and_version(bowtie2_build_path):
-    bowtie2_build_path = shutil.which(bowtie2_build_path)
-    if bowtie2_build_path is None:
-        return '', '', 'not found'
-
-    command = [bowtie2_build_path, '--version']
+    found_bowtie2_build_path = shutil.which(bowtie2_build_path)
+    if found_bowtie2_build_path is None:
+        return bowtie2_build_path, '', 'not found'
+    command = [found_bowtie2_build_path, '--version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     try:
@@ -896,15 +907,14 @@ def bowtie2_build_path_and_version(bowtie2_build_path):
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return bowtie2_build_path, version, 'good'
+    return found_bowtie2_build_path, version, 'good'
 
 
 def bowtie2_path_and_version(bowtie2_path):
-    bowtie2_path = shutil.which(bowtie2_path)
-    if bowtie2_path is None:
-        return '', '', 'not found'
-
-    command = [bowtie2_path, '--version']
+    found_bowtie2_path = shutil.which(bowtie2_path)
+    if found_bowtie2_path is None:
+        return bowtie2_path, '', 'not found'
+    command = [found_bowtie2_path, '--version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     try:
@@ -912,15 +922,14 @@ def bowtie2_path_and_version(bowtie2_path):
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return bowtie2_path, version, 'good'
+    return found_bowtie2_path, version, 'good'
 
 
 def samtools_path_and_version(samtools_path):
-    samtools_path = shutil.which(samtools_path)
-    if samtools_path is None:
-        return '', '', 'not found'
-
-    command = [samtools_path]
+    found_samtools_path = shutil.which(samtools_path)
+    if found_samtools_path is None:
+        return samtools_path, '', 'not found'
+    command = [found_samtools_path]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('Version: ')[-1].split('-')[0].split()[0]
@@ -935,15 +944,15 @@ def samtools_path_and_version(samtools_path):
     except (ValueError, IndexError):
         version, status = '?', 'too old'
 
-    return samtools_path, version, status
+    return found_samtools_path, version, status
 
 
 def java_path_and_version(java_path):
-    java_path = shutil.which(java_path)
-    if java_path is None:
-        return '', '', 'not found'
+    found_java_path = shutil.which(java_path)
+    if found_java_path is None:
+        return java_path, '', 'not found'
 
-    command = [java_path, '-version']
+    command = [found_java_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     version = out.decode().split('java version ')[-1].split()[0].replace('"', '')
@@ -962,7 +971,7 @@ def java_path_and_version(java_path):
     except (ValueError, IndexError):
         version, status = '?', 'too old'
 
-    return java_path, version, status
+    return found_java_path, version, status
 
 
 def pilon_path_and_version(pilon_path, java_path, args):
@@ -970,7 +979,7 @@ def pilon_path_and_version(pilon_path, java_path, args):
     if status == 'good':
         pilon_path = args.pilon_path
     else:
-        return '', '', status
+        return pilon_path, '', status
     if pilon_path.endswith('.jar'):
         command = [java_path, '-jar', pilon_path, '--version']
     else:

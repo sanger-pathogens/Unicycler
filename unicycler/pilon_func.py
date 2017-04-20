@@ -33,16 +33,6 @@ class CannotPolish(Exception):
         return repr(self.message)
 
 
-
-class CannotMakeVcf(Exception):
-    def __init__(self, message):
-        self.message = message
-
-    def __str__(self):
-        return repr(self.message)
-
-
-
 def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir,
                                       vcf_filename=None):
     """
@@ -58,39 +48,21 @@ def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir
     # to run these commands.
     starting_dir = os.getcwd()
     os.chdir(polish_dir)
-    bam, input_fasta = None, None
 
     insert_size_1st, insert_size_99th = get_insert_size_range(insert_size_graph, args, polish_dir)
     for i in range(settings.MAX_PILON_POLISH_COUNT):
         if i > 0:
             graph.rotate_circular_sequences()
-        change_count, bam, input_fasta = polish_with_pilon(graph, args, polish_dir, insert_size_1st,
-                                                           insert_size_99th, i+1)
+        change_count = polish_with_pilon(graph, args, polish_dir, insert_size_1st,
+                                         insert_size_99th, i+1)
         if change_count == 0:
             break
 
-    # If a VCF filename was given, use Samtools to make a VCF of the assembly using the last BAM
-    # and FASTA from polishing.
-    if vcf_filename is not None and bam is not None and input_fasta is not None and \
-            os.path.isfile(bam) and os.path.isfile(input_fasta):
-        faidx_command = [args.samtools_path, 'faidx', input_fasta]
-        log.log(dim('  ' + ' '.join(faidx_command)), 2)
-        try:
-            subprocess.check_output(faidx_command, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
-            raise CannotMakeVcf('samtools faidx encountered an error:\n' + e.output.decode())
-
-        mpileup_command = [args.samtools_path, 'mpileup', '-o', vcf_filename, '-v', '-u',
-                           '-f', input_fasta, bam]
-        log.log(dim('  ' + ' '.join(mpileup_command)), 2)
-        try:
-            subprocess.check_output(mpileup_command, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
-            raise CannotMakeVcf('samtools mpileup encountered an error:\n' + e.output.decode())
-
+    os.chdir(starting_dir)
     if args.keep < 3 and os.path.exists(polish_dir):
         shutil.rmtree(polish_dir)
-    os.chdir(starting_dir)
+
+    return insert_size_1st, insert_size_99th
 
 
 def get_insert_size_range(graph, args, polish_dir):
@@ -277,7 +249,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     if total_count == 0:
         log.log('No Pilon changes')
     else:
-        log.log('Number of Pilon changes: ' + int_to_str(total_count))
+        log.log('Total number of changes: ' + int_to_str(total_count))
         log.log('', 2)
         seg_names = sorted(graph.segments)
         polish_input_seg_names = set(get_segment_name_or_number(x) for x in segments_to_polish)
@@ -313,10 +285,11 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
             segment.forward_sequence = sequence
             segment.reverse_sequence = reverse_complement(sequence)
 
-    log.log('', 2)
+    log.log('')
 
     if args.keep < 3:
-        for f in [sam_filename, pilon_fasta_filename, pilon_changes_filename,
+        for f in [input_filename, sam_filename, bam_filename, bam_filename + '.bai',
+                  pilon_fasta_filename, pilon_changes_filename,
                   input_filename + '.1.bt2', input_filename + '.2.bt2', input_filename + '.3.bt2',
                   input_filename + '.4.bt2', input_filename + '.rev.1.bt2',
                   input_filename + '.rev.2.bt2', pilon_output_filename]:
@@ -325,7 +298,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
             except FileNotFoundError:
                 pass
 
-    return total_count, bam_filename, input_filename
+    return total_count
 
 
 def get_segment_name(segment):
