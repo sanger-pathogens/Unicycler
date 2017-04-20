@@ -497,6 +497,11 @@ def get_single_copy_segments_for_bridging(graph):
     bridging_seg_nums |= set([x.number for x in graph.segments.values()
                               if x.get_length() >= graph_n50])
 
+    # TO DO: I could look on a per-connected component basis to possibly let in additional, smaller
+    # segments. This is particularly to deal with the case of where two very similar small plasmids
+    # are present in the genome. They may max out at 500 bp segments or something, but we should
+    # include those so we don't lose the plasmids in the final assembly.
+
     bridging_segments = sorted([graph.segments[x] for x in bridging_seg_nums], reverse=True,
                                key=lambda x: x.get_length())
 
