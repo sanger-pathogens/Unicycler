@@ -1055,6 +1055,16 @@ class AssemblyGraph(object):
                 single_copy_segments.append(segment)
         return single_copy_segments
 
+    def get_no_copy_depth_segments(self):
+        """
+        Returns a list of the graph segments which failed to have a copy depth assigned.
+        """
+        no_copy_depth_segments = []
+        for num, segment in self.segments.items():
+            if num not in self.copy_depths or len(self.copy_depths[num]) == 0:
+                no_copy_depth_segments.append(segment)
+        return no_copy_depth_segments
+
     def get_path_sequence(self, path_segments):
         """
         Gets a linear (i.e. not circular) path sequence from the graph.
@@ -2159,14 +2169,15 @@ class AssemblyGraph(object):
         # become single copy, then it's okay to merge.
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
 
-    def find_simple_two_way_junctions(self, min_single_copy_seg_len):
+    def find_simple_two_way_junctions(self, valid_segments):
         """
         This function returns a list of segment numbers that are simple two-way junctions.
         Simple two-way junctions are defined as cases where two single copy segments join and then
-        split. The single copy segments must exceed the minimum length parameter. Also, the single
+        split. The single copy segments must be in the valid_segments list. Also, the single
         copy segments do not have to be unique, e.g. a loop can count as a two-way junction (the
         same segment is in inputs and outputs.
         """
+        valid_seg_nums = set([x.number for x in valid_segments])
         simple_two_way_junctions = []
         for segment in self.segments.values():
             if self.get_copy_number(segment) != 2:
@@ -2183,9 +2194,7 @@ class AssemblyGraph(object):
             if exclusive_input_count != 2 or exclusive_output_count != 2:
                 continue
             neighbour_segments = self.get_connected_segments(seg_num)
-            long_enough = all(self.segments[x].get_length() > min_single_copy_seg_len
-                              for x in neighbour_segments)
-            if not long_enough:
+            if any(x not in valid_seg_nums for x in neighbour_segments):
                 continue
             simple_two_way_junctions.append(seg_num)
         return simple_two_way_junctions

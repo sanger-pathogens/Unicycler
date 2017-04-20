@@ -127,7 +127,7 @@ class LoopUnrollingBridge(object):
         return 'loop'
 
 
-def create_loop_unrolling_bridges(graph):
+def create_loop_unrolling_bridges(graph, segments_to_bridge):
     """
     This function creates loop unrolling bridges using the information in SPAdes paths.
     """
@@ -140,6 +140,7 @@ def create_loop_unrolling_bridges(graph):
 
     bridges = []
     simple_loops = graph.find_all_simple_loops()
+    seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
 
     # A simple loop can either be caused by a repeat in one sequence (probably more typical) or by
     # a separate circular sequence which has some common sequence (less typical, but still very
@@ -148,12 +149,12 @@ def create_loop_unrolling_bridges(graph):
     # are on the same piece of DNA and can be unrolled.
     for start, end, middle, repeat in simple_loops:
 
-        # We only want cases where the start and end are single copy by the middle is not.
-        if graph.get_copy_number_from_segment_number(start) != 1:
+        # We only want where the start and end are to-be-bridged segments but the middle is not.
+        if abs(start) not in seg_nums_to_bridge:
             continue
-        if graph.get_copy_number_from_segment_number(end) != 1:
+        if abs(end) not in seg_nums_to_bridge:
             continue
-        if graph.get_copy_number_from_segment_number(middle) == 1:
+        if abs(end) in seg_nums_to_bridge:
             continue
 
         joined = False
@@ -183,6 +184,6 @@ def create_loop_unrolling_bridges(graph):
         print_table(bridge_table, alignments='RRRRRRRR', left_align_header=False, indent=0,
                     fixed_col_widths=[5, 6, 6, 5, 10, 10, 5, 7])
     else:
-        log.log('No simple loop bridges')
+        log.log('Loop unrolling bridges')
 
     return bridges

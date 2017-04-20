@@ -27,6 +27,7 @@ from .string_graph import StringGraph, StringGraphSegment, \
     merge_string_graph_segments_into_unitig_graph
 from .read_ref import load_references, load_long_reads
 from .unicycler_align import semi_global_align_long_reads
+from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
 from . import log
 from . import settings
 
@@ -46,32 +47,33 @@ class MiniasmFailure(Exception):
         return repr(self.message)
 
 
-def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                              scoring_scheme, racon_path, read_nicknames, counter):
+def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_scheme, read_nicknames,
+                              counter, args, segments_to_bridge):
     log.log_section_header('Assembling contigs and long reads with miniasm')
     if graph is not None:
-        log.log_explanation('Unicycler uses miniasm to construct a string graph '
-                            'assembly using both the short read contigs and the long reads. It will '
-                            'then use the resulting string graph to produce bridges between contigs. '
-                            'This method requires decent coverage of long reads and therefore '
-                            'may not be fruitful if long reads are sparse. However, it does not '
-                            'rely on the short read assembly graph having good connectivity and is '
-                            'able to bridge an assembly graph even when it contains many dead ends.',
+        log.log_explanation('Unicycler uses miniasm to construct a string graph assembly using '
+                            'both the short read contigs and the long reads. It will then use the '
+                            'resulting string graph to produce bridges between contigs. This '
+                            'method requires decent coverage of long reads and therefore may not '
+                            'be fruitful if long reads are sparse. However, it does not rely on '
+                            'the short read assembly graph having good connectivity and is able to '
+                            'bridge an assembly graph even when it contains many dead ends.',
                             extra_empty_lines_after=0)
-        log.log_explanation('Unicycler uses two types of "reads" as assembly input: '
-                            'sufficiently long single-copy short read contigs and actual long reads '
-                            'which overlap two or more of these contigs. It then assembles them with '
-                            'a modified version of miniasm which gives precedence to the contigs over '
-                            'the real long reads.')
+        log.log_explanation('Unicycler uses two types of "reads" as assembly input: sufficiently '
+                            'long single-copy short read contigs and actual long reads which '
+                            'overlap two or more of these contigs. It then assembles them with a '
+                            'modified version of miniasm which gives precedence to the contigs '
+                            'over the real long reads.')
 
-    miniasm_dir = os.path.join(out_dir, 'miniasm_assembly')
+    miniasm_dir = os.path.join(args.out, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
         os.makedirs(miniasm_dir)
 
     short_reads_available = graph is not None
+    seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
 
     assembly_read_names = get_miniasm_assembly_reads(graph, read_dict, long_read_filename,
-                                                     miniasm_dir, threads)
+                                                     miniasm_dir, args.threads)
 
     # TO DO: identify chimeric reads and throw them out. This was part of miniasm, but it was
     # removed due to 'not working as intended', so I pulled it out of my miniasm as well.
@@ -91,15 +93,17 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
     branching_paths_removed_filename = os.path.join(miniasm_dir, '11_branching_paths_removed.gfa')
     unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
-    contigs_placed_filename = os.path.join(miniasm_dir, '14_contigs_placed.gfa')
+    pilon_polished_filename = os.path.join(miniasm_dir, '14_pilon_polished.gfa')
+    contigs_placed_filename = os.path.join(miniasm_dir, '15_contigs_placed.gfa')
 
-    save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph)
+    save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph,
+                                seg_nums_to_bridge)
 
     # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
     # alignments are excluded (because single-copy contigs, by definition, should not
     # significantly overlap each other).
     minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
-                                                 threads, 0, 'read vs read')
+                                                 args.threads, 0, 'read vs read')
     with open(mappings_filename, 'wt') as mappings:
         for minimap_alignment_str in line_iterator(minimap_alignments_str):
             if minimap_alignment_str.count('CONTIG_') < 2:
@@ -131,44 +135,54 @@ def make_miniasm_string_graph(graph, out_dir, keep, threads, read_dict, long_rea
         log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
                 str(len(string_graph.links) // 2) + ' links', verbosity=2)
 
-        if not short_reads_available and keep > 0:
-            shutil.copyfile(string_graph_filename, gfa_path(out_dir, next(counter), 'string_graph'))
+        if not short_reads_available and args.keep > 0:
+            shutil.copyfile(string_graph_filename,
+                            gfa_path(args.out, next(counter), 'string_graph'))
 
         string_graph.remove_branching_paths()
-        if keep >= 3:
+        if args.keep >= 3:
             string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
         log.log('')
         unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames)
-        if keep >= 3:
+        if args.keep >= 3:
             unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
 
-        if not short_reads_available and keep > 0:
-            shutil.copyfile(unitig_graph_filename, gfa_path(out_dir, next(counter), 'unitig_graph'))
+        if not short_reads_available and args.keep > 0:
+            shutil.copyfile(unitig_graph_filename, gfa_path(args.out, next(counter), 'unitig_graph'))
 
-        polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
-                                  scoring_scheme)
-        if keep >= 3:
+        polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, args.racon_path,
+                                  args.threads, scoring_scheme, seg_nums_to_bridge)
+        if args.keep >= 3:
             unitig_graph.save_to_gfa(racon_polished_filename)
 
-        if not short_reads_available and keep > 0:
+        if not short_reads_available and args.keep > 0:
             shutil.copyfile(racon_polished_filename,
-                            gfa_path(out_dir, next(counter), 'racon_polished'))
+                            gfa_path(args.out, next(counter), 'racon_polished'))
 
         if short_reads_available:
-            unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, threads, scoring_scheme)
-            if keep >= 3:
+            polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
+            if args.keep >= 3:
+                unitig_graph.save_to_gfa(pilon_polished_filename)
+
+        if short_reads_available:
+
+            # TO DO: assembly graph contigs which end in a dead-end often have some junk sequence
+            # near the dead end. So before aligning contigs to the long-read graph, we should look
+            # for dead ends, see how much sequence miniasm clipped off that end, and trim the
+            # contig by the same amount.
+
+            unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, args.threads,
+                                         scoring_scheme, seg_nums_to_bridge)
+            if args.keep >= 3:
                 unitig_graph.save_to_gfa(contigs_placed_filename, include_depth=False)
 
-    if keep < 3:
+    if args.keep < 3:
         shutil.rmtree(miniasm_dir)
     return unitig_graph
 
 
 def get_miniasm_assembly_reads(graph, read_dict, long_read_filename, miniasm_dir, threads):
-    """
-    Returns a list of read names which overlap at least one single copy graph segment.
-    """
     if graph is not None:  # hybrid assembly
         minimap_alignments = align_long_reads_to_assembly_graph(graph, long_read_filename,
                                                                 miniasm_dir, threads)
@@ -181,7 +195,8 @@ def get_miniasm_assembly_reads(graph, read_dict, long_read_filename, miniasm_dir
         return sorted([x for x in read_dict.keys()])
 
 
-def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, contig_copy_count=1):
+def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, seg_nums_to_bridge,
+                                contig_copy_count=1):
     qual = chr(settings.CONTIG_READ_QSCORE + 33)
     log.log('Saving to ' + read_filename + ':')
 
@@ -191,7 +206,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
             # reflect our confidence in them.
             seg_count = 0
             for seg in sorted(graph.segments.values(), key=lambda x: x.number):
-                if segment_suitable_for_miniasm_assembly(graph, seg):
+                if segment_suitable_for_miniasm_assembly(graph, seg, seg_nums_to_bridge):
                     for i in range(contig_copy_count):
                         fastq_name = '@CONTIG_' + str(seg.number)
                         if contig_copy_count > 1:
@@ -229,22 +244,19 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, con
         log.log('')
 
 
-def segment_suitable_for_miniasm_assembly(graph, segment):
+def segment_suitable_for_miniasm_assembly(graph, segment, seg_nums_to_bridge):
     """
     Returns True if the segment is:
-      1) single copy
-      2) long enough
-      3) not already circular and complete
+      1) one of the to-be-bridged segments
+      2) not already circular and complete
     """
-    if graph.get_copy_number(segment) != 1:
-        return False
-    if segment.get_length() < settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING:
+    if segment.number not in seg_nums_to_bridge:
         return False
     return not graph.is_component_complete([segment.number])
 
 
 def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon_path, threads,
-                              scoring_scheme):
+                              scoring_scheme, seg_nums_to_bridge):
     log.log_section_header('Polishing miniasm assembly with Racon')
     log.log_explanation('Unicycler now uses Racon to polish the miniasm assembly. It does '
                         'multiple rounds of polishing to get the best consensus. Circular unitigs '
@@ -265,7 +277,7 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
     polish_read_names = sorted([x for x in read_dict.keys()])
     polish_reads = os.path.join(polish_dir, 'polishing_reads.fastq')
     save_assembly_reads_to_file(polish_reads, polish_read_names, read_dict, graph,
-                                settings.RACON_CONTIG_DUPLICATION_COUNT)
+                                seg_nums_to_bridge, settings.RACON_CONTIG_DUPLICATION_COUNT)
 
     col_widths = [6, 12, 14]
     racon_table_header = ['Polish round', 'Assembly size', 'Mapping quality']
@@ -359,7 +371,20 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
         log.log(red('Polishing failed'))
 
 
-def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme):
+def polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir):
+    log.log_section_header('Polishing miniasm assembly with Pilon')
+    log.log_explanation('Unicycler now uses Pilon to polish the miniasm assembly with short '
+                        'reads, taking it to very high accuracy. Like for the Racon polish, '
+                        'circular contigs are rotated between rounds.')
+    try:
+        polish_dir = os.path.join(miniasm_dir, 'pilon_polish')
+        polish_with_pilon_multiple_rounds(unitig_graph, graph, args, polish_dir)
+    except CannotPolish as e:
+        log.log('Unable to polish assembly using Pilon: ' + e.message)
+
+
+def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme,
+                  seg_nums_to_bridge):
     log.log('', verbosity=2)
     log.log_explanation('Unicycler now places the single copy contigs back into the unitig '
                         'graph. This serves two purposes: a) it replaces long read assembly '
@@ -374,24 +399,12 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
     contig_positions = []
     contig_numbers = []
     for seg in sorted(assembly_graph.segments.values(), key=lambda x: x.number):
-        if segment_suitable_for_miniasm_assembly(assembly_graph, seg):
+        if segment_suitable_for_miniasm_assembly(assembly_graph, seg, seg_nums_to_bridge):
             contig_numbers.append(seg.number)
     for contig_search_end_size in settings.CONTIG_SEARCH_END_SIZES:
         log.log('Searching for contigs using ' + int_to_str(contig_search_end_size) + ' bp of '
                 'contig ends.')
         log.log('')
-
-
-
-        # TO DO: This method (using semi-global alignment) works well for contigs that don't end in
-        # junk. But contigs which end with a dead end often do, so we should be willing to clip.
-        #
-        # I therefore need to:
-        #   * identify which ends of which contigs are dead ends in the assembly graph
-        #   * look in miniasm's all_reads.txt for the trim size on those ends
-        #   * only search for the trimmed contigs in the unitig graph, not the whole contigs
-
-
 
         contig_position_results, not_found_contig_numbers = \
             find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threads,

@@ -107,7 +107,7 @@ class SimpleLongReadBridge(object):
 
 
 def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                                 scoring_scheme):
+                                    scoring_scheme, segments_to_bridge):
     """
     Create and return simple long read bridges.
     """
@@ -123,16 +123,17 @@ def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lo
                                                             bridging_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
     bridges = simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
-                                              minimap_alignments)
+                                              minimap_alignments, segments_to_bridge)
     bridges += simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads,
-                                   minimap_alignments, read_dict, scoring_scheme, threads)
+                                   minimap_alignments, read_dict, scoring_scheme, threads,
+                                   segments_to_bridge)
     if keep < 3:
         shutil.rmtree(bridging_dir)
     return bridges
 
 
 def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
-                                    minimap_alignments):
+                                    minimap_alignments, segments_to_bridge):
     bridges = []
     c_with_arrows = get_right_arrow() + 'C' + get_right_arrow()
     log.log_explanation('Two-way junctions are defined as cases where two graph contigs (A and B) '
@@ -147,7 +148,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
     two_way_junctions_table = [['Junction', 'Option 1', 'Option 2', 'Op. 1 votes', 'Op. 2 votes',
                                 'Neither votes', 'Final op.', 'Bridge quality']]
 
-    junctions = graph.find_simple_two_way_junctions(settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING)
+    junctions = graph.find_simple_two_way_junctions(segments_to_bridge)
 
     if not junctions:
         log.log('No suitable two-way junctions present')
@@ -265,7 +266,7 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
 
 def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_alignments,
-                        read_dict, scoring_scheme, threads):
+                        read_dict, scoring_scheme, threads, segments_to_bridge):
     bridges = []
     ra = get_right_arrow()
     zero_loops = 'A' + ra + 'C' + ra + 'B'
@@ -282,6 +283,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                         'most voted for count.')
 
     loops = sorted(graph.find_all_simple_loops())
+    seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
 
     if not loops:
         log.log('No suitable simple loops present')
@@ -295,10 +297,11 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                 alignments='RRRRRLRR', indent=0)
 
     for start, end, middle, repeat in loops:
-        start_len = graph.segments[abs(start)].get_length()
-        end_len = graph.segments[abs(end)].get_length()
-        if start_len < settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING or \
-                end_len < settings.MIN_SEGMENT_LENGTH_FOR_SIMPLE_BRIDGING:
+        if abs(start) not in seg_nums_to_bridge:
+            continue
+        if abs(end) not in seg_nums_to_bridge:
+            continue
+        if abs(end) in seg_nums_to_bridge:
             continue
 
         loop_table_row = [start, repeat, middle, end]

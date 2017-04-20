@@ -425,7 +425,7 @@ class MiniasmBridge(object):
         return 'miniasm'
 
 
-def create_miniasm_bridges(graph, string_graph):
+def create_miniasm_bridges(graph, string_graph, segments_to_bridge):
     """
     Makes bridges between single copy segments using the miniasm string graph.
     """

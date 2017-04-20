@@ -119,7 +119,7 @@ class SpadesContigBridge(object):
         return 'SPAdes'
 
 
-def create_spades_contig_bridges(graph, single_copy_segments):
+def create_spades_contig_bridges(graph, segments_to_bridge):
     """
     Builds graph bridges using the SPAdes contig paths.
     """
@@ -131,8 +131,8 @@ def create_spades_contig_bridges(graph, single_copy_segments):
                         'create a bridge from the path.', verbosity=1)
 
     bridge_path_set = set()
-    single_copy_numbers = [x.number for x in single_copy_segments]
-    for segment in single_copy_segments:
+    single_copy_numbers = [x.number for x in segments_to_bridge]
+    for segment in segments_to_bridge:
         for path in graph.paths.values():
             flipped_path = [-x for x in reversed(path)]
             contig_bridges = find_contig_bridges(segment.number, path, single_copy_numbers)

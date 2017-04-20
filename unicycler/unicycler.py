@@ -83,7 +83,7 @@ def main():
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.no_correct, args.linear_seqs)
-        single_copy_segments = get_single_copy_segments(graph, 0)
+        determine_copy_depth(graph)
         if args.keep > 0:
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
                               include_insert_size=True)
@@ -93,6 +93,8 @@ def main():
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True, include_insert_size=True)
+
+        segments_to_bridge = get_single_copy_segments_for_bridging(graph)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -107,8 +109,8 @@ def main():
         # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
         # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
         if args.mode != 0:
-            bridges += create_spades_contig_bridges(graph, single_copy_segments)
-            bridges += create_loop_unrolling_bridges(graph)
+            bridges += create_spades_contig_bridges(graph, segments_to_bridge)
+            bridges += create_loop_unrolling_bridges(graph, segments_to_bridge)
             if not bridges:
                 log.log('none found', 1)
 
@@ -117,7 +119,7 @@ def main():
 
     else:  # short reads not available
         graph = None
-        single_copy_segments = []
+        segments_to_bridge = []
 
     if short_reads_available and long_reads_available:
         # TO DO: tune alignment parameters with last-train
@@ -132,14 +134,10 @@ def main():
         read_dict, read_names, long_read_filename = {}, [], ''
         read_nicknames = {}
 
-    if short_reads_available and long_reads_available:
-        bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
-                                                   read_dict, long_read_filename, scoring_scheme)
-
     if long_reads_available:
-        string_graph = make_miniasm_string_graph(graph, args.out, args.keep, args.threads,
-                                                 read_dict, long_read_filename, scoring_scheme,
-                                                 args.racon_path, read_nicknames, counter)
+        string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
+                                                 scoring_scheme, read_nicknames, counter, args,
+                                                 segments_to_bridge)
     else:
         string_graph = None
 
@@ -149,15 +147,19 @@ def main():
 
     if short_reads_available and long_reads_available:
         if string_graph is not None:
-            bridges += create_miniasm_bridges(graph, string_graph)
+            bridges += create_miniasm_bridges(graph, string_graph, segments_to_bridge)
+
+        bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
+                                                   read_dict, long_read_filename, scoring_scheme,
+                                                   segments_to_bridge)
 
         read_names, min_scaled_score, min_alignment_length = \
-            align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command,
+            align_long_reads_to_assembly_graph(graph, segments_to_bridge, args, full_command,
                                                read_dict, read_names, long_read_filename)
 
         expected_linear_seqs = args.linear_seqs > 0
         bridges += create_long_read_bridges(graph, read_dict, read_names,
-                                            single_copy_segments, args.verbosity, bridges,
+                                            segments_to_bridge, args.verbosity, bridges,
                                             min_scaled_score, args.threads, scoring_scheme,
                                             min_alignment_length, expected_linear_seqs,
                                             args.min_bridge_qual)
@@ -170,14 +172,14 @@ def main():
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'bridges_applied'),
                               save_seg_type_info=True, save_copy_depth_info=True, newline=True)
 
-        graph.clean_up_after_bridging_1(single_copy_segments, seg_nums_used_in_bridges)
+        graph.clean_up_after_bridging_1(segments_to_bridge, seg_nums_used_in_bridges)
         graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                        args.min_dead_end_size, graph, single_copy_segments)
+                                        args.min_dead_end_size, graph, segments_to_bridge)
         if args.keep > 2:
             log.log('', 2)
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
                               save_seg_type_info=True, save_copy_depth_info=True)
-        graph.merge_all_possible(single_copy_segments, args.mode)
+        graph.merge_all_possible(segments_to_bridge, args.mode)
         if args.keep > 2:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
@@ -474,21 +476,47 @@ def make_output_directory(out_dir, verbosity):
     return message
 
 
-def get_single_copy_segments(graph, min_single_copy_length):
+def get_single_copy_segments_for_bridging(graph):
     """
-    Returns a list of the graph segments determined to be single copy.
+    Returns a list of the graph segments that will be used for bridging.
     """
-    determine_copy_depth(graph)
-    single_copy_segments = [x for x in graph.get_single_copy_segments()
-                            if x.get_length() >= min_single_copy_length]
+    graph_n50 = graph.get_n_segment_length(50.0)
+    graph_n80 = graph.get_n_segment_length(80.0)
+    graph_n99 = graph.get_n_segment_length(99.0)
+
+    # First we include any segments which are single-copy and not too short.
+    bridging_seg_nums = set([x.number for x in graph.get_single_copy_segments()
+                             if x.get_length() >= graph_n99 and
+                             x.get_length() >= settings.MIN_SINGLE_COPY_LENGTH])
+
+    # Next we include any long contigs which didn't have a copy-depth assigned. These are probably
+    # single copy and the multiplicity algorithm just failed to call them as such.
+    bridging_seg_nums |= set([x.number for x in graph.get_no_copy_depth_segments()
+                              if x.get_length() >= graph_n80])
+
+    # Finally we include any very long contigs, regardless of their copy depth.
+    bridging_seg_nums |= set([x.number for x in graph.segments.values()
+                              if x.get_length() >= graph_n50])
+
+    bridging_segments = sorted([graph.segments[x] for x in bridging_seg_nums], reverse=True,
+                               key=lambda x: x.get_length())
+
+    # TO DO: if long reads are available, I could potentially use them to more reliably determine
+    # whether segments are single-copy or not single-copy. Something like taking all long reads
+    # which align to a segment and seeing if they all cluster together well (based on read-to-read
+    # alignments), implying single-copy, or if they cluster into two or more groups, implying
+    # multi-copy.
+
     log.log('', 2)
-    total_single_copy_length = sum([x.get_length() for x in single_copy_segments])
-    log.log(int_to_str(len(single_copy_segments)) +
-          ' single copy segments (' + int_to_str(total_single_copy_length) + ' bp) out of ' +
+    total_bridging_length = sum([x.get_length() for x in bridging_segments])
+    log.log(int_to_str(len(bridging_segments)) +
+          ' bridging segments (' + int_to_str(total_bridging_length) + ' bp) out of ' +
           int_to_str(len(graph.segments)) +
           ' total segments (' + int_to_str(graph.get_total_length()) + ' bp)')
+    log.log('\nBridging segments:', 2)
+    log.log_number_list([x.number for x in bridging_segments], 2)
 
-    return single_copy_segments
+    return bridging_segments
 
 
 def sam_references_match(sam_filename, assembly_graph):
@@ -771,11 +799,7 @@ def final_polish(graph, args, counter):
     log.log_section_header('Polishing assembly with Pilon')
     polish_dir = os.path.join(args.out, 'pilon_polish')
     try:
-        polish_with_pilon_multiple_rounds(graph, args.bowtie2_path, args.bowtie2_build_path,
-                                          args.pilon_path, args.java_path, args.samtools_path,
-                                          args.min_polish_size, polish_dir, args.short1,
-                                          args.short2, args.unpaired, args.threads,
-                                          settings.MAX_PILON_POLISH_COUNT, args.keep)
+        polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir)
     except CannotPolish as e:
         log.log('Unable to polish assembly using Pilon: ' + e.message)
     else:
