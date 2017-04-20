@@ -159,7 +159,7 @@ def main():
 
         expected_linear_seqs = args.linear_seqs > 0
         bridges += create_long_read_bridges(graph, read_dict, read_names,
-                                            segments_to_bridge, args.verbosity, bridges,
+                                            segments_to_bridge, args.verbosity,
                                             min_scaled_score, args.threads, scoring_scheme,
                                             min_alignment_length, expected_linear_seqs,
                                             args.min_bridge_qual)
