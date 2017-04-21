@@ -544,9 +544,9 @@ class StringGraphSegment(object):
         return len(self.forward_sequence)
 
     def gfa_segment_line(self, include_depth=True):
-        s_line_parts = ['S', self.full_name, self.forward_sequence, 'LN:i:', str(self.get_length())]
+        s_line_parts = ['S', self.full_name, self.forward_sequence, 'LN:i:' + str(self.get_length())]
         if include_depth:
-            s_line_parts += ['dp:f:', str(self.depth)]
+            s_line_parts += ['dp:f:' + str(self.depth)]
         return '\t'.join(s_line_parts) + '\n'
 
     def fasta_record(self):
