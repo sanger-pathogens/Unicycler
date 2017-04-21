@@ -44,6 +44,12 @@ def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir
     if not os.path.exists(polish_dir):
         os.makedirs(polish_dir)
 
+    # TO DO: I'd like to come up with a way to polish (maybe with Pilon, maybe with something else)
+    # that has a sensitivity adjustment. That way early rounds of polishing can take care of the
+    # obvious errors and later rounds can make more tough calls. I hope this means that long read
+    # problems (e.g. homopolymer runs) get fixed first and tougher problems (e.g. SNPs in repeat
+    # regions) get fixed later, when the sequence is cleaner and easier to align to.
+
     # To avoid issues with paths that contain spaces, we will move into the temporary directory
     # to run these commands.
     starting_dir = os.getcwd()
@@ -206,6 +212,12 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     except subprocess.CalledProcessError as e:
         raise CannotPolish('Samtools encountered an error:\n' + e.output.decode())
 
+    # Always delete the SAM file, regardless of keep level (it's big).
+    try:
+        os.remove(sam_filename)
+    except FileNotFoundError:
+        pass
+
     # Index the alignments.
     samtools_index_command = [args.samtools_path, 'index', bam_filename]
     log.log(dim('  ' + ' '.join(samtools_index_command)), 2)
@@ -288,7 +300,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     log.log('')
 
     if args.keep < 3:
-        for f in [input_filename, sam_filename, bam_filename, bam_filename + '.bai',
+        for f in [input_filename, bam_filename, bam_filename + '.bai',
                   pilon_fasta_filename, pilon_changes_filename,
                   input_filename + '.1.bt2', input_filename + '.2.bt2', input_filename + '.3.bt2',
                   input_filename + '.4.bt2', input_filename + '.rev.1.bt2',

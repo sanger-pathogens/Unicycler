@@ -166,12 +166,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 unitig_graph.save_to_gfa(pilon_polished_filename)
 
         if short_reads_available:
-
-            # TO DO: assembly graph contigs which end in a dead-end often have some junk sequence
-            # near the dead end. So before aligning contigs to the long-read graph, we should look
-            # for dead ends, see how much sequence miniasm clipped off that end, and trim the
-            # contig by the same amount.
-
+            trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_dir)
             unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, args.threads,
                                          scoring_scheme, seg_nums_to_bridge)
             if args.keep >= 3:
@@ -733,3 +728,43 @@ def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads,
         assert False
 
     return mapping_quality, unitig_depths
+
+
+def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_dir):
+    log.log_explanation('Contigs in the short-read assembly graph which end in dead ends may '
+                        'contain bogus sequence near the dead end. Unicycler therefore uses the '
+                        'read clipping values from the miniasm assembly to trim these dead ends '
+                        'to only the parts which aligned well to long reads.')
+
+    dead_end_trim_table = [['Segment', 'Previous length', 'Trimmed from start', 'Trimmed from end',
+                            'Final length']]
+
+    with open(os.path.join(miniasm_dir, 'all_reads.txt'), 'rt') as miniasm_read_names:
+        for line in miniasm_read_names:
+            if line.startswith('CONTIG_'):
+                line = line.strip()
+                contig_number = int(line.split('CONTIG_')[1].split(':')[0])
+                start_dead_end = assembly_graph.starts_with_dead_end(contig_number)
+                end_dead_end = assembly_graph.ends_with_dead_end(contig_number)
+                if start_dead_end or end_dead_end:
+                    contig = assembly_graph.segments[contig_number]
+                    starting_length = contig.get_length()
+                    contig_range = line.split(':')[1]
+                    contig_start_pos, contig_end_pos = [int(x) for x in contig_range.split('-')]
+                    contig_start_trim = contig_start_pos - 1  # 1-based range to Python 0-base range
+                    contig_end_trim = contig.get_length() - contig_end_pos
+                    if start_dead_end:
+                        contig.trim_from_start(contig_start_trim)
+                    if end_dead_end:
+                        contig.trim_from_end(contig_end_trim)
+                    table_row = [str(contig_number), int_to_str(starting_length),
+                                 int_to_str(contig_start_trim) if contig_start_trim else '-',
+                                 int_to_str(contig_end_trim) if contig_end_trim else '-',
+                                 int_to_str(contig.get_length())]
+                    dead_end_trim_table.append(table_row)
+
+    if len(dead_end_trim_table) > 1:
+        print_table(dead_end_trim_table, fixed_col_widths=[7, 10, 7, 7, 10], alignments='LRRRR',
+                    indent=0, left_align_header=False)
+    else:
+        log.log('No dead ends required trimming.')
