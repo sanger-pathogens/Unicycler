@@ -602,7 +602,7 @@ A preprint version of the Unicycler manuscript is currently available on bioRxiv
 
 Unicycler would not have been possible without [Kat Holt](https://holtlab.net/), my fellow researchers in her lab and the many other people I work with at the University of Melbourne's [Centre for Systems Genomics](https://sysgenmelb.org/). In particular, [Margaret Lam](https://scholar.google.com.au/citations?user=cWmhzUIAAAAJ&hl=en), [Kelly Wyres](https://holtlab.net/kelly-wyres/) and [David Edwards](https://scholar.google.com.au/citations?hl=en&user=rZ1RJK0AAAAJ) worked with me on many challenging genomes during Unicycler's development.
 
-Unicycler uses [SeqAn](https://www.seqan.de/) to perform alignments and other sequence manipulations. The authors of this library have been very helpful during Unicycler's development and I owe them a great deal of thanks! It also uses [minimap](https://github.com/lh3/minimap) to seed alignments and so I'd like to thank [Heng Li](https://github.com/lh3) for writing such a fast long read aligner.
+Unicycler uses [SeqAn](https://www.seqan.de/) to perform alignments and other sequence manipulations. The authors of this library have been very helpful during Unicycler's development and I owe them a great deal of thanks! It also uses [minimap](https://github.com/lh3/minimap) for alignment and [miniasm](https://github.com/lh3/minimap) for long read assembly, and so I'd like to thank [Heng Li](https://github.com/lh3) for these tools. Finally, Unicycler uses [nanoflann](https://github.com/jlblancoc/nanoflann), a delightfully fast and lightweight nearest neighbour library, to perform its line-finding in semi-global alignment.
 
 
 

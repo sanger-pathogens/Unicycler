@@ -117,6 +117,10 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
     # repeat regions, then finding these repeat regions in reads and tossing out alignments which
     # are contained only in repeat regions.
 
+
+    # TO DO: Unicycler's mode (conservative, normal or bold) should appropriately affect the
+    # miniasm settings.
+
     # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
     log.log('Assembling reads with miniasm... ', end='')
     min_depth = 3
