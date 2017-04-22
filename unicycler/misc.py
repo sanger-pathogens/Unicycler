@@ -865,35 +865,33 @@ def tblastn_path_and_version(tblastn_path):
 
 
 def bowtie2_build_path_and_version(bowtie2_build_path):
-    bowtie2_build_path = shutil.which(bowtie2_build_path)
-    if bowtie2_build_path is None:
-        return '', '', 'not found'
-
-    command = [bowtie2_build_path, '--version']
+    found_bowtie2_build_path = shutil.which(bowtie2_build_path)
+    if found_bowtie2_build_path is None:
+        return bowtie2_build_path, '', 'not found'
+    command = [found_bowtie2_build_path, '--version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
-    version = out.decode().split(' version ')[-1].split()[0]
     try:
+        version = out.decode().split(' version ')[1].split()[0]
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return bowtie2_build_path, version, 'good'
+    return found_bowtie2_build_path, version, 'good'
 
 
 def bowtie2_path_and_version(bowtie2_path):
-    bowtie2_path = shutil.which(bowtie2_path)
-    if bowtie2_path is None:
-        return '', '', 'not found'
-
-    command = [bowtie2_path, '--version']
+    found_bowtie2_path = shutil.which(bowtie2_path)
+    if found_bowtie2_path is None:
+        return bowtie2_path, '', 'not found'
+    command = [found_bowtie2_path, '--version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
-    version = out.decode().split(' version ')[-1].split()[0]
     try:
+        version = out.decode().split(' version ')[1].split()[0]
         int(version.split('.')[0]), int(version.split('.')[1])
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-    return bowtie2_path, version, 'good'
+    return found_bowtie2_path, version, 'good'
 
 
 def samtools_path_and_version(samtools_path):
