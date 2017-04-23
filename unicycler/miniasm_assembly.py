@@ -757,14 +757,16 @@ def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_dir):
                     contig_start_pos, contig_end_pos = [int(x) for x in contig_range.split('-')]
                     contig_start_trim = contig_start_pos - 1  # 1-based range to Python 0-base range
                     contig_end_trim = contig.get_length() - contig_end_pos
-                    if start_dead_end:
+                    if contig_start_trim:
                         contig.trim_from_start(contig_start_trim)
-                    if end_dead_end:
+                    if contig_end_trim:
                         contig.trim_from_end(contig_end_trim)
-                    table_row = [str(contig_number), int_to_str(starting_length),
+                    ending_length = contig.get_length()
+                    table_row = [int_to_str(contig_number),
+                                 int_to_str(starting_length),
                                  int_to_str(contig_start_trim) if contig_start_trim else '-',
                                  int_to_str(contig_end_trim) if contig_end_trim else '-',
-                                 int_to_str(contig.get_length())]
+                                 int_to_str(ending_length)]
                     dead_end_trim_table.append(table_row)
 
     if len(dead_end_trim_table) > 1:
