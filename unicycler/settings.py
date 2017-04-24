@@ -25,9 +25,6 @@ MAX_TO_MIN_MINIMISER_RATIO = 10
 # to make the alignment faster.
 SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 50
 
-# Only single copy segments longer than this will be included as 'reads' in the miniasm assembly.
-MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING = 4000
-
 # Illumina contigs are used as 'reads' in the miniasm and Racon steps. They are given this as a
 # qscore at each base.
 CONTIG_READ_QSCORE = 40

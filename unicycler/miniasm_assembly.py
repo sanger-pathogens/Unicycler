@@ -220,8 +220,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, seg
                         fastq.write('\n')
                     seg_count += 1
             if contig_copy_count > 0:
-                message = '  ' + str(seg_count) + ' single copy contigs ' + \
-                          str(settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING) + ' bp or longer'
+                message = '  ' + str(seg_count) + ' short-read contigs'
                 if contig_copy_count > 1:
                     message += ' (duplicated ' + str(contig_copy_count) + ' times)'
                 log.log(message)
@@ -546,6 +545,9 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     """
     This function searches for contig start and end points in the unitig graph.
     """
+    if not contig_numbers:
+        return [], []
+
     contig_search_dir = os.path.join(miniasm_dir, 'contig_search')
     if not os.path.isdir(contig_search_dir):
         os.makedirs(contig_search_dir)
@@ -553,11 +555,15 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     # Save the contigs to a FASTA file.
     contigs_fasta = os.path.join(contig_search_dir, 'contigs.fasta')
     longest_contig_seq_len = 0
+    smallest_contig_seq_len = float('inf')
     with open(contigs_fasta, 'wt') as fasta:
         for contig_number in contig_numbers:
             seg = assembly_graph.segments[contig_number]
             seq = seg.forward_sequence
+
             longest_contig_seq_len = max(longest_contig_seq_len, len(seq))
+            smallest_contig_seq_len = min(smallest_contig_seq_len, len(seq))
+
             contig_name = 'CONTIG_' + str(seg.number)
 
             # If the contig is long, we just look for the ends.
@@ -597,8 +603,7 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     # 'reads' are the contigs and the 'references' are the unitigs.
     references = load_references(unitigs_fasta, section_header=None, show_progress=False)
     read_dict, read_names, read_filename = load_long_reads(contigs_fasta, silent=True)
-    min_alignment_len = min(contig_search_end_size * 0.9,
-                            settings.MIN_SEGMENT_LENGTH_FOR_MINIASM_BRIDGING * 0.9)
+    min_alignment_len = min(contig_search_end_size * 0.9, smallest_contig_seq_len * 0.9)
     semi_global_align_long_reads(references, unitigs_fasta, read_dict, read_names, read_filename,
                                  threads, scoring_scheme, [None], False, min_alignment_len, None,
                                  None, 10, 0, None, verbosity=0)
