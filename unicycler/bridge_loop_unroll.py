@@ -154,7 +154,7 @@ def create_loop_unrolling_bridges(graph, segments_to_bridge):
             continue
         if abs(end) not in seg_nums_to_bridge:
             continue
-        if abs(end) in seg_nums_to_bridge:
+        if abs(repeat) in seg_nums_to_bridge:
             continue
 
         joined = False
@@ -184,6 +184,6 @@ def create_loop_unrolling_bridges(graph, segments_to_bridge):
         print_table(bridge_table, alignments='RRRRRRRR', left_align_header=False, indent=0,
                     fixed_col_widths=[5, 6, 6, 5, 10, 10, 5, 7])
     else:
-        log.log('Loop unrolling bridges')
+        log.log('No loop unrolling bridges made')
 
     return bridges

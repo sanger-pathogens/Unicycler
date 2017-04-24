@@ -142,12 +142,13 @@ def main():
         read_dict, read_names, long_read_filename = {}, [], ''
         read_nicknames = {}
 
-    if long_reads_available:
-        string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
-                                                 scoring_scheme, read_nicknames, counter, args,
-                                                 segments_to_bridge)
-    else:
-        string_graph = None
+    # if long_reads_available:
+    #     string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
+    #                                              scoring_scheme, read_nicknames, counter, args,
+    #                                              segments_to_bridge)
+    # else:
+    #     string_graph = None
+    string_graph = None
 
     # If there aren't short reads and the miniasm assembly failed, then there's nothing we can do!
     if not short_reads_available and string_graph is None:

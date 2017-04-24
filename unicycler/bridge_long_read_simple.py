@@ -27,7 +27,6 @@ from collections import defaultdict
 import itertools
 from multiprocessing.dummy import Pool as ThreadPool
 from .minimap_alignment import align_long_reads_to_assembly_graph, build_start_end_overlap_sets
-from .assembly_graph_copy_depth import determine_copy_depth
 from .misc import print_table, get_right_arrow, float_to_str
 from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
 from . import log
@@ -284,7 +283,9 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
 
     loops = sorted(graph.find_all_simple_loops())
     seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
-
+    loops = [x for x in loops
+             if abs(x[0]) in seg_nums_to_bridge and abs(x[1]) in seg_nums_to_bridge and
+                abs(x[3]) not in seg_nums_to_bridge]
     if not loops:
         log.log('No suitable simple loops present')
         log.log('')
@@ -297,13 +298,6 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                 alignments='RRRRRLRR', indent=0)
 
     for start, end, middle, repeat in loops:
-        if abs(start) not in seg_nums_to_bridge:
-            continue
-        if abs(end) not in seg_nums_to_bridge:
-            continue
-        if abs(end) in seg_nums_to_bridge:
-            continue
-
         loop_table_row = [start, repeat, middle, end]
 
         forward_strand_reads = end_overlap_reads[start] & start_overlap_reads[end]
