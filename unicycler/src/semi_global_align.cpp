@@ -326,8 +326,10 @@ long long getMaxSeedChainGapArea(String<TSeed> & seedChain, int readLen, int tri
         long long gapArea = hGap * vGap;
         if (gapArea > maxGapArea)
             maxGapArea = gapArea;
-        previousH = hPos;
-        previousV = vPos;
+        if (i < seedChainLength) {
+            previousH = endPositionH(seedChain[i]);
+            previousV = endPositionV(seedChain[i]);
+        }
     }
     return maxGapArea;
 }
