@@ -391,7 +391,7 @@ class LongReadBridge(object):
         return 'long read'
 
 
-def create_long_read_bridges(graph, read_dict, read_names, segments_to_bridge, verbosity,
+def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verbosity,
                              min_scaled_score, threads, scoring_scheme, min_alignment_length,
                              expected_linear_seqs, min_bridge_qual):
     """
@@ -399,7 +399,7 @@ def create_long_read_bridges(graph, read_dict, read_names, segments_to_bridge, v
     """
     log.log_section_header('Building long read bridges')
 
-    seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
+    seg_nums_to_bridge = set(x.number for x in anchor_segments)
 
     # This dictionary will collect the read sequences which span between two single copy segments.
     # Key = tuple of signed segment numbers (the segments being bridged)

@@ -106,7 +106,7 @@ class SimpleLongReadBridge(object):
 
 
 def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, long_read_filename,
-                                    scoring_scheme, segments_to_bridge):
+                                    scoring_scheme, anchor_segments):
     """
     Create and return simple long read bridges.
     """
@@ -122,10 +122,10 @@ def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lo
                                                             bridging_dir, threads)
     start_overlap_reads, end_overlap_reads = build_start_end_overlap_sets(minimap_alignments)
     bridges = simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_reads,
-                                              minimap_alignments, segments_to_bridge)
+                                              minimap_alignments, anchor_segments)
     bridges += simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads,
                                    minimap_alignments, read_dict, scoring_scheme, threads,
-                                   segments_to_bridge)
+                                   anchor_segments)
     if keep < 3:
         shutil.rmtree(bridging_dir)
     return bridges

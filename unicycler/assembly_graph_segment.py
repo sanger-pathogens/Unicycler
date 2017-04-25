@@ -139,6 +139,8 @@ class Segment(object):
         Removes the specified number of bases from the end of the segment sequence.
         """
         assert self.get_length() >= amount
+        if amount == 0:
+            return
         self.forward_sequence = self.forward_sequence[:-amount]
         self.reverse_sequence = self.reverse_sequence[amount:]
 
@@ -147,6 +149,8 @@ class Segment(object):
         Removes the specified number of bases from the end of the segment sequence.
         """
         assert self.get_length() >= amount
+        if amount == 0:
+            return
         self.forward_sequence = self.forward_sequence[amount:]
         self.reverse_sequence = self.reverse_sequence[:-amount]
 

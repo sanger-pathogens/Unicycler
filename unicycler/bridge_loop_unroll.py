@@ -127,7 +127,7 @@ class LoopUnrollingBridge(object):
         return 'loop'
 
 
-def create_loop_unrolling_bridges(graph, segments_to_bridge):
+def create_loop_unrolling_bridges(graph, anchor_segments):
     """
     This function creates loop unrolling bridges using the information in SPAdes paths.
     """
@@ -140,7 +140,7 @@ def create_loop_unrolling_bridges(graph, segments_to_bridge):
 
     bridges = []
     simple_loops = graph.find_all_simple_loops()
-    seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
+    seg_nums_to_bridge = set(x.number for x in anchor_segments)
 
     # A simple loop can either be caused by a repeat in one sequence (probably more typical) or by
     # a separate circular sequence which has some common sequence (less typical, but still very

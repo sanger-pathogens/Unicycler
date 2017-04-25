@@ -95,7 +95,7 @@ def main():
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True, include_insert_size=True)
 
-        segments_to_bridge = get_single_copy_segments_for_bridging(graph)
+        anchor_segments = get_anchor_segments(graph)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -110,8 +110,8 @@ def main():
         # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
         # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
         if args.mode != 0:
-            bridges += create_spades_contig_bridges(graph, segments_to_bridge)
-            bridges += create_loop_unrolling_bridges(graph, segments_to_bridge)
+            bridges += create_spades_contig_bridges(graph, anchor_segments)
+            bridges += create_loop_unrolling_bridges(graph, anchor_segments)
             if not bridges:
                 log.log('none found', 1)
 
@@ -120,7 +120,7 @@ def main():
 
     else:  # short reads not available
         graph = None
-        segments_to_bridge = []
+        anchor_segments = []
 
     if short_reads_available and long_reads_available:
 
@@ -145,7 +145,7 @@ def main():
     if long_reads_available:
         string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
                                                  scoring_scheme, read_nicknames, counter, args,
-                                                 segments_to_bridge)
+                                                 anchor_segments)
     else:
         string_graph = None
 
@@ -155,18 +155,19 @@ def main():
 
     if short_reads_available and long_reads_available:
         if string_graph is not None:
-            bridges += create_miniasm_bridges(graph, string_graph, segments_to_bridge)
+            bridges += create_miniasm_bridges(graph, string_graph, anchor_segments,
+                                              scoring_scheme)
 
         bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
                                                    read_dict, long_read_filename, scoring_scheme,
-                                                   segments_to_bridge)
+                                                   anchor_segments)
 
         read_names, min_scaled_score, min_alignment_length = \
-            align_long_reads_to_assembly_graph(graph, segments_to_bridge, args, full_command,
+            align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,
                                                read_dict, read_names, long_read_filename)
 
         expected_linear_seqs = args.linear_seqs > 0
-        bridges += create_long_read_bridges(graph, read_dict, read_names, segments_to_bridge,
+        bridges += create_long_read_bridges(graph, read_dict, read_names, anchor_segments,
                                             args.verbosity, min_scaled_score, args.threads,
                                             scoring_scheme, min_alignment_length,
                                             expected_linear_seqs, args.min_bridge_qual)
@@ -179,14 +180,14 @@ def main():
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'bridges_applied'),
                               save_seg_type_info=True, save_copy_depth_info=True, newline=True)
 
-        graph.clean_up_after_bridging_1(segments_to_bridge, seg_nums_used_in_bridges)
+        graph.clean_up_after_bridging_1(anchor_segments, seg_nums_used_in_bridges)
         graph.clean_up_after_bridging_2(seg_nums_used_in_bridges, args.min_component_size,
-                                        args.min_dead_end_size, graph, segments_to_bridge)
+                                        args.min_dead_end_size, graph, anchor_segments)
         if args.keep > 2:
             log.log('', 2)
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'cleaned'),
                               save_seg_type_info=True, save_copy_depth_info=True)
-        graph.merge_all_possible(segments_to_bridge, args.mode)
+        graph.merge_all_possible(anchor_segments, args.mode)
         if args.keep > 2:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
@@ -507,7 +508,7 @@ def make_output_directory(out_dir, verbosity):
     return message
 
 
-def get_single_copy_segments_for_bridging(graph):
+def get_anchor_segments(graph):
     """
     Returns a list of the graph segments that will be used for bridging.
     """
@@ -519,6 +520,12 @@ def get_single_copy_segments_for_bridging(graph):
     bridging_seg_nums = set([x.number for x in graph.get_single_copy_segments()
                              if x.get_length() >= graph_n99 and
                              x.get_length() >= settings.MIN_SINGLE_COPY_LENGTH])
+
+    # Any already-completed segments are included - they don't need bridging but we want to ensure
+    # that they are included in the final graph.
+    for component in graph.get_connected_components():
+        if graph.is_component_complete(component):
+            bridging_seg_nums.add(component[0])
 
     # Next we include any long contigs which didn't have a copy-depth assigned. These are probably
     # single copy and the multiplicity algorithm just failed to call them as such.
@@ -860,12 +867,12 @@ def final_polish(graph, args, counter, vcf_filename):
     return insert_size_1st, insert_size_99th
 
 
-def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_command,
+def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,
                                        read_dict, read_names, long_read_filename):
     alignment_dir = os.path.join(args.out, 'read_alignment')
     graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
-    single_copy_segments_fasta = os.path.join(alignment_dir, 'single_copy_segments.fasta')
-    single_copy_segment_names = set(str(x.number) for x in single_copy_segments)
+    anchor_segments_fasta = os.path.join(alignment_dir, 'anchor_segments.fasta')
+    anchor_segment_names = set(str(x.number) for x in anchor_segments)
     alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
     scoring_scheme = AlignmentScoringScheme(args.scores)
     min_alignment_length = graph.overlap * settings.MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP
@@ -873,7 +880,7 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
     if not os.path.exists(alignment_dir):
         os.makedirs(alignment_dir)
     graph.save_to_fasta(graph_fasta, silent=True)
-    graph.save_specific_segments_to_fasta(single_copy_segments_fasta, single_copy_segments,
+    graph.save_specific_segments_to_fasta(anchor_segments_fasta, anchor_segments,
                                           silent=True)
     references = load_references(graph_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
@@ -901,7 +908,7 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
                                      low_score_threshold, False, min_alignment_length,
                                      alignments_in_progress, full_command, allowed_overlap,
                                      0, args.contamination, args.verbosity,
-                                     single_copy_segment_names=single_copy_segment_names)
+                                     single_copy_segment_names=anchor_segment_names)
         shutil.move(alignments_in_progress, alignments_sam)
 
         if args.keep < 2:
@@ -911,8 +918,8 @@ def align_long_reads_to_assembly_graph(graph, single_copy_segments, args, full_c
             os.remove(alignments_sam)
         if args.keep < 3 and os.path.isfile(graph_fasta):
             os.remove(graph_fasta)
-        if args.keep < 3 and os.path.isfile(single_copy_segments_fasta):
-            os.remove(single_copy_segments_fasta)
+        if args.keep < 3 and os.path.isfile(anchor_segments_fasta):
+            os.remove(anchor_segments_fasta)
 
     # Discard any reads that mostly align to known contamination.
     if args.contamination:

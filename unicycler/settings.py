@@ -91,8 +91,8 @@ ALL_PATH_SEARCH_MAX_FINAL_PATHS = 250
 # segments. When its number of working paths reaches PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS, it
 # will cull them down by scoring the alignment of each. Paths which have a score within the
 # PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION of the best are kept.
-PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 500
-PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.99
+PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 100
+PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.995
 
 # These settings are used for Unicycler's copy number determination - the process by which it
 # tries to figure out the depth of constituent components of each segment.
@@ -173,3 +173,8 @@ BASES_PER_FASTA_LINE = 70
 # changes are made or this limit is hit.
 MAX_PILON_POLISH_COUNT = 10
 
+MINIASM_BRIDGE_QUAL_WITH_GRAPH_PATH = 1.0
+MINIASM_BRIDGE_QUAL_WITH_DEAD_END = 1.0
+MINIASM_BRIDGE_QUAL_WITHOUT_PATH_OR_DEAD_END = 0.7
+MINIASM_BRIDGE_SCALED_SCORE_TO_USE_GRAPH_PATH = 95.0
+MINIASM_BRIDGE_HALF_QUAL_LENGTH = 2000

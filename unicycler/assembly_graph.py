@@ -21,6 +21,7 @@ from .misc import int_to_str, float_to_str, weighted_average_list, score_functio
     add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow, \
     remove_dupes_preserve_order
 from .bridge_long_read import LongReadBridge
+from .bridge_miniasm import MiniasmBridge
 from . import settings
 from . import log
 
@@ -557,12 +558,12 @@ class AssemblyGraph(object):
             log.log('\nRemoved small dead ends:', 2)
             log.log_number_list(removed_segments, 2)
 
-    def merge_all_possible(self, single_copy_segments, bridging_mode):
+    def merge_all_possible(self, anchor_segments, bridging_mode):
         """
         This function merges segments which are in a simple, unbranching path.
         """
-        if single_copy_segments is not None:
-            single_copy_seg_nums = set(x.number for x in single_copy_segments)
+        if anchor_segments is not None:
+            single_copy_seg_nums = set(x.number for x in anchor_segments)
         else:
             single_copy_seg_nums = None
         while True:
@@ -1191,6 +1192,20 @@ class AssemblyGraph(object):
             for link in [x for x in self.reverse_links[end]]:
                 self.remove_link(link, end)
 
+        # If the new bridge is a miniasm bridge, then we might need to trim a bit from the segments
+        # being bridged.
+        if isinstance(bridge, MiniasmBridge):
+            start_seg = self.segments[abs(start)]
+            if start > 0:
+                start_seg.trim_from_end(bridge.start_overlap)
+            else:
+                start_seg.trim_from_start(bridge.start_overlap)
+            end_seg = self.segments[abs(end)]
+            if end > 0:
+                end_seg.trim_from_start(bridge.end_overlap)
+            else:
+                end_seg.trim_from_end(bridge.end_overlap)
+
         # Create a new bridge segment.
         new_seg_num = self.get_next_available_seg_number()
         new_seg = Segment(new_seg_num, bridge.depth, bridge.bridge_sequence, True, bridge,
@@ -1274,7 +1289,7 @@ class AssemblyGraph(object):
             return False
         return True
 
-    def clean_up_after_bridging_1(self, single_copy_segments, seg_nums_used_in_bridges):
+    def clean_up_after_bridging_1(self, anchor_segments, seg_nums_used_in_bridges):
         """
         This function is run after bridge application to clean up necessary segments. This is the
         first of two such functions, and this one takes care of the simpler aspects of cleaning.
@@ -1290,13 +1305,13 @@ class AssemblyGraph(object):
         log.log('Segments eligible for deletion:\n' +
                 ', '.join(str(x) for x in sorted(list(seg_nums_used_in_bridges))) + '\n', 2)
 
-        single_copy_seg_nums = set(x.number for x in single_copy_segments)
+        single_copy_seg_nums = set(x.number for x in anchor_segments)
         self.remove_unbridging_segments(single_copy_seg_nums)
         self.remove_components_without_single_copy_segments(single_copy_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
 
     def clean_up_after_bridging_2(self, seg_nums_used_in_bridges, min_component_size,
-                                  min_dead_end_size, unbridged_graph, single_copy_segments):
+                                  min_dead_end_size, unbridged_graph, anchor_segments):
         """
         This is the second of two post-bridging cleaning functions, and it takes care of the more
         complex aspects of cleaning: deleting segments that were used in bridges but are still
@@ -1406,7 +1421,7 @@ class AssemblyGraph(object):
         for segment in self.segments.values():
             segment.depth = max(0.0, segment.depth)
 
-        single_copy_seg_nums = set(x.number for x in single_copy_segments)
+        single_copy_seg_nums = set(x.number for x in anchor_segments)
         self.remove_components_without_single_copy_segments(single_copy_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
         self.remove_unbridging_segments(single_copy_seg_nums)
