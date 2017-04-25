@@ -33,8 +33,7 @@ class CannotPolish(Exception):
         return repr(self.message)
 
 
-def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir,
-                                      vcf_filename=None):
+def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir):
     """
     This function does multiple rounds of Pilon polishing, until either it stops making changes
     or the limit is reached. It takes two graphs - one for polishing and one for insert size
@@ -55,14 +54,18 @@ def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir
     starting_dir = os.getcwd()
     os.chdir(polish_dir)
 
+    fix_type = 'bases'
     insert_size_1st, insert_size_99th = get_insert_size_range(insert_size_graph, args, polish_dir)
     for i in range(settings.MAX_PILON_POLISH_COUNT):
         if i > 0:
             graph.rotate_circular_sequences()
         change_count = polish_with_pilon(graph, args, polish_dir, insert_size_1st,
-                                         insert_size_99th, i+1)
+                                         insert_size_99th, i+1, fix_type)
         if change_count == 0:
-            break
+            if fix_type == 'bases':
+                fix_type = 'all'
+            else:
+                break
 
     os.chdir(starting_dir)
     if args.keep < 3 and os.path.exists(polish_dir):
@@ -150,7 +153,8 @@ def get_insert_size_range(graph, args, polish_dir):
     return insert_size_1st, insert_size_99th
 
 
-def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th, round_num):
+def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th, round_num,
+                      fix_type):
     """
     Runs Pilon on the graph to hopefully fix up small mistakes.
     """
@@ -232,7 +236,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     else:
         pilon_command = [args.pilon_path]
     pilon_command += ['--genome', input_filename, '--frags', bam_filename, '--changes',
-                      '--output', output_prefix, '--outdir', polish_dir, '--fix', 'bases']
+                      '--output', output_prefix, '--outdir', polish_dir, '--fix', fix_type]
     log.log(dim('  ' + ' '.join(pilon_command)), 2)
     try:
         pilon_stdout = subprocess.check_output(pilon_command, stderr=subprocess.STDOUT)

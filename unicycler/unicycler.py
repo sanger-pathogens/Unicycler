@@ -204,7 +204,7 @@ def main():
     insert_size_1st, insert_size_99th = None, None
     if short_reads_available and not args.no_pilon:
         insert_size_1st, insert_size_99th = \
-            final_polish(graph, args, counter, os.path.join(args.out, 'assembly.vcf'))
+            final_polish(graph, args, counter)
 
     if not args.no_rotate:
         rotate_completed_replicons(graph, args, counter)
@@ -216,8 +216,8 @@ def main():
     graph.save_to_gfa(final_assembly_gfa)
     graph.save_to_fasta(final_assembly_fasta, min_length=args.min_fasta_length)
 
-    final_assembly_vcf = os.path.join(args.out, 'assembly.vcf')
     if args.vcf and short_reads_available:
+        final_assembly_vcf = os.path.join(args.out, 'assembly.vcf')
         make_vcf(final_assembly_vcf, args, final_assembly_fasta, insert_size_1st, insert_size_99th)
 
     log.log('')
@@ -851,13 +851,13 @@ def rotate_completed_replicons(graph, args, counter):
             shutil.rmtree(blast_dir)
 
 
-def final_polish(graph, args, counter, vcf_filename):
+def final_polish(graph, args, counter):
     log.log_section_header('Polishing assembly with Pilon')
     polish_dir = os.path.join(args.out, 'pilon_polish')
     insert_size_1st, insert_size_99th = None, None
     try:
         insert_size_1st, insert_size_99th = \
-            polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir, vcf_filename)
+            polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir)
     except CannotPolish as e:
         log.log('Unable to polish assembly using Pilon: ' + e.message)
     else:
