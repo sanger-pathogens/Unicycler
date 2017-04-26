@@ -79,13 +79,12 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
     unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
     pilon_polished_filename = os.path.join(miniasm_dir, '14_pilon_polished.gfa')
-    pilon_polished_filename_2 = gfa_path(args.out, next(counter), 'long_read_assembly')
     contigs_placed_filename = os.path.join(miniasm_dir, '15_contigs_placed.gfa')
 
     # If the long read assembly already exists, then we can skip ahead quite a lot.
-    if os.path.isfile(pilon_polished_filename_2):
-        log.log('Long read assembly already exists: ' + pilon_polished_filename_2)
-        unitig_graph = StringGraph(pilon_polished_filename_2)
+    if os.path.isfile(pilon_polished_filename):
+        log.log('Long read assembly already exists: ' + pilon_polished_filename)
+        unitig_graph = StringGraph(pilon_polished_filename)
 
     # If not, we need to do all of the long read assembly steps now.
     else:
@@ -178,7 +177,9 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
                 if args.keep >= 3:
                     unitig_graph.save_to_gfa(pilon_polished_filename)
-                    shutil.copyfile(pilon_polished_filename, pilon_polished_filename_2)
+                if args.keep > 0:
+                    unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
+                                                      'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
         trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_dir)
