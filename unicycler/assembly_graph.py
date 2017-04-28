@@ -563,14 +563,14 @@ class AssemblyGraph(object):
         This function merges segments which are in a simple, unbranching path.
         """
         if anchor_segments is not None:
-            single_copy_seg_nums = set(x.number for x in anchor_segments)
+            anchor_seg_nums = set(x.number for x in anchor_segments)
         else:
-            single_copy_seg_nums = None
+            anchor_seg_nums = None
         while True:
             # Sort the segment numbers first so we apply the merging in a consistent order.
             seg_nums = sorted(list(self.segments.keys()))
             for num in seg_nums:
-                path = self.get_simple_path(num, single_copy_seg_nums, bridging_mode)
+                path = self.get_simple_path(num, anchor_seg_nums, bridging_mode)
                 assert len(path) > 0
                 if len(path) > 1:
                     self.merge_simple_path(path)
@@ -1305,9 +1305,9 @@ class AssemblyGraph(object):
         log.log('Segments eligible for deletion:\n' +
                 ', '.join(str(x) for x in sorted(list(seg_nums_used_in_bridges))) + '\n', 2)
 
-        single_copy_seg_nums = set(x.number for x in anchor_segments)
-        self.remove_unbridging_segments(single_copy_seg_nums)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        anchor_seg_nums = set(x.number for x in anchor_segments)
+        self.remove_unbridging_segments(anchor_seg_nums)
+        self.remove_components_without_anchor_segments(anchor_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
 
     def clean_up_after_bridging_2(self, seg_nums_used_in_bridges, min_component_size,
@@ -1421,22 +1421,22 @@ class AssemblyGraph(object):
         for segment in self.segments.values():
             segment.depth = max(0.0, segment.depth)
 
-        single_copy_seg_nums = set(x.number for x in anchor_segments)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        anchor_seg_nums = set(x.number for x in anchor_segments)
+        self.remove_components_without_anchor_segments(anchor_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
-        self.remove_unbridging_segments(single_copy_seg_nums)
+        self.remove_unbridging_segments(anchor_seg_nums)
         self.remove_small_components(min_component_size)
         self.remove_small_dead_ends(min_dead_end_size)
 
-    def remove_components_without_single_copy_segments(self, single_copy_seg_nums):
+    def remove_components_without_anchor_segments(self, anchor_seg_nums):
         """
-        Deletes all graph components that contain no single copy segments.
+        Deletes all graph components that contain no anchor segments.
         """
         segment_nums_to_remove = []
         connected_components = self.get_connected_components()
         for component_nums in connected_components:
             for seg_num in component_nums:
-                if abs(seg_num) in single_copy_seg_nums:
+                if abs(seg_num) in anchor_seg_nums:
                     break
             else:
                 segment_nums_to_remove += component_nums
@@ -1462,16 +1462,16 @@ class AssemblyGraph(object):
             log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
-    def remove_unbridging_segments(self, single_copy_seg_nums):
+    def remove_unbridging_segments(self, anchor_seg_nums):
         """
-        Deletes any multi-copy segments which cannot possibly connect two single copy segments.
+        Deletes any segments which cannot possibly connect two anchor segments.
         """
         segment_nums_to_remove = []
         for seg_num in self.segments:
-            if seg_num in single_copy_seg_nums:
+            if seg_num in anchor_seg_nums:
                 continue
-            if not (self.search(seg_num, single_copy_seg_nums) and
-                    self.search(-seg_num, single_copy_seg_nums)):
+            if not (self.search(seg_num, anchor_seg_nums) and
+                    self.search(-seg_num, anchor_seg_nums)):
                 segment_nums_to_remove.append(seg_num)
         if segment_nums_to_remove:
             log.log('Removed unbridging segments:', 2)
