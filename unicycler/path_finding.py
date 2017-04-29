@@ -54,7 +54,7 @@ def get_best_paths_for_seq(graph, start_seg, end_seg, target_length, sequence, s
     except TooManyPaths:
         progressive_path_search = True
         paths = progressive_path_find(graph, start_seg, end_seg, min_length, max_length,
-                                      sequence, scoring_scheme, expected_scaled_score)
+                                          sequence, scoring_scheme, expected_scaled_score)
 
     # Sort by length discrepancy from the target so the closest length matches come first.
     paths = sorted(paths, key=lambda x: abs(target_length - graph.get_bridge_path_length(x)))
@@ -174,8 +174,6 @@ def progressive_path_find(graph, start, end, min_length, max_length, sequence, s
     # closer to 1.0) such that path culling is more aggressive.
     forward_clogged = False
     reverse_clogged = False
-    cull_score_fraction = settings.PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION
-    max_working_paths = settings.PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS
 
     while True:
         if not forward_clogged:
@@ -185,10 +183,10 @@ def progressive_path_find(graph, start, end, min_length, max_length, sequence, s
                                                   shortest_reverse_path, final_paths, False,
                                                   sequence, scoring_scheme, expected_scaled_score,
                                                   graph, start_end_depth, max_length,
-                                                  cull_score_fraction)
+                                                  settings.PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION)
             if not forward_working_paths:
                 break
-            elif len(forward_working_paths) > max_working_paths:
+            elif len(forward_working_paths) > settings.PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS:
                 forward_clogged = True
 
         if not reverse_clogged:
@@ -198,18 +196,16 @@ def progressive_path_find(graph, start, end, min_length, max_length, sequence, s
                                                   shortest_forward_path, final_paths, True,
                                                   reverse_sequence, scoring_scheme,
                                                   expected_scaled_score, graph, start_end_depth,
-                                                  max_length, cull_score_fraction)
+                                                  max_length,
+                                                  settings.PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION)
             if not reverse_working_paths:
                 break
-            elif len(reverse_working_paths) > max_working_paths:
+            elif len(reverse_working_paths) > settings.PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS:
                 reverse_clogged = True
 
-        # If both paths have clogged up, then we need to fix things so that we can keep going! Make
-        # the thresholds a bit less strict and unclog whichever path is less clogged.
+        # If both paths have clogged up, then we give up!
         if forward_clogged and reverse_clogged:
-            cull_score_fraction = 1.0 - ((1.0 - cull_score_fraction) * 0.5)
-            forward_clogged = False
-            reverse_clogged = False
+            return []
 
     # Trim the start/end segments, filter for appropriate length and return the final paths!
     final_paths = [list(x)[1:-1] for x in final_paths]

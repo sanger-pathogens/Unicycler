@@ -1302,8 +1302,8 @@ class AssemblyGraph(object):
             if seg.bridge is not None:
                 seg_nums_used_in_bridges.add(seg_num)
 
-        log.log('Segments eligible for deletion:\n' +
-                ', '.join(str(x) for x in sorted(list(seg_nums_used_in_bridges))) + '\n', 2)
+        log.log('Segments eligible for deletion:', 2)
+        log.log_number_list(sorted(list(seg_nums_used_in_bridges)), 2)
 
         anchor_seg_nums = set(x.number for x in anchor_segments)
         self.remove_unbridging_segments(anchor_seg_nums)
