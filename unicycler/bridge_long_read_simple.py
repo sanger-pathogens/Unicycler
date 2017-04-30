@@ -286,6 +286,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
     loops = [x for x in loops
              if abs(x[0]) in seg_nums_to_bridge and abs(x[1]) in seg_nums_to_bridge and
                 abs(x[3]) not in seg_nums_to_bridge]
+    loops = [x for x in loops if abs(x[0]) != abs(x[1])]
     if not loops:
         log.log('No suitable simple loops present')
         log.log('')
