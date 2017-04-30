@@ -90,7 +90,7 @@ def main():
                               include_insert_size=True)
 
         clean_up_spades_graph(graph)
-        if args.keep > 2:
+        if args.keep > 0:
             overlap_removed_graph_filename = gfa_path(args.out, next(counter), 'overlaps_removed')
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True, include_insert_size=True)
