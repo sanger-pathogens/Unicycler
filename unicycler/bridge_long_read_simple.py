@@ -414,8 +414,8 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
             break
 
     # We should now have the indices of the alignments around the repeat.
-    assert (last_index_of_start != -1)
-    assert (first_index_of_end != -1)
+    if last_index_of_start == -1 or first_index_of_end == -1:
+        return -1  # vote for bad read
 
     # If there are any alignments in between the start and end segments, they are only
     # allowed to be the middle or repeat segments.
