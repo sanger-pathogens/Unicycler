@@ -156,7 +156,7 @@ def main():
     if short_reads_available and long_reads_available:
         if string_graph is not None:
             bridges += create_miniasm_bridges(graph, string_graph, anchor_segments,
-                                              scoring_scheme)
+                                              scoring_scheme, args.verbosity, args.min_bridge_qual)
 
         bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
                                                    read_dict, long_read_filename, scoring_scheme,

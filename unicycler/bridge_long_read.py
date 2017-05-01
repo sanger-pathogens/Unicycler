@@ -20,9 +20,9 @@ import math
 import statistics
 import sys
 from collections import defaultdict
-from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
-from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
-    print_table, get_right_arrow
+from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor, \
+    get_bridge_table_parameters, print_bridge_table_header, print_bridge_table_row
+from .misc import float_to_str, reverse_complement, flip_number_order, score_function
 from . import settings
 from .path_finding import get_best_paths_for_seq
 from . import log
@@ -329,6 +329,7 @@ class LongReadBridge(object):
         # the scores up a bit (otherwise they tend to hang near the bottom of the range).
         self.quality = 100.0 * math.sqrt(self.quality)
 
+        # noinspection PyTypeChecker
         output.append(self.quality)
 
         return output
@@ -510,9 +511,9 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
 
     # We want to display this table one row at a time, so we have to fix all of the column widths
     # at the start.
-    alignments, col_widths = get_long_read_bridge_table_parameters(graph, num_long_read_bridges,
-                                                                   verbosity)
-    print_long_read_bridge_table_header(alignments, col_widths, verbosity)
+    alignments, col_widths = get_bridge_table_parameters(graph, num_long_read_bridges, verbosity,
+                                                         'LongReadBridge')
+    print_bridge_table_header(alignments, col_widths, verbosity, 'LongReadBridge')
     completed_count = 0
 
     # Use a simple loop if we only have one thread.
@@ -521,8 +522,9 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
             output = bridge.finalise(scoring_scheme, min_alignment_length, read_lengths,
                                      estimated_genome_size, expected_linear_seqs)
             completed_count += 1
-            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                             num_long_read_bridges, min_bridge_qual, verbosity)
+            print_bridge_table_row(alignments, col_widths, output, completed_count,
+                                   num_long_read_bridges, min_bridge_qual, verbosity,
+                                   'LongReadBridge')
 
     # Use a thread pool if we have more than one thread.
     else:
@@ -540,12 +542,13 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
                              estimated_genome_size, expected_linear_seqs))
         for output in pool.imap_unordered(finalise_bridge, arg_list):
             completed_count += 1
-            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                             num_long_read_bridges, min_bridge_qual, verbosity)
+            print_bridge_table_row(alignments, col_widths, output, completed_count,
+                                   num_long_read_bridges, min_bridge_qual, verbosity,
+                                   'LongReadBridge')
 
-    # Now that the bridges are finalised, we split bridges that contain multiple anchor segments
-    # such that all bridges start and end on an anchor segment but contain no anchor segment in
-    # their path.
+    # Now that the bridges are finalised, we split bridges that contain anchor segments in their
+    # path such that all bridges start and end on an anchor segment but contain no anchor segments
+    # in their path.
     split_bridges = []
     for bridge in new_bridges:
         if not bridge.graph_path:
@@ -553,7 +556,9 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
         else:  # bridge has a path
             if not any(abs(x) in anchor_seg_nums for x in bridge.graph_path):  # already good
                 split_bridges.append(bridge)
-            else:  # bridge needs to be split!
+
+            # If the bridge path contains one or more anchor segments, it must be split!
+            else:
                 full_path = [bridge.start_segment] + bridge.graph_path + [bridge.end_segment]
                 anchor_indices = []
                 for i, seg_num in enumerate(full_path):
@@ -571,116 +576,9 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
                     split_bridge.all_paths = [new_path]
                     split_bridge.bridge_sequence = graph.get_path_sequence(new_path)
                     split_bridge.quality = bridge.quality
-                    split_bridge.depth = bridge.depth
                     split_bridges.append(split_bridge)
 
-    # TO DO: should I get rid of redundant bridges here, only keeping the highest quality one?
-    #        Redundancy will happen when a small bridge is made directly and as a split part of a
-    #        longer bridge. Culling redundancy isn't really necessary, as the by-quality bridge
-    #        application will take care of it, but it might make the output look a bit cleaner.
-
     return split_bridges
-
-
-def get_long_read_bridge_table_parameters(graph, num_long_read_bridges, verbosity):
-    max_seg_num_len = len(str(max(graph.segments.keys()))) + 1
-
-    table_alignments = 'RL'
-    table_col_widths = [2 * len(str(num_long_read_bridges)) + 1,  # Number
-                        max_seg_num_len + 10]                     # Start to end
-
-    if verbosity > 1:
-        table_alignments += 'RR'
-        table_col_widths += [5, 9]   # Read count, Consensus length
-
-    if verbosity > 2:
-        table_alignments += 'RR'
-        table_col_widths += [9, 8]   # Consensus time, Target length
-
-    if verbosity > 1:
-        table_alignments += 'LRR'
-        table_col_widths += [11, 8, 5]   # Search type, Search time, Path count
-
-    table_alignments += 'L'
-    table_col_widths += [40]  # Best path
-
-    if verbosity > 2:
-        table_alignments += 'RRRR'
-        table_col_widths += [9, 9, 12, 11]  # Best path length, raw score, scaled score, len disc
-
-    table_alignments += 'R'
-    table_col_widths += [7]  # Quality
-
-    return table_alignments, table_col_widths
-
-
-def print_long_read_bridge_table_header(alignments, col_widths, verbosity):
-    header_line_1 = ['', '']
-    header_line_2 = ['', 'Start ' + get_right_arrow() + ' end']
-
-    if verbosity > 1:
-        header_line_1 += ['',      'Consensus']
-        header_line_2 += ['Reads', 'len (bp)']
-    if verbosity > 2:
-        header_line_1 += ['Consensus', 'Target']
-        header_line_2 += ['time (s)',  'len (bp)']
-    if verbosity > 1:
-        header_line_1 += ['',            'Search',   'Path']
-        header_line_2 += ['Search type', 'time (s)', 'count']
-
-    header_line_1 += ['']
-    header_line_2 += ['Best path']
-
-    if verbosity > 2:
-        header_line_1 += ['Best path', 'Best path', 'Best path',    'Best path']
-        header_line_2 += ['len (bp)',  'raw score', 'scaled score', 'length disc']
-
-    header_line_1 += ['']
-    header_line_2 += ['Quality']
-
-    if any(x for x in header_line_1):
-        print_table([header_line_1], col_separation=2, alignments=alignments,
-                    header_format='normal', fixed_col_widths=col_widths, indent=0)
-    print_table([header_line_2], col_separation=2, alignments=alignments,
-                header_format='underline', fixed_col_widths=col_widths, indent=0)
-
-
-def print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                     num_long_read_bridges, min_bridge_qual, verbosity):
-    fraction = str(completed_count) + '/' + str(num_long_read_bridges)
-
-    start, end, read_count, consensus_length, consensus_time, target_length, path_count, \
-        search_type, search_time, best_path, best_path_len, best_path_raw_score, \
-        best_path_scaled_score, best_path_length_discrepancy, quality = output
-
-    start_to_end = (start + ' ' + get_right_arrow()).rjust(7) + ' ' + end
-    quality_str = float_to_str(quality, 3)
-
-    table_row = [fraction, start_to_end]
-
-    if verbosity > 1:
-        table_row += [read_count, consensus_length]
-
-    if verbosity > 2:
-        table_row += [consensus_time, target_length]
-
-    if verbosity > 1:
-        table_row += [search_type, search_time, path_count]
-
-    table_row += [best_path]
-
-    if verbosity > 2:
-        table_row += [best_path_len, best_path_raw_score, best_path_scaled_score,
-                      best_path_length_discrepancy]
-
-    table_row += [quality_str]
-
-    sub_colour = {}
-    if quality < min_bridge_qual:
-        sub_colour[quality_str] = 'red'
-    print_table([table_row], col_separation=2, header_format='normal', indent=0,
-                left_align_header=False, alignments=alignments, fixed_col_widths=col_widths,
-                sub_colour=sub_colour, bottom_align_header=False)
 
 
 def get_single_copy_alignments(read, single_copy_num_set, min_scaled_score):

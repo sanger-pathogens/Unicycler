@@ -2010,6 +2010,7 @@ class AssemblyGraph(object):
                 large_trim_end.add(-end_seg)
 
         # Now we finally do the segment trimming!
+        log.log('Removing graph overlaps\n', 3)
         log.log('             Bases     Bases', 3)
         log.log('           trimmed   trimmed', 3)
         log.log(' Segment      from      from', 3)
