@@ -399,7 +399,7 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
     """
     log.log_section_header('Building long read bridges')
 
-    seg_nums_to_bridge = set(x.number for x in anchor_segments)
+    anchor_seg_nums = set(x.number for x in anchor_segments)
 
     # This dictionary will collect the read sequences which span between two single copy segments.
     # Key = tuple of signed segment numbers (the segments being bridged)
@@ -409,53 +409,74 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
 
     for read_name in read_names:
         read = read_dict[read_name]
-        alignments = get_single_copy_alignments(read, seg_nums_to_bridge, min_scaled_score)
-
-        # TO DO: throw out alignments to the same segment but in opposite directions. This is
-        # because there's no legitimate way for a single copy segment to appear in the same read in
-        # two different directions. The same direction is okay, as that can happen with a circular
-        # piece of DNA, but opposite directions implies multi-copy.
-
+        alignments = get_single_copy_alignments(read, anchor_seg_nums, min_scaled_score)
         if len(alignments) < 2:
             continue
 
-        alignments = sorted(alignments, key=lambda x: x.read_start_positive_strand())
+        # If the code got here, then we have some alignments to anchor segments. We grab
+        # neighbouring pairs of alignments, starting with the highest scoring ones and work our
+        # way down. This means that we should have a pair for each neighbouring alignment, but
+        # potentially also more distant pairs if the alignments are strong.
+        already_added = set()
+        sorted_alignments = sorted(alignments, key=lambda x: x.raw_score, reverse=True)
+        available_alignments = []
+        for alignment in sorted_alignments:
 
-        for i in range(len(alignments)):
-            if i < len(alignments) - 1:
-                alignment_1 = alignments[i]
-                alignment_2 = alignments[i + 1]
-
-            # Special case: when the first and last alignments are to the same graph segment,
-            # make a bridge for them, even if they aren't a particularly high scoring pair of
-            # alignments. This can help to circularise plasmids which are very tied up with
-            # other, similar plasmids.
-            elif alignments[0].ref.name == alignments[-1].ref.name:
-                alignment_1 = alignments[0]
-                alignment_2 = alignments[-1]
-            else:
+            # If the alignment being added is to a reference that has already been added but in the
+            # opposite direction, then we don't include it. E.g. we don't add an alignment for 10
+            # if we already have an alignment for -10. This is because there's no legitimate way
+            # for a single copy segment to appear in the same read in two different directions. The
+            # same direction is okay, as that can happen with a circular piece of DNA, but opposite
+            # directions implies multi-copy.
+            opposite_num = -alignment.get_signed_ref_num()
+            if opposite_num in set(x.get_signed_ref_num() for x in available_alignments):
                 continue
 
-            # Standardise the order so we don't end up with both directions (e.g. 5 to -6 and
-            # 6 to -5) in spanning_read_seqs.
-            seg_nums, flipped = flip_number_order(alignment_1.get_signed_ref_num(),
-                                                  alignment_2.get_signed_ref_num())
-            bridge_start = alignment_1.read_end_positive_strand()
-            bridge_end = alignment_2.read_start_positive_strand()
+            available_alignments.append(alignment)
+            available_alignments = sorted(available_alignments,
+                                          key=lambda x: x.read_start_positive_strand())
+            if len(available_alignments) < 2:
+                continue
 
-            if bridge_end > bridge_start:
-                bridge_seq = read.sequence[bridge_start:bridge_end]
-                bridge_qual = read.qualities[bridge_start:bridge_end]
-                if flipped:
-                    bridge_seq = reverse_complement(bridge_seq)
-                    bridge_qual = bridge_qual[::-1]
-            else:
-                bridge_seq = bridge_end - bridge_start  # 0 or a negative number
-                bridge_qual = ''
+            for i in range(len(available_alignments)):
+                if i < len(available_alignments) - 1:
+                    alignment_1 = available_alignments[i]
+                    alignment_2 = available_alignments[i + 1]
 
-            spanning_read_seqs[seg_nums].append((bridge_seq, bridge_qual, alignment_1, alignment_2))
+                # Special case: when the first and last alignments are to the same graph segment,
+                # make a bridge for them, even if they aren't a particularly high scoring pair of
+                # alignments. This can help to circularise plasmids which are very tied up with
+                # other, similar plasmids.
+                elif available_alignments[0].ref.name == available_alignments[-1].ref.name:
+                    alignment_1 = available_alignments[0]
+                    alignment_2 = available_alignments[-1]
+                else:
+                    continue
 
-    # Create a bridge for each pair of segments with spanning read sequences.
+                # Standardise the order so we don't end up with both directions (e.g. 5 to -6 and
+                # 6 to -5) in spanning_read_seqs.
+                seg_nums, flipped = flip_number_order(alignment_1.get_signed_ref_num(),
+                                                      alignment_2.get_signed_ref_num())
+                if seg_nums not in already_added:
+                    bridge_start = alignment_1.read_end_positive_strand()
+                    bridge_end = alignment_2.read_start_positive_strand()
+
+                    if bridge_end > bridge_start:
+                        bridge_seq = read.sequence[bridge_start:bridge_end]
+                        bridge_qual = read.qualities[bridge_start:bridge_end]
+                        if flipped:
+                            bridge_seq = reverse_complement(bridge_seq)
+                            bridge_qual = bridge_qual[::-1]
+                    else:
+                        bridge_seq = bridge_end - bridge_start  # 0 or a negative number
+                        bridge_qual = ''
+
+                    spanning_read_seqs[seg_nums].append((bridge_seq, bridge_qual, alignment_1,
+                                                         alignment_2))
+                    already_added.add(seg_nums)
+
+    # If a bridge already exists for a spanning sequence, we add the sequence to the bridge. If
+    # not, we create a new bridge and add it.
     new_bridges = []
     for seg_nums, span in spanning_read_seqs.items():
         start, end = seg_nums
@@ -463,7 +484,7 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
         # If the start and end are the same and already exclusively connect (i.e. if this segment
         # is already circular), then skip - there's no need to bridge.
         if start == end and graph.get_downstream_seg_nums(start) == [start] and \
-                graph.get_upstream_seg_nums(start) == [start]:
+                        graph.get_upstream_seg_nums(start) == [start]:
             continue
 
         new_bridge = LongReadBridge(graph, start, end)
@@ -481,17 +502,18 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
         if read.alignments:
             read_lengths[read.get_length()] += 1
     estimated_genome_size = graph.get_estimated_sequence_len()
-    bridge_count = len(new_bridges)
-
-    # We want to display this table one row at a time, so we have to fix all of the column widths
-    # at the start.
-    alignments, col_widths = get_long_read_bridge_table_parameters(graph, bridge_count, verbosity)
-    print_long_read_bridge_table_header(alignments, col_widths, verbosity)
-    completed_count = 0
 
     # Now we need to finalise the bridges. This is the intensive step, as it involves creating a
     # consensus sequence, finding graph paths and doing alignments between the consensus and the
-    # graph paths.
+    # graph paths. We can therefore use threads to make this faster.
+    num_long_read_bridges = len(new_bridges)
+
+    # We want to display this table one row at a time, so we have to fix all of the column widths
+    # at the start.
+    alignments, col_widths = get_long_read_bridge_table_parameters(graph, num_long_read_bridges,
+                                                                   verbosity)
+    print_long_read_bridge_table_header(alignments, col_widths, verbosity)
+    completed_count = 0
 
     # Use a simple loop if we only have one thread.
     if threads == 1:
@@ -500,7 +522,7 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
                                      estimated_genome_size, expected_linear_seqs)
             completed_count += 1
             print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                             bridge_count, min_bridge_qual, verbosity)
+                                             num_long_read_bridges, min_bridge_qual, verbosity)
 
     # Use a thread pool if we have more than one thread.
     else:
@@ -519,8 +541,45 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
         for output in pool.imap_unordered(finalise_bridge, arg_list):
             completed_count += 1
             print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                             bridge_count, min_bridge_qual, verbosity)
-    return new_bridges
+                                             num_long_read_bridges, min_bridge_qual, verbosity)
+
+    # Now that the bridges are finalised, we split bridges that contain multiple anchor segments
+    # such that all bridges start and end on an anchor segment but contain no anchor segment in
+    # their path.
+    split_bridges = []
+    for bridge in new_bridges:
+        if not bridge.graph_path:
+            split_bridges.append(bridge)
+        else:  # bridge has a path
+            if not any(abs(x) in anchor_seg_nums for x in bridge.graph_path):  # already good
+                split_bridges.append(bridge)
+            else:  # bridge needs to be split!
+                full_path = [bridge.start_segment] + bridge.graph_path + [bridge.end_segment]
+                anchor_indices = []
+                for i, seg_num in enumerate(full_path):
+                    if abs(seg_num) in anchor_seg_nums:
+                        anchor_indices.append(i)
+                anchor_indices = sorted(anchor_indices)
+                for i in range(len(anchor_indices) - 1):
+                    start_i = anchor_indices[i]
+                    end_i = anchor_indices[i+1]
+                    start_seg_num = full_path[start_i]
+                    end_seg_num = full_path[end_i]
+                    new_path = full_path[start_i+1:end_i]
+                    split_bridge = LongReadBridge(graph, start_seg_num, end_seg_num)
+                    split_bridge.graph_path = new_path
+                    split_bridge.all_paths = [new_path]
+                    split_bridge.bridge_sequence = graph.get_path_sequence(new_path)
+                    split_bridge.quality = bridge.quality
+                    split_bridge.depth = bridge.depth
+                    split_bridges.append(split_bridge)
+
+    # TO DO: should I get rid of redundant bridges here, only keeping the highest quality one?
+    #        Redundancy will happen when a small bridge is made directly and as a split part of a
+    #        longer bridge. Culling redundancy isn't really necessary, as the by-quality bridge
+    #        application will take care of it, but it might make the output look a bit cleaner.
+
+    return split_bridges
 
 
 def get_long_read_bridge_table_parameters(graph, num_long_read_bridges, verbosity):
