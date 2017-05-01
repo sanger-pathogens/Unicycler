@@ -85,14 +85,14 @@ RELATIVE_PATH_LENGTH_BUFFER_SIZE = 100
 # search (exceeds these thresholds), Unicycler will give up and instead try a progressive path
 # search.
 ALL_PATH_SEARCH_MAX_WORKING_PATHS = 10000
-ALL_PATH_SEARCH_MAX_FINAL_PATHS = 250
+ALL_PATH_SEARCH_MAX_FINAL_PATHS = 500
 
 # These settings are used when Unicycler is progressively searching for paths connecting two graph
 # segments. When its number of working paths reaches PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS, it
 # will cull them down by scoring the alignment of each. Paths which have a score within the
 # PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION of the best are kept.
-PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 250
-PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.99
+PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 100
+PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.995
 
 # These settings are used for Unicycler's copy number determination - the process by which it
 # tries to figure out the depth of constituent components of each segment.
@@ -178,3 +178,5 @@ MINIASM_BRIDGE_QUAL_WITH_DEAD_END = 1.0
 MINIASM_BRIDGE_QUAL_WITHOUT_PATH_OR_DEAD_END = 0.7
 MINIASM_BRIDGE_SCALED_SCORE_TO_USE_GRAPH_PATH = 95.0
 MINIASM_BRIDGE_HALF_QUAL_LENGTH = 2000
+
+LONG_READ_BRIDGE_HALF_QUAL_LENGTH = 2000

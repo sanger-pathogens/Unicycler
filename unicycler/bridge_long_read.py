@@ -263,6 +263,11 @@ class LongReadBridge(object):
                 else:  # dead_end_count == 0
                     self.quality = settings.PATHLESS_BRIDGE_QUAL_NO_DEAD_ENDS
 
+            # Bridge length affects quality too: short bridges are better.
+            bridge_len = max(0, len(self.bridge_sequence))
+            half_qual_len = settings.LONG_READ_BRIDGE_HALF_QUAL_LENGTH
+            self.quality *= half_qual_len / (bridge_len + half_qual_len)
+
         # Expected read count is determined using the read lengths and bridge size. For a given
         # read length and bridge, there are an estimable number of positions where a read of that
         # length would be able to contribute to the bridge. This is used to get the probability
