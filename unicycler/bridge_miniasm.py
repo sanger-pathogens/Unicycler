@@ -129,9 +129,9 @@ def create_miniasm_bridges(graph, string_graph, anchor_segments, scoring_scheme)
     bridges = []
     seg_nums_to_bridge = set(x.number for x in anchor_segments)
 
-    string_graph_bridge_segments = [x for x in string_graph.segments
-                                    if x.startswith('BRIDGE_') or
-                                    x.startswith('OVERLAPPING_BRIDGE_')]
+    string_graph_bridge_segments = sorted([x for x in string_graph.segments
+                                           if x.startswith('BRIDGE_') or
+                                           x.startswith('OVERLAPPING_BRIDGE_')])
 
     for bridge_seg_name in string_graph_bridge_segments:
         bridge_seg = string_graph.segments[bridge_seg_name]

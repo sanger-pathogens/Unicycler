@@ -80,10 +80,12 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
     pilon_polished_filename = os.path.join(miniasm_dir, '14_pilon_polished.gfa')
     contigs_placed_filename = os.path.join(miniasm_dir, '15_contigs_placed.gfa')
+    miniasm_read_list = os.path.join(miniasm_dir, 'all_reads.txt')
 
     # If the long read assembly already exists, then we can skip ahead quite a lot.
-    if os.path.isfile(pilon_polished_filename):
+    if os.path.isfile(pilon_polished_filename) and os.path.isfile(miniasm_read_list):
         log.log('Long read assembly already exists: ' + pilon_polished_filename)
+        log.log('')
         unitig_graph = StringGraph(pilon_polished_filename)
 
     # If not, we need to do all of the long read assembly steps now.
@@ -182,7 +184,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                                                       'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
-        trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_dir)
+        trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_read_list)
         unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, args.threads,
                                      scoring_scheme, seg_nums_to_bridge)
         if args.keep >= 3:
@@ -751,7 +753,7 @@ def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads,
     return mapping_quality, unitig_depths
 
 
-def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_dir):
+def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_read_list):
     log.log_explanation('Contigs in the short-read assembly graph which end in dead ends may '
                         'contain bogus sequence near the dead end. Unicycler therefore uses the '
                         'read clipping values from the miniasm assembly to trim these dead ends '
@@ -760,7 +762,7 @@ def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_dir):
     dead_end_trim_table = [['Segment', 'Previous length', 'Trimmed from start', 'Trimmed from end',
                             'Final length']]
 
-    with open(os.path.join(miniasm_dir, 'all_reads.txt'), 'rt') as miniasm_read_names:
+    with open(miniasm_read_list, 'rt') as miniasm_read_names:
         for line in miniasm_read_names:
             if line.startswith('CONTIG_'):
                 line = line.strip()
