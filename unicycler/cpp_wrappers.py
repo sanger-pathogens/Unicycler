@@ -262,7 +262,11 @@ def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level
     preset = 0  # default
     if preset_name == 'read vs read':
         preset = 1
-    if preset_name == 'find contigs':
+    elif preset_name == 'find contigs':
+        preset = 2
+    if preset_name == 'scrub reads with reads':
+        preset = 1
+    if preset_name == 'scrub assembly with reads':
         preset = 2
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
                                   threads, sensitivity_level, preset)

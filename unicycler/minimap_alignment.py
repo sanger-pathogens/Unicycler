@@ -90,6 +90,15 @@ class MinimapAlignment(object):
         except ZeroDivisionError:
             return 0.0
 
+    def get_start_overhang(self):
+        return min(self.read_start, self.ref_start)
+
+    def get_end_overhang(self):
+        return min(self.read_end_gap, self.ref_end_gap)
+
+    def get_total_overhang(self):
+        return self.get_start_overhang() + self.get_end_overhang()
+
 
 def load_minimap_alignments_basic(minimap_alignments_str):
     """

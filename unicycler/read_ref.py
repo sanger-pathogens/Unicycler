@@ -90,7 +90,7 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
     return references
 
 
-def load_long_reads(filename, silent=False):
+def load_long_reads(filename, silent=False, section_header='Loading reads'):
     """
     This function loads in long reads from a FASTQ file and returns a dictionary where key = read
     name and value = Read object. It also returns a list of read names, in the order they are in
@@ -108,7 +108,7 @@ def load_long_reads(filename, silent=False):
         open_func = open
 
     if not silent:
-        log.log_section_header('Loading reads')
+        log.log_section_header(section_header)
 
     read_dict = {}
     read_names = []
