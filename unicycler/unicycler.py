@@ -954,7 +954,13 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
 def clean_up_spades_graph(graph):
     graph.remove_all_overlaps()
     graph.remove_zero_length_segs()
-    graph.merge_small_segments(5)
+    while True:
+        graph.expand_repeats()
+        if not graph.remove_zero_length_segs():
+            break
+    while True:
+        if not graph.merge_small_segments(5):
+            break
     graph.normalise_read_depths()
     graph.renumber_segments()
     graph.sort_link_order()

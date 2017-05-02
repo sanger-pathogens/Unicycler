@@ -15,6 +15,7 @@ not, see <http://www.gnu.org/licenses/>.
 
 import math
 import copy
+import os
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
 from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
@@ -820,6 +821,26 @@ class AssemblyGraph(object):
         if segment_number not in self.forward_links:
             return []
         return [abs(x) for x in self.forward_links[segment_number] if
+                self.lead_exclusively_from(x, segment_number)]
+
+    def get_exclusive_inputs_signed(self, segment_number):
+        """
+        This function finds all segments which lead into the given segment.  If those segments
+        do not lead into any other segments, then this function returns them in a list.
+        Specifically, this function returns a list of signed numbers.
+        """
+        if segment_number not in self.reverse_links:
+            return []
+        return [x for x in self.reverse_links[segment_number] if
+                self.lead_exclusively_to(x, segment_number)]
+
+    def get_exclusive_outputs_signed(self, segment_number):
+        """
+        Does the same thing as get_exclusive_inputs_signed, but in the other direction.
+        """
+        if segment_number not in self.forward_links:
+            return []
+        return [x for x in self.forward_links[segment_number] if
                 self.lead_exclusively_from(x, segment_number)]
 
     def lead_exclusively_to(self, segment_num_1, segment_num_2):
@@ -2080,6 +2101,7 @@ class AssemblyGraph(object):
             self.remove_segments(segs_to_remove)
             log.log('\nRemoved zero-length segments:')
             log.log_number_list(segs_to_remove)
+        return len(segs_to_remove)
 
     def merge_small_segments(self, max_merge_size):
         """
@@ -2131,6 +2153,39 @@ class AssemblyGraph(object):
             log.log('\nMerged small segments:')
             log.log_number_list(merged_seg_nums)
             self.remove_zero_length_segs()
+        return len(merged_seg_nums)
+
+    def expand_repeats(self):
+        """
+        This function moves sequence into repeat segments, wherever possible.
+        """
+        for seg_num in sorted(self.segments):  # sort for consistency between runs
+            segment = self.segments[seg_num]
+            inputs = sorted(self.get_upstream_seg_nums(seg_num))
+            exclusive_inputs = sorted(self.get_exclusive_inputs_signed(seg_num))
+            if len(inputs) > 1 and inputs == exclusive_inputs:
+                common_end = os.path.commonprefix([self.seq_from_signed_seg_num(x)[::-1]
+                                                   for x in inputs])[::-1]
+                if len(common_end) > 0:
+                    segment.prepend_to_forward_sequence(common_end)
+                    for in_seg in inputs:
+                        if in_seg > 0:
+                            self.segments[in_seg].trim_from_end(len(common_end))
+                        else:
+                            self.segments[-in_seg].trim_from_start(len(common_end))
+
+            outputs = sorted(self.get_downstream_seg_nums(seg_num))
+            exclusive_outputs = sorted(self.get_exclusive_outputs_signed(seg_num))
+            if len(outputs) > 1 and outputs == exclusive_outputs:
+                common_start = os.path.commonprefix([self.seq_from_signed_seg_num(x)
+                                                     for x in outputs])
+                if len(common_start) > 0:
+                    segment.append_to_forward_sequence(common_start)
+                    for out_seg in outputs:
+                        if out_seg > 0:
+                            self.segments[out_seg].trim_from_start(len(common_start))
+                        else:
+                            self.segments[-out_seg].trim_from_end(len(common_start))
 
     def starts_with_dead_end(self, signed_seg_num):
         """
