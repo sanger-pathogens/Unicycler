@@ -28,7 +28,7 @@ from collections import defaultdict
 from .misc import MyHelpFormatter, bold, quit_with_error, get_default_thread_count, \
     check_file_exists, int_to_str, float_to_str
 from .minimap_alignment import load_minimap_alignments_basic
-from .read_ref import load_long_reads
+from .read_ref import load_long_reads, Read
 from . import log
 
 try:
@@ -47,14 +47,26 @@ def main():
                                              section_header='Loading sequences')
     log.log('')
 
-    if args.trim > 0:
-        log.log_section_header('Conducting alignments for trimming', single_newline=True)
-        alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads)
+    log.log_section_header('Conducting alignments', single_newline=True)
+    alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads)
 
+    if args.trim > 0:
         log.log_section_header('Trimming sequences', single_newline=True)
         trim_sequences(seq_dict, seq_names, alignments, args.trim)
 
+    if args.split > 0:
+        log.log_section_header('Splitting sequences', single_newline=True)
+        split_seqs = split_sequences(seq_dict, seq_names, alignments, args.split,
+                                     args.min_split_size)
+    else:
+        split_seqs = [seq_dict[x] for x in seq_names]
 
+    # TO DO: OUTPUT READS HERE
+    # TO DO: OUTPUT READS HERE
+    # TO DO: OUTPUT READS HERE
+    # TO DO: OUTPUT READS HERE
+    # TO DO: OUTPUT READS HERE
+    # TO DO: OUTPUT READS HERE
 
 
 def get_arguments():
@@ -77,6 +89,9 @@ def get_arguments():
     parser.add_argument('--split', type=int, default=50,
                         help='The aggressiveness with which the input will be split (0 to 100, '
                              'where 0 is no splitting and 100 is very aggressive splitting)')
+    parser.add_argument('--min_split_size', type=int, default=1000,
+                        help='Parts of split sequences will only be outputted if they are at '
+                             'least this big')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
     args = parser.parse_args()
@@ -85,6 +100,8 @@ def get_arguments():
         quit_with_error('--trim must be between 0 and 100 (inclusive)')
     if args.split < 0 or args.split > 100:
         quit_with_error('--split must be between 0 and 100 (inclusive)')
+    if args.trim == 0 and args.split == 0:
+        quit_with_error('--trim and --split cannot both be 0 (there would be nothing left to do)')
     if args.threads <= 0:
         quit_with_error('--threads must be at least 1')
 
@@ -174,22 +191,12 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
         seq = seq_dict[name]
         seq_alignments = alignments[name]
         seq_length = seq.get_length()
-
-        # Total up the read's mean depth, but we don't want to count alignments that are too local
-        # (e.g. only part of the sequence is in common). So we scale each alignment's contribution
-        # down by its overhang.
-        mean_depth = 0.0
-        for a in seq_alignments:
-            fraction_ref = a.fraction_ref_aligned()
-            overhang = a.get_total_overhang()
-            alignment_size = a.num_bases
-            scaling_factor = max(alignment_size - overhang, 0) / alignment_size
-            fraction_ref *= scaling_factor
-            mean_depth += fraction_ref
-
+        mean_depth = get_mean_seq_depth(seq_alignments)
         target_depth = int(math.floor(trim_setting * mean_depth))
+
         trim_start_pos = 0
         trim_end_pos = seq_length
+
         if target_depth > 0:
             depth_changes = defaultdict(int)
             for a in seq_alignments:
@@ -229,3 +236,101 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
             float_to_str(mean_bases_per_seq, 1, max_num=length_before))
     log.log('Total length after trimming:  ' +
             int_to_str(length_after, max_num=length_before) + ' bp')
+
+
+def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size):
+    split_setting = (split_setting / 100.0) ** 2
+    max_relevant_distance = 1000
+    split_seqs = []
+
+    for name in seq_names:
+        seq = seq_dict[name]
+        seq_alignments = alignments[name]
+        seq_length = seq.get_length()
+
+        # Each position in the sequence is scored based on the alignments around it.
+
+        scores = [1.0 - split_setting] * seq_length
+        start_overhang_scores = [0.0] * seq_length
+        end_overhang_scores = [0.0] * seq_length
+
+        for a in seq_alignments:
+
+            # Alignments which span the position earn it positive points (because they suggest
+            # contiguity). The larger the span (up to a maximum), the more points are earned.
+            a_start, a_end = a.ref_start, a.ref_end
+            for pos in range(a_start, a_end):
+                distance_from_end = min(pos - a_start, a_end - pos)
+                relevant_distance = min(distance_from_end, max_relevant_distance)
+                score = relevant_distance / max_relevant_distance
+                score /= split_setting
+                scores[pos] += score
+
+            # Tally up the score for start overlaps. Scores are larger for positions in larger
+            # overlaps and positions close to where the overlap begins.
+            start_overhang_size = min(a.get_start_overhang(), max_relevant_distance)
+            start_overhang_rel_size = start_overhang_size / max_relevant_distance
+            for pos in range(a_start - start_overhang_size, a_start):
+                distance_from_clip = a_start - pos
+                score = (start_overhang_size - distance_from_clip) / start_overhang_size
+                score *= start_overhang_rel_size
+                start_overhang_scores[pos] -= score
+
+            # Do the same for end overlaps.
+            end_overhang_size = min(a.get_end_overhang(), max_relevant_distance)
+            end_overhang_rel_size = end_overhang_size / max_relevant_distance
+            for pos in range(a_end, a_end + end_overhang_size):
+                distance_from_clip = pos - a_end
+                score = (end_overhang_size - distance_from_clip) / end_overhang_size
+                score *= end_overhang_rel_size
+                end_overhang_scores[pos] -= score
+
+        # The final score comes from the positive contribution of spanning alignments and the
+        # negative contribution of overhangs. But there needs to be both a start overhang and
+        # end overhang to really matter.
+        positive_score_ranges = []
+        positive_range_start = 0
+        in_positive_range = True
+        for pos in range(seq_length):
+            overhang_score = max(start_overhang_scores[pos], end_overhang_scores[pos])
+            scores[pos] += overhang_score
+            if scores[pos] >= 0.0:
+                if not in_positive_range:
+                    in_positive_range = True
+                    positive_range_start = pos
+            else:
+                if in_positive_range:
+                    in_positive_range = False
+                    positive_score_ranges.append((positive_range_start, pos))
+        if in_positive_range:
+            positive_score_ranges.append((positive_range_start, seq_length))
+
+        # Clean up small ranges.
+        positive_score_ranges = [x for x in positive_score_ranges if x[1] - x[0] >= min_split_size]
+
+        if positive_score_ranges == [(0, seq_length)]:  # Sequence wasn't split
+            split_seqs.append(seq)
+        else:
+            for i, positive_score_range in enumerate(positive_score_ranges):
+                start, end = positive_score_range
+                seq_name = seq.name + '_split_' + str(i+1)
+                split_seqs.append(Read(seq_name, seq.sequence[start:end], seq.qualities[start:end]))
+
+    return split_seqs
+
+
+def get_mean_seq_depth(seq_alignments):
+    """
+    Total up the read's mean depth, but we don't want to count alignments that are too local (e.g.
+    only part of the sequence is in common). So we scale each alignment's contribution down by its
+    overhang.
+    """
+    mean_depth = 0.0
+    for a in seq_alignments:
+        fraction_ref = a.fraction_ref_aligned()
+        overhang = a.get_total_overhang()
+        alignment_size = a.num_bases
+        scaling_factor = max(alignment_size - overhang, 0) / alignment_size
+        fraction_ref *= scaling_factor
+        mean_depth += fraction_ref
+    return mean_depth
