@@ -2051,7 +2051,8 @@ class AssemblyGraph(object):
         multi-way junction).
         """
         segs_to_remove = []
-        for seg_num, seg in self.segments.items():
+        for seg_num in sorted(self.segments):  # sort for consistency between runs
+            seg = self.segments[seg_num]
             if seg.get_length() != self.overlap:
                 continue
             if seg_num in self.forward_links:
@@ -2085,13 +2086,11 @@ class AssemblyGraph(object):
         In some cases, small segments can be merged into neighbouring segments to simplify the
         graph somewhat. This function does just that!
         """
-        # This function assumes an overlap-free graph.
-        if self.overlap > 0:
-            return
-
+        assert self.overlap == 0
         merged_seg_nums = []
         while True:
-            for seg_num, segment in self.segments.items():
+            for seg_num in sorted(self.segments):  # sort for consistency between runs
+                segment = self.segments[seg_num]
                 if segment.get_length() > max_merge_size or segment.get_length() == 0:
                     continue
                 downstream_segs = self.get_downstream_seg_nums(seg_num)
@@ -2131,6 +2130,7 @@ class AssemblyGraph(object):
         if merged_seg_nums:
             log.log('\nMerged small segments:')
             log.log_number_list(merged_seg_nums)
+            self.remove_zero_length_segs()
 
     def starts_with_dead_end(self, signed_seg_num):
         """
