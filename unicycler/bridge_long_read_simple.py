@@ -81,6 +81,12 @@ class SimpleLongReadBridge(object):
         vote_quality = max(0.0, 2.0 * (vote_proportion - 0.5))
         self.quality *= vote_quality
 
+        # Low numbers of votes get penalised.
+        if votes_for == 1:
+            self.quality *= 0.5
+        elif votes_for == 2:
+            self.quality *= 0.75
+
         # We finalise the quality to a range of 0 to 100. We also use the sqrt function to pull
         # the scores up a bit (otherwise they tend to hang near the bottom of the range).
         self.quality = 100.0 * math.sqrt(self.quality)
