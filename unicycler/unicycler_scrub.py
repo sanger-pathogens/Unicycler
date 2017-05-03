@@ -24,11 +24,12 @@ import argparse
 import os
 import math
 import sys
+import subprocess
 from collections import defaultdict
 from .misc import MyHelpFormatter, bold, quit_with_error, get_default_thread_count, \
-    check_file_exists, int_to_str, float_to_str
+    check_file_exists, int_to_str, float_to_str, get_sequence_file_type
 from .minimap_alignment import load_minimap_alignments_basic
-from .read_ref import load_long_reads, Read
+from .read_ref import load_long_reads
 from . import log
 
 try:
@@ -42,6 +43,7 @@ def main():
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
     print_intro_message(args, full_command)
+    input_type = get_sequence_file_type(args.input)
 
     seq_dict, seq_names, _ = load_long_reads(args.input, silent=False,
                                              section_header='Loading sequences')
@@ -50,20 +52,34 @@ def main():
     log.log_section_header('Conducting alignments', single_newline=True)
     alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads)
 
+    # Trim the sequences based on
     if args.trim > 0:
         log.log_section_header('Trimming sequences', single_newline=True)
         trim_sequences(seq_dict, seq_names, alignments, args.trim)
+    else:
+        for seq in seq_dict.values():
+            seq.trim_start_pos = 0
+            seq.trim_end_pos = seq.get_length()
 
+    # Split the sequences where they look like chimeras/misassemblies.
     if args.split > 0:
         log.log_section_header('Splitting sequences', single_newline=True)
         split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size)
+    else:
+        for seq in seq_dict.values():
+            seq.positive_score_ranges = [(0, seq.get_length())]
 
-    # TO DO: OUTPUT READS HERE
-    # TO DO: OUTPUT READS HERE
-    # TO DO: OUTPUT READS HERE
-    # TO DO: OUTPUT READS HERE
-    # TO DO: OUTPUT READS HERE
-    # TO DO: OUTPUT READS HERE
+    # Combine the trimming with the splitting to get final output ranges for each sequence.
+    for name in seq_names:
+        seq = seq_dict[name]
+        seq.final_ranges = []
+        for s, e in seq.positive_score_ranges:
+            s = max(s, seq.trim_start_pos)
+            e = min(e, seq.trim_end_pos)
+            if e - s >= args.min_split_size:
+                seq.final_ranges.append((s, e))
+
+    output_sequences(args.out, seq_names, seq_dict, input_type)
 
 
 def get_arguments():
@@ -164,7 +180,7 @@ def get_minimap_alignments_by_seq(input, reads, threads):
         minimap_preset = 'scrub reads with reads'
     else:
         minimap_preset = 'scrub assembly with reads'
-    minimap_alignments_str = minimap_align_reads(input, reads, threads, 3, minimap_preset)
+    minimap_alignments_str = minimap_align_reads(input, reads, threads, 2, minimap_preset)
     minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
     log.log(int_to_str(len(minimap_alignments)) + ' alignments found')
     alignments_by_seq = defaultdict(list)
@@ -308,8 +324,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         else:
             log.log('\nSplit ' + seq.name + ' into pieces: ' +
                     get_read_range_str(seq.positive_score_ranges))
-            print(seq.sequence)  # TEMP
-
+            # print(seq.sequence)  # TEMP
 
 
 def get_mean_seq_depth(seq_alignments):
@@ -331,3 +346,45 @@ def get_mean_seq_depth(seq_alignments):
 
 def get_read_range_str(ranges):
     return ', '.join([str(x[0]) + '-' + str(x[1]) for x in ranges])
+
+
+def output_sequences(output, seq_names, seq_dict, out_format):
+    gzipped_out = output.endswith('.gz')
+    if gzipped_out:
+        out_filename = 'TEMP_' + str(os.getpid()) + '.fastq'
+    else:
+        out_filename = output
+    with open(out_filename, 'wt') as out:
+        for name in seq_names:
+            seq = seq_dict[name]
+            include_piece_number = len(seq.final_ranges) > 1
+            for i, range in enumerate(seq.final_ranges):
+                if out_format == 'FASTA':
+                    out_str = get_fasta(seq.name, range, seq.sequence, i, include_piece_number)
+                else:  # FASTQ
+                    out_str = get_fastq(seq.name, range, seq.sequence, seq.qualities, i,
+                                        include_piece_number)
+                out.write(out_str)
+    if gzipped_out:
+        subprocess.check_output('gzip -c ' + out_filename + ' > ' + output,
+                                stderr=subprocess.STDOUT, shell=True)
+        os.remove(out_filename)
+    log.log('Saved scrubbed sequences to ' + os.path.abspath(output))
+
+
+def get_fasta(name, range, sequence, i, include_piece_number):
+    s, e = range
+    parts = ['>', name]
+    if include_piece_number:
+        parts.append('_' + str(i+1))
+    parts += ['\n', sequence[s, e], '\n']
+    return ''.join(parts)
+
+
+def get_fastq(name, range, sequence, qualities, i, include_piece_number):
+    s, e = range
+    parts = ['@', name]
+    if include_piece_number:
+        parts.append('_' + str(i+1))
+    parts += ['\n', sequence[s, e], '\n+\n', qualities[s, e], '\n']
+    return ''.join(parts)
