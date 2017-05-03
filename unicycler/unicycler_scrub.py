@@ -234,9 +234,8 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
 
 
 def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size):
-    split_setting = (split_setting / 100.0) ** 2
+    split_setting /= 100.0
     max_relevant_distance = 1000
-    split_seqs = []
 
     for name in seq_names:
         seq = seq_dict[name]
@@ -244,8 +243,8 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         seq_length = seq.get_length()
 
         # Each position in the sequence is scored based on the alignments around it.
-
-        scores = [1.0 - split_setting] * seq_length
+        starting_score = 1.0 - split_setting
+        scores = [starting_score] * seq_length
         start_overhang_scores = [0.0] * seq_length
         end_overhang_scores = [0.0] * seq_length
 
@@ -258,7 +257,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
                 distance_from_end = min(pos - a_start, a_end - pos)
                 relevant_distance = min(distance_from_end, max_relevant_distance)
                 score = relevant_distance / max_relevant_distance
-                score /= split_setting
+                score /= split_setting  # lower split settings give larger positive scores
                 scores[pos] += score
 
             # Tally up the score for start overlaps. Scores are larger for positions in larger
@@ -305,10 +304,12 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
                                      if x[1] - x[0] >= min_split_size]
 
         if seq.positive_score_ranges == [(0, seq_length)]:  # Sequence wasn't split
-            print('.', end='', flush=True)
+            log.log('.', end='')
         else:
-            print('\nSplit ' + seq.name + ' into pieces: ' +
-                  get_read_range_str(seq.positive_score_ranges), flush=True)
+            log.log('\nSplit ' + seq.name + ' into pieces: ' +
+                    get_read_range_str(seq.positive_score_ranges))
+            print(seq.sequence)  # TEMP
+
 
 
 def get_mean_seq_depth(seq_alignments):
