@@ -56,10 +56,7 @@ def main():
 
     if args.split > 0:
         log.log_section_header('Splitting sequences', single_newline=True)
-        split_seqs = split_sequences(seq_dict, seq_names, alignments, args.split,
-                                     args.min_split_size)
-    else:
-        split_seqs = [seq_dict[x] for x in seq_names]
+        split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size)
 
     # TO DO: OUTPUT READS HERE
     # TO DO: OUTPUT READS HERE
@@ -169,7 +166,7 @@ def get_minimap_alignments_by_seq(input, reads, threads):
         minimap_preset = 'scrub assembly with reads'
     minimap_alignments_str = minimap_align_reads(input, reads, threads, 3, minimap_preset)
     minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
-    log.log(str(len(minimap_alignments)) + ' alignments found')
+    log.log(int_to_str(len(minimap_alignments)) + ' alignments found')
     alignments_by_seq = defaultdict(list)
     for a in minimap_alignments:
         alignments_by_seq[a.ref_name].append(a)
@@ -194,8 +191,8 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
         mean_depth = get_mean_seq_depth(seq_alignments)
         target_depth = int(math.floor(trim_setting * mean_depth))
 
-        trim_start_pos = 0
-        trim_end_pos = seq_length
+        seq.trim_start_pos = 0
+        seq.trim_end_pos = seq_length
 
         if target_depth > 0:
             depth_changes = defaultdict(int)
@@ -210,7 +207,7 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
                 depth += change
                 assert depth >= 0
                 if depth >= target_depth:
-                    trim_start_pos = pos
+                    seq.trim_start_pos = pos
                     break
 
             # Go through the depth changes backwards to find the last position which exceeds the
@@ -220,14 +217,12 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
                 depth -= change
                 assert depth >= 0
                 if depth >= target_depth:
-                    trim_end_pos = pos
+                    seq.trim_end_pos = pos
                     break
 
-        seq.sequence = seq.sequence[trim_start_pos:trim_end_pos]
-        seq.qualities = seq.qualities[trim_start_pos:trim_end_pos]
-        bases_trimmed += trim_start_pos
-        bases_trimmed += seq_length - trim_end_pos
-        length_after += len(seq.sequence)
+        bases_trimmed += seq.trim_start_pos
+        bases_trimmed += seq_length - seq.trim_end_pos
+        length_after += seq.trim_end_pos - seq.trim_start_pos
 
     log.log('Total bases trimmed:          ' +
             int_to_str(bases_trimmed, max_num=length_before) + ' bp')
@@ -306,17 +301,14 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
             positive_score_ranges.append((positive_range_start, seq_length))
 
         # Clean up small ranges.
-        positive_score_ranges = [x for x in positive_score_ranges if x[1] - x[0] >= min_split_size]
+        seq.positive_score_ranges = [x for x in positive_score_ranges
+                                     if x[1] - x[0] >= min_split_size]
 
-        if positive_score_ranges == [(0, seq_length)]:  # Sequence wasn't split
-            split_seqs.append(seq)
+        if seq.positive_score_ranges == [(0, seq_length)]:  # Sequence wasn't split
+            print('.', end='', flush=True)
         else:
-            for i, positive_score_range in enumerate(positive_score_ranges):
-                start, end = positive_score_range
-                seq_name = seq.name + '_split_' + str(i+1)
-                split_seqs.append(Read(seq_name, seq.sequence[start:end], seq.qualities[start:end]))
-
-    return split_seqs
+            print('\nSplit ' + seq.name + ' into pieces: ' +
+                  get_read_range_str(seq.positive_score_ranges), flush=True)
 
 
 def get_mean_seq_depth(seq_alignments):
@@ -334,3 +326,7 @@ def get_mean_seq_depth(seq_alignments):
         fraction_ref *= scaling_factor
         mean_depth += fraction_ref
     return mean_depth
+
+
+def get_read_range_str(ranges):
+    return ', '.join([str(x[0]) + '-' + str(x[1]) for x in ranges])
