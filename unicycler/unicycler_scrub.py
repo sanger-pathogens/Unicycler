@@ -63,9 +63,12 @@ def main():
 
     # Split the sequences where they look like chimeras/misassemblies.
     if args.split > 0:
-        log.log_section_header('Splitting sequences', single_newline=True)
+        if args.discard_chimeras:
+            log.log_section_header('Discarding chimeras', single_newline=True)
+        else:
+            log.log_section_header('Splitting chimeras', single_newline=True)
         split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size,
-                        args.discard_chimeras)
+                        args.discard_chimeras, args.show_sequences)
     else:
         for seq in seq_dict.values():
             seq.positive_score_ranges = [(0, seq.get_length())]
@@ -107,7 +110,10 @@ def get_arguments():
                         help='Parts of split sequences will only be outputted if they are at '
                              'least this big')
     parser.add_argument('--discard_chimeras', action='store_true',
-                        help='If set, chimeric reads will be discarded instead of split')
+                        help='If used, chimeric sequences will be discarded instead of split')
+    parser.add_argument('--show_sequences', action='store_true',
+                        help='If used, the the program will display the nucleotide sequence for '
+                             'chimeric sequences (mainly for debugging and verification purposes)')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
     args = parser.parse_args()
@@ -253,9 +259,10 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
 
 
 def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size,
-                    discard_chimeras):
+                    discard_chimeras, show_sequences):
     split_setting /= 100.0
     max_relevant_distance = 1000
+    chimera_count = 0
 
     for name in seq_names:
         seq = seq_dict[name]
@@ -322,21 +329,29 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         is_chimera = seq.positive_score_ranges != [(0, seq_length)]
 
         if is_chimera:
+            chimera_count += 1
             if discard_chimeras:
                 seq.positive_score_ranges = []
             else:
                 # Clean up small ranges.
                 seq.positive_score_ranges = [x for x in seq.positive_score_ranges
                                              if x[1] - x[0] >= min_split_size]
-
             if seq.positive_score_ranges:
                 log.log('\nSplit ' + seq.name + ' into pieces: ' +
                         get_read_range_str(seq.positive_score_ranges))
-                # print(seq.sequence)  # TEMP
+                if show_sequences:
+                    log.log(seq.sequence)
             else:
                 log.log('\nDiscarded ' + seq.name)
+                if show_sequences:
+                    log.log(seq.sequence)
         else:
             log.log('.', end='')
+
+    log.log('')
+    log.log('Detected ' + int_to_str(chimera_count) + ' chimeras out of ' +
+            int_to_str(len(seq_names)) + ' total reads')
+    log.log('')
 
 
 def get_mean_seq_depth(seq_alignments):
@@ -361,32 +376,39 @@ def get_read_range_str(ranges):
 
 
 def output_sequences(output, seq_names, seq_dict, out_format):
-    log.log('\n')
+    log.log('')
+    log.log('Saved scrubbed sequences to ' + os.path.abspath(output))
+
     gzipped_out = output.endswith('.gz')
     if gzipped_out:
         out_filename = 'TEMP_' + str(os.getpid()) + '.fastq'
     else:
         out_filename = output
+
+    total_length = 0
     with open(out_filename, 'wt') as out:
         for name in seq_names:
             seq = seq_dict[name]
             include_piece_number = len(seq.final_ranges) > 1
             for i, range in enumerate(seq.final_ranges):
+                s, e = range
+                total_length += e - s
                 if out_format == 'FASTA':
-                    out_str = get_fasta(seq.name, range, seq.sequence, i, include_piece_number)
+                    out_str = get_fasta(seq.name, s, e, seq.sequence, i, include_piece_number)
                 else:  # FASTQ
-                    out_str = get_fastq(seq.name, range, seq.sequence, seq.qualities, i,
+                    out_str = get_fastq(seq.name, s, e, seq.sequence, seq.qualities, i,
                                         include_piece_number)
                 out.write(out_str)
     if gzipped_out:
         subprocess.check_output('gzip -c ' + out_filename + ' > ' + output,
                                 stderr=subprocess.STDOUT, shell=True)
         os.remove(out_filename)
-    log.log('Saved scrubbed sequences to ' + os.path.abspath(output))
+    log.log('Total length after scrubbing: ' + int_to_str(total_length) + ' bp')
 
 
-def get_fasta(name, range, sequence, i, include_piece_number):
-    s, e = range
+def get_fasta(name, s, e, sequence, i, include_piece_number):
+    if e - s == 0:
+        return ''
     parts = ['>', name]
     if include_piece_number:
         parts.append('_' + str(i+1))
@@ -394,8 +416,9 @@ def get_fasta(name, range, sequence, i, include_piece_number):
     return ''.join(parts)
 
 
-def get_fastq(name, range, sequence, qualities, i, include_piece_number):
-    s, e = range
+def get_fastq(name, s, e, sequence, qualities, i, include_piece_number):
+    if e - s == 0:
+        return ''
     parts = ['@', name]
     if include_piece_number:
         parts.append('_' + str(i+1))
