@@ -348,7 +348,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         else:
             log.log('.', end='')
 
-    log.log('')
+    log.log('\n')
     log.log('Detected ' + int_to_str(chimera_count) + ' chimeras out of ' +
             int_to_str(len(seq_names)) + ' total reads')
     log.log('')
@@ -376,8 +376,7 @@ def get_read_range_str(ranges):
 
 
 def output_sequences(output, seq_names, seq_dict, out_format):
-    log.log('')
-    log.log('Saved scrubbed sequences to ' + os.path.abspath(output))
+    log.log('Saving scrubbed sequences to ' + os.path.abspath(output))
 
     gzipped_out = output.endswith('.gz')
     if gzipped_out:
