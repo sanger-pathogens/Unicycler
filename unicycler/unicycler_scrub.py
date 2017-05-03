@@ -64,7 +64,8 @@ def main():
     # Split the sequences where they look like chimeras/misassemblies.
     if args.split > 0:
         log.log_section_header('Splitting sequences', single_newline=True)
-        split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size)
+        split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size,
+                        args.discard_chimeras)
     else:
         for seq in seq_dict.values():
             seq.positive_score_ranges = [(0, seq.get_length())]
@@ -105,6 +106,8 @@ def get_arguments():
     parser.add_argument('--min_split_size', type=int, default=1000,
                         help='Parts of split sequences will only be outputted if they are at '
                              'least this big')
+    parser.add_argument('--discard_chimeras', action='store_true',
+                        help='If set, chimeric reads will be discarded instead of split')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
     args = parser.parse_args()
@@ -180,7 +183,7 @@ def get_minimap_alignments_by_seq(input, reads, threads):
         minimap_preset = 'scrub reads with reads'
     else:
         minimap_preset = 'scrub assembly with reads'
-    minimap_alignments_str = minimap_align_reads(input, reads, threads, 2, minimap_preset)
+    minimap_alignments_str = minimap_align_reads(input, reads, threads, 3, minimap_preset)
     minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
     log.log(int_to_str(len(minimap_alignments)) + ' alignments found')
     alignments_by_seq = defaultdict(list)
@@ -249,7 +252,8 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
             int_to_str(length_after, max_num=length_before) + ' bp')
 
 
-def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size):
+def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size,
+                    discard_chimeras):
     split_setting /= 100.0
     max_relevant_distance = 1000
 
@@ -298,7 +302,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         # The final score comes from the positive contribution of spanning alignments and the
         # negative contribution of overhangs. But there needs to be both a start overhang and
         # end overhang to really matter.
-        positive_score_ranges = []
+        seq.positive_score_ranges = []
         positive_range_start = 0
         in_positive_range = True
         for pos in range(seq_length):
@@ -311,20 +315,28 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
             else:
                 if in_positive_range:
                     in_positive_range = False
-                    positive_score_ranges.append((positive_range_start, pos))
+                    seq.positive_score_ranges.append((positive_range_start, pos))
         if in_positive_range:
-            positive_score_ranges.append((positive_range_start, seq_length))
+            seq.positive_score_ranges.append((positive_range_start, seq_length))
 
-        # Clean up small ranges.
-        seq.positive_score_ranges = [x for x in positive_score_ranges
-                                     if x[1] - x[0] >= min_split_size]
+        is_chimera = seq.positive_score_ranges != [(0, seq_length)]
 
-        if seq.positive_score_ranges == [(0, seq_length)]:  # Sequence wasn't split
-            log.log('.', end='')
+        if is_chimera:
+            if discard_chimeras:
+                seq.positive_score_ranges = []
+            else:
+                # Clean up small ranges.
+                seq.positive_score_ranges = [x for x in seq.positive_score_ranges
+                                             if x[1] - x[0] >= min_split_size]
+
+            if seq.positive_score_ranges:
+                log.log('\nSplit ' + seq.name + ' into pieces: ' +
+                        get_read_range_str(seq.positive_score_ranges))
+                # print(seq.sequence)  # TEMP
+            else:
+                log.log('\nDiscarded ' + seq.name)
         else:
-            log.log('\nSplit ' + seq.name + ' into pieces: ' +
-                    get_read_range_str(seq.positive_score_ranges))
-            # print(seq.sequence)  # TEMP
+            log.log('.', end='')
 
 
 def get_mean_seq_depth(seq_alignments):
@@ -349,6 +361,7 @@ def get_read_range_str(ranges):
 
 
 def output_sequences(output, seq_names, seq_dict, out_format):
+    log.log('\n')
     gzipped_out = output.endswith('.gz')
     if gzipped_out:
         out_filename = 'TEMP_' + str(os.getpid()) + '.fastq'
@@ -377,7 +390,7 @@ def get_fasta(name, range, sequence, i, include_piece_number):
     parts = ['>', name]
     if include_piece_number:
         parts.append('_' + str(i+1))
-    parts += ['\n', sequence[s, e], '\n']
+    parts += ['\n', sequence[s:e], '\n']
     return ''.join(parts)
 
 
@@ -386,5 +399,5 @@ def get_fastq(name, range, sequence, qualities, i, include_piece_number):
     parts = ['@', name]
     if include_piece_number:
         parts.append('_' + str(i+1))
-    parts += ['\n', sequence[s, e], '\n+\n', qualities[s, e], '\n']
+    parts += ['\n', sequence[s:e], '\n+\n', qualities[s:e], '\n']
     return ''.join(parts)
