@@ -163,8 +163,8 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
 
             if not short_reads_available and args.keep > 0:
-                shutil.copyfile(unitig_graph_filename, gfa_path(args.out, next(counter),
-                                                                'unitig_graph'))
+                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'unitig_graph'),
+                                         include_depth=False)
 
             polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, args.racon_path,
                                       args.threads, scoring_scheme, seg_nums_to_bridge)
@@ -172,8 +172,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 unitig_graph.save_to_gfa(racon_polished_filename)
 
             if not short_reads_available and args.keep > 0:
-                shutil.copyfile(racon_polished_filename,
-                                gfa_path(args.out, next(counter), 'racon_polished'))
+                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
 
             if short_reads_available:
                 polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
