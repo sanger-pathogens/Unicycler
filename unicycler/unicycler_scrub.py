@@ -39,6 +39,16 @@ except AttributeError as att_err:
              'Have you successfully built the library file using make?')
 
 
+# Unicycler-scrub has various hard-coded settings, which I will later optimise using some test
+# read sets:
+TRIM_SETTING_POWER = 2.0
+STARTING_SCORE = 0.5
+SPLIT_SETTING_POWER = 1.0
+POS_SCORE_SCALING_FACTOR = 1.0
+POS_SCORE_FEATHER_SIZE = 1000
+NEG_SCORE_FEATHER_SIZE = 1000
+
+
 def main():
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
@@ -206,7 +216,7 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
         length_before += seq_dict[name].get_length()
     log.log('Total length before trimming: ' + int_to_str(length_before) + ' bp')
 
-    trim_setting = (trim_setting / 100.0) ** 2
+    trim_setting = (trim_setting / 100.0) ** TRIM_SETTING_POWER
     bases_trimmed = 0
     length_after = 0
     for name in seq_names:
@@ -260,8 +270,7 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
 
 def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size,
                     discard_chimeras, show_sequences):
-    split_setting /= 100.0
-    max_relevant_distance = 1000
+    split_setting = (split_setting / 100.0) ** SPLIT_SETTING_POWER
     chimera_count = 0
 
     for name in seq_names:
@@ -270,8 +279,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         seq_length = seq.get_length()
 
         # Each position in the sequence is scored based on the alignments around it.
-        starting_score = 1.0 - split_setting
-        scores = [starting_score] * seq_length
+        scores = [STARTING_SCORE] * seq_length
         start_overhang_scores = [0.0] * seq_length
         end_overhang_scores = [0.0] * seq_length
 
@@ -282,15 +290,16 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
             a_start, a_end = a.ref_start, a.ref_end
             for pos in range(a_start, a_end):
                 distance_from_end = min(pos - a_start, a_end - pos)
-                relevant_distance = min(distance_from_end, max_relevant_distance)
-                score = relevant_distance / max_relevant_distance
+                relevant_distance = min(distance_from_end, POS_SCORE_FEATHER_SIZE)
+                score = relevant_distance / POS_SCORE_FEATHER_SIZE
+                score *= POS_SCORE_SCALING_FACTOR
                 score /= split_setting  # lower split settings give larger positive scores
                 scores[pos] += score
 
             # Tally up the score for start overlaps. Scores are larger for positions in larger
             # overlaps and positions close to where the overlap begins.
-            start_overhang_size = min(a.get_start_overhang(), max_relevant_distance)
-            start_overhang_rel_size = start_overhang_size / max_relevant_distance
+            start_overhang_size = min(a.get_start_overhang(), NEG_SCORE_FEATHER_SIZE)
+            start_overhang_rel_size = start_overhang_size / NEG_SCORE_FEATHER_SIZE
             for pos in range(a_start - start_overhang_size, a_start):
                 distance_from_clip = a_start - pos
                 score = (start_overhang_size - distance_from_clip) / start_overhang_size
@@ -298,8 +307,8 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
                 start_overhang_scores[pos] -= score
 
             # Do the same for end overlaps.
-            end_overhang_size = min(a.get_end_overhang(), max_relevant_distance)
-            end_overhang_rel_size = end_overhang_size / max_relevant_distance
+            end_overhang_size = min(a.get_end_overhang(), NEG_SCORE_FEATHER_SIZE)
+            end_overhang_rel_size = end_overhang_size / NEG_SCORE_FEATHER_SIZE
             for pos in range(a_end, a_end + end_overhang_size):
                 distance_from_clip = pos - a_end
                 score = (end_overhang_size - distance_from_clip) / end_overhang_size
@@ -327,7 +336,6 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
             seq.positive_score_ranges.append((positive_range_start, seq_length))
 
         is_chimera = seq.positive_score_ranges != [(0, seq_length)]
-
         if is_chimera:
             chimera_count += 1
             if discard_chimeras:
