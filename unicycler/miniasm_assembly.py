@@ -59,11 +59,10 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                             'the short read assembly graph having good connectivity and is able to '
                             'bridge an assembly graph even when it contains many dead ends.',
                             extra_empty_lines_after=0)
-        log.log_explanation('Unicycler uses two types of "reads" as assembly input: sufficiently '
-                            'long single-copy short read contigs and actual long reads which '
-                            'overlap two or more of these contigs. It then assembles them with a '
-                            'modified version of miniasm which gives precedence to the contigs '
-                            'over the real long reads.')
+        log.log_explanation('Unicycler uses two types of "reads" as assembly input: anchor contigs '
+                            'from the short-read assembly and actual long reads which '
+                            'overlap two or more of these contigs. It then assembles them with '
+                            'miniasm.')
 
     miniasm_dir = os.path.join(args.out, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):

@@ -27,13 +27,12 @@ def determine_copy_depth(graph):
 
     log.log_section_header('Determining graph multiplicity')
     log.log_explanation('Multiplicity is the number of times a '
-                        'sequence occurs in the underlying sequence. Single-copy segments '
+                        'sequence occurs in the underlying sequence. Single-copy contigs '
                         '(those with a multiplicity of one, occurring only once in the underlying '
-                        'sequence) are particularly useful. These are the segments that Unicycler '
-                        'will attempt to connect via "bridges" through repeat sequences.',
+                        'sequence) are particularly useful.',
                         verbosity=1, extra_empty_lines_after=0)
 
-    log.log_explanation('Multiplicity determination begins by identifying segments which are '
+    log.log_explanation('Multiplicity determination begins by identifying contigs which are '
                         'clearly single-copy because they are of low depth and do not have more '
                         'than one link per side.',
                         verbosity=2)
@@ -56,9 +55,9 @@ def determine_copy_depth(graph):
 
     log.log('', verbosity=2)
     log.log_explanation('Unicycler now uses a greedy algorithm to propagate multiplicity '
-                        'through the graph. For example, if two single-copy segments merge '
-                        'together, the resulting segment will get a multiplicity of two. '
-                        'When no more propagation is possible, additional single copy segments '
+                        'through the graph. For example, if two single-copy contigs merge '
+                        'together, the resulting contig will get a multiplicity of two. '
+                        'When no more propagation is possible, additional single-copy contigs '
                         'are added and the process is repeated. This allows for multiplicity to be '
                         'correctly assigned to the chromosome (at the median depth) but also for '
                         'plasmids (which may be higher or lower in depth).',

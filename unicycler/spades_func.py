@@ -44,15 +44,21 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count, min_k_frac,
                                 max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
+
     log.log_section_header('SPAdes assemblies')
+    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
+                        'assembly graph for each k-mer using the number of contigs (fewer is '
+                        'better) and the number of dead ends (fewer is much better). The score '
+                        'function is 1/(c*(d+1)^2), where c is the contig count and d is the '
+                        'dead end count.')
 
     # Conduct a SPAdes assembly for each k-mer and score them to choose
     # the best.
     if verbosity > 1:
-        spades_results_table = [['K-mer', 'Segments', 'Links', 'Total length', 'N50',
-                                 'Longest segment', 'Dead ends', 'Score']]
+        spades_results_table = [['K-mer', 'Contigs', 'Links', 'Total length', 'N50',
+                                 'Longest contig', 'Dead ends', 'Score']]
     else:
-        spades_results_table = [['K-mer', 'Segments', 'Dead ends', 'Score']]
+        spades_results_table = [['K-mer', 'Contigs', 'Dead ends', 'Score']]
     best_score = 0.0
     best_kmer = 0
     best_graph_filename = ''
@@ -167,6 +173,9 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     This runs SPAdes with the --only-error-correction option.
     """
     log.log_section_header('SPAdes read error correction')
+    log.log_explanation('Unicycler uses the SPAdes read error correction module to reduce the '
+                        'number of errors in the short read before SPAdes assembly. This can make '
+                        'the assembly faster and simplify the assembly graph structure.')
 
     using_paired_reads = bool(short1) and bool(short2)
     using_unpaired_reads = bool(unpaired)
@@ -357,6 +366,9 @@ def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, 
     Uses the read lengths to determine the k-mer range to be used in the SPAdes assembly.
     """
     log.log_section_header('Choosing k-mer range for assembly')
+    log.log_explanation('Unicycler chooses a k-mer range for SPAdes based on the length of the '
+                        'input reads. It uses a wide range of many k-mer sizes to maximise the '
+                        'chance of finding an ideal assembly.')
 
     # If the k-mer range file already exists, we use its values and proceed.
     kmer_range_filename = os.path.join(spades_dir, 'kmer_range')

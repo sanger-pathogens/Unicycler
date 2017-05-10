@@ -173,7 +173,6 @@ def main():
                                             expected_linear_seqs, args.min_bridge_qual)
 
     if short_reads_available:
-        log.log_section_header('Applying bridges')
         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
                                                        args.min_bridge_qual)
         if args.keep > 0:
@@ -192,11 +191,17 @@ def main():
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
         # Perform some final cleaning on the graph.
-        graph.final_clean()
         log.log_section_header('Bridged assembly graph')
-        graph.print_component_table()
+        log.log_explanation('The assembly is now mostly finished and no more structural changes '
+                            'will be made. Ideally the assembly graph should now have one contig '
+                            'per replicon and no erroneous contigs (i.e a complete assembly). '
+                            'If there are more contigs, then the assembly is not complete.',
+                            verbosity=1)
+        graph.final_clean()
         if args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'), newline=True)
+            graph.save_to_gfa(gfa_path(args.out, next(counter), 'final_clean'))
+        log.log('')
+        graph.print_component_table()
 
     else:  # only long reads available
         graph = string_graph
@@ -512,37 +517,42 @@ def get_anchor_segments(graph):
     """
     Returns a list of the graph segments that will be used for bridging.
     """
+    log.log('')
+    log.log_explanation('Unicycler now selects a set of anchor contigs from the '
+                        'single-copy contigs. These are the contigs which will be connected '
+                        'via bridges to form the final assembly.', verbosity=1)
+
     graph_n50 = graph.get_n_segment_length(50.0)
     graph_n80 = graph.get_n_segment_length(80.0)
     graph_n99 = graph.get_n_segment_length(99.0)
 
     # First we include any segments which are single-copy and not too short.
-    bridging_seg_nums = set([x.number for x in graph.get_single_copy_segments()
-                             if x.get_length() >= graph_n99 and
-                             x.get_length() >= settings.MIN_SINGLE_COPY_LENGTH])
+    anchor_seg_nums = set([x.number for x in graph.get_single_copy_segments()
+                           if x.get_length() >= graph_n99 and
+                           x.get_length() >= settings.MIN_SINGLE_COPY_LENGTH])
 
     # Any already-completed segments are included - they don't need bridging but we want to ensure
     # that they are included in the final graph.
     for component in graph.get_connected_components():
         if graph.is_component_complete(component):
-            bridging_seg_nums.add(component[0])
+            anchor_seg_nums.add(component[0])
 
     # Next we include any long contigs which didn't have a copy-depth assigned. These are probably
     # single copy and the multiplicity algorithm just failed to call them as such.
-    bridging_seg_nums |= set([x.number for x in graph.get_no_copy_depth_segments()
-                              if x.get_length() >= graph_n80])
+    anchor_seg_nums |= set([x.number for x in graph.get_no_copy_depth_segments()
+                            if x.get_length() >= graph_n80])
 
     # Finally we include any very long contigs, regardless of their copy depth.
-    bridging_seg_nums |= set([x.number for x in graph.segments.values()
-                              if x.get_length() >= graph_n50])
+    anchor_seg_nums |= set([x.number for x in graph.segments.values()
+                            if x.get_length() >= graph_n50])
 
     # TO DO: I could look on a per-connected component basis to possibly let in additional, smaller
     # segments. This is particularly to deal with the case of where two very similar small plasmids
     # are present in the genome. They may max out at 500 bp segments or something, but we should
     # include those so we don't lose the plasmids in the final assembly.
 
-    bridging_segments = sorted([graph.segments[x] for x in bridging_seg_nums], reverse=True,
-                               key=lambda x: x.get_length())
+    anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums], reverse=True,
+                              key=lambda x: x.get_length())
 
     # TO DO: if long reads are available, I could potentially use them to more reliably determine
     # whether segments are single-copy or not single-copy. Something like taking all long reads
@@ -551,15 +561,15 @@ def get_anchor_segments(graph):
     # multi-copy.
 
     log.log('', 2)
-    total_bridging_length = sum([x.get_length() for x in bridging_segments])
-    log.log(int_to_str(len(bridging_segments)) +
-          ' bridging segments (' + int_to_str(total_bridging_length) + ' bp) out of ' +
+    total_anchor_length = sum([x.get_length() for x in anchor_segments])
+    log.log(int_to_str(len(anchor_segments)) +
+          ' anchor segments (' + int_to_str(total_anchor_length) + ' bp) out of ' +
           int_to_str(len(graph.segments)) +
           ' total segments (' + int_to_str(graph.get_total_length()) + ' bp)')
-    log.log('\nBridging segments:', 2)
-    log.log_number_list([x.number for x in bridging_segments], 2)
+    log.log('\nAnchor segments:', 2)
+    log.log_number_list([x.number for x in anchor_segments], 2)
 
-    return bridging_segments
+    return anchor_segments
 
 
 def sam_references_match(sam_filename, assembly_graph):
@@ -600,7 +610,7 @@ def print_intro_message(args, full_command, out_dir_message):
     intro_message = 'Welcome to Unicycler, an assembly pipeline for bacterial genomes. '
     if short_reads_available and long_reads_available:
         intro_message += ('Since you provided both short and long reads, Unicycler will perform a '
-                          'hybrid assembly. It will first use SPAdes to make a short read '
+                          'hybrid assembly. It will first use SPAdes to make a short-read '
                           'assembly graph, and then it will use various methods to scaffold '
                           'that graph with the long reads.')
     elif short_reads_available:
@@ -806,6 +816,12 @@ def rotate_completed_replicons(graph, args, counter):
     completed_replicons = graph.completed_circular_replicons()
     if len(completed_replicons) > 0:
         log.log_section_header('Rotating completed replicons')
+        log.log_explanation('Any completed circular contigs (i.e. single contigs which have one '
+                            'link connecting end to start) can have their start position changed '
+                            'with altering the sequence. For consistency, Unicycler now searches '
+                            'for a starting gene (dnaA or repA) in each such contig, and if one '
+                            'is found, the contig is rotated to start with that gene on the '
+                            'forward strand.')
 
         rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
                                   'Strand', 'Identity', 'Coverage']]
@@ -853,6 +869,9 @@ def rotate_completed_replicons(graph, args, counter):
 
 def final_polish(graph, args, counter):
     log.log_section_header('Polishing assembly with Pilon')
+    log.log_explanation('Unicycler now conducts multiple rounds of Pilon in an attempt to repair '
+                        'any remaining small-scale errors with the assembly.',
+                        verbosity=1)
     polish_dir = os.path.join(args.out, 'pilon_polish')
     insert_size_1st, insert_size_99th = None, None
     try:
@@ -952,6 +971,10 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
 
 
 def clean_up_spades_graph(graph):
+    log.log_section_header('Cleaning graph')
+    log.log_explanation('Unicycler now performs various cleaning procedures on the graph to '
+                        'remove overlaps and simplify the graph structure. The end result is a '
+                        'graph ready for bridging.', verbosity=1)
     graph.remove_all_overlaps()
     graph.remove_zero_length_segs()
     while True:

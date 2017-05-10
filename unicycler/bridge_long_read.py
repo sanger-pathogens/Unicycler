@@ -404,6 +404,10 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
     Makes bridges between single copy segments using the alignments in the long reads.
     """
     log.log_section_header('Building long read bridges')
+    log.log_explanation('Unicycler uses the long read alignments to produce bridges between '
+                        'anchor segments. These bridges can be formed using as few as one long '
+                        'read, giving Unicycler the ability to bridge the graph even when '
+                        'long-read depth is low.')
 
     anchor_seg_nums = set(x.number for x in anchor_segments)
 

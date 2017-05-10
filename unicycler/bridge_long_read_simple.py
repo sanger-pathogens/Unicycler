@@ -295,7 +295,6 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
     loops = [x for x in loops if abs(x[0]) != abs(x[1])]
     if not loops:
         log.log('No suitable simple loops present')
-        log.log('')
         return []
 
     col_widths = [5, 6, 6, 5, 5, 18, 5, 7]

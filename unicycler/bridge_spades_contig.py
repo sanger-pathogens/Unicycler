@@ -127,7 +127,7 @@ def create_spades_contig_bridges(graph, anchor_segments):
     log.log_explanation('SPAdes uses paired-end information to perform repeat resolution (RR) and '
                         'produce contigs from the assembly graph. SPAdes saves the graph paths '
                         'corresponding to these contigs in the contigs.paths file. When one of '
-                        'these paths contains two or more single-copy segments, Unicycler can '
+                        'these paths contains two or more anchor contigs, Unicycler can '
                         'create a bridge from the path.', verbosity=1)
 
     bridge_path_set = set()

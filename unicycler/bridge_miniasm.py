@@ -145,7 +145,7 @@ def create_miniasm_bridges(graph, string_graph, anchor_segments, scoring_scheme,
     """
     log.log_section_header('Creating miniasm/Racon bridges')
     log.log_explanation('Now that the miniasm/Racon string graph is complete, Unicycler will '
-                        'use it to build bridges between single-copy contigs.', verbosity=1)
+                        'use it to build bridges between anchor segments.', verbosity=1)
     bridges = []
     anchor_seg_nums = set(x.number for x in anchor_segments)
 

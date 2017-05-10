@@ -132,7 +132,7 @@ def create_loop_unrolling_bridges(graph, anchor_segments):
     This function creates loop unrolling bridges using the information in SPAdes paths.
     """
     log.log_section_header('Creating loop unrolling bridges')
-    log.log_explanation('When a SPAdes contig path connects a single-copy contig with the '
+    log.log_explanation('When a SPAdes contig path connects an anchor contig with the '
                         'middle contig of a simple loop, Unicycler concludes that the sequences '
                         'are contiguous (i.e. the loop is not a separate piece of DNA). It then '
                         'uses the read depth of the middle and repeat contigs to guess the number '

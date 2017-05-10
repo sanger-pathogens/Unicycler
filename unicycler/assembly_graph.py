@@ -1111,6 +1111,11 @@ class AssemblyGraph(object):
         """
         Uses the supplied bridges to simplify the graph.
         """
+        log.log_section_header('Applying bridges')
+        log.log_explanation('Unicycler now applies to the graph in decreasing order of quality. '
+                            'This ensures that when multiple, contradictory bridges exist, the '
+                            'most supported option is used.')
+
         unbridged_graph = copy.deepcopy(self)
 
         # Each segment can have only one bridge per side, so we will track which segments have had
@@ -2043,6 +2048,7 @@ class AssemblyGraph(object):
             segment.trim_from_end(end_trim)
             log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
 
+        log.log('Graph overlaps removed')
         self.overlap = 0
 
     def get_downstream_seg_nums(self, seg_num):
@@ -2099,7 +2105,8 @@ class AssemblyGraph(object):
 
         if segs_to_remove and not suppress_log:
             self.remove_segments(segs_to_remove)
-            log.log('\nRemoved zero-length segments:')
+            log.log('')
+            log.log('Removed zero-length segments:')
             log.log_number_list(segs_to_remove)
         return len(segs_to_remove)
 

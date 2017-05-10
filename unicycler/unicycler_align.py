@@ -206,6 +206,12 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     # score minus three times the MAD.
     if display_low_score and verbosity > 0:
         log.log_section_header('Determining low score threshold')
+        log.log_explanation('Before conducting semi-global alignment of the long reads to the '
+                            'assembly graph, Unicycler must determine a minimum alignment '
+                            'score threshold such that nonsense alignments are excluded. '
+                            'To choose a threshold automatically, it examines alignments between '
+                            'random sequences and selects a score a few standard deviations above '
+                            'the mean.')
     low_score_threshold = low_score_threshold_list[0]
     if low_score_threshold is not None:
         if display_low_score and verbosity > 0:
