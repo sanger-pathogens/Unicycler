@@ -155,7 +155,6 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             if args.keep >= 3:
                 string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
-            log.log('')
             unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph,
                                                                          read_nicknames)
             if args.keep >= 3:
@@ -174,14 +173,15 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
 
             if short_reads_available:
-                polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
-                if args.keep >= 3:
-                    unitig_graph.save_to_gfa(pilon_polished_filename)
+                # polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
+                # if args.keep >= 3:
+                #     unitig_graph.save_to_gfa(pilon_polished_filename)
                 if args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
                                                       'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
+        log.log('')
         trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_read_list)
         unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, args.threads,
                                      scoring_scheme, seg_nums_to_bridge)
@@ -395,13 +395,13 @@ def polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir):
 
 def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme,
                   seg_nums_to_bridge):
-    log.log('', verbosity=2)
+    log.log('', verbosity=1)
     log.log_explanation('Unicycler now places the single copy contigs back into the unitig '
                         'graph. This serves two purposes: a) it replaces long read assembly '
                         'sequences (which may be error prone) with Illumina assembly sequence '
                         '(which is probably quite accurate), improving the assembly quality, and '
                         'b) it defines inter-contig sequences for use in building bridges.',
-                        verbosity=2)
+                        verbosity=1)
 
     # Use semi-global alignment of contig ends to find the contigs in the unitig graph. We first
     # look for contigs using relatively large chunks of their ends and progress to smaller chunks

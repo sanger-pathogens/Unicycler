@@ -123,7 +123,6 @@ def main():
         anchor_segments = []
 
     if short_reads_available and long_reads_available:
-
         # TO DO: use long reads to check for misassemblies in short-read assembly graph. If there
         # is a misassembly (happened in QMP_B2_170), that can totally ruin the rest of the process!
         # I should do this in the same way I'll use long reads to verify an assembly: minimap
