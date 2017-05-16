@@ -283,11 +283,12 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
         seq_alignments = alignments[name]
         seq_length = seq.get_length()
         mean_depth = get_mean_seq_depth(seq_alignments)
-        target_depth = int(math.floor(parameters.trim_depth_fraction * mean_depth))
 
         seq.trim_start_pos = 0
         seq.trim_end_pos = seq_length
 
+        target_depth = parameters.trim_depth_intercept + parameters.trim_depth_slope * mean_depth
+        target_depth = int(math.floor(target_depth))
         if target_depth > 0:
             depth_changes = defaultdict(int)
             for a in seq_alignments:
@@ -313,6 +314,9 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
                 if depth >= target_depth:
                     seq.trim_end_pos = pos
                     break
+
+        seq.trim_start_pos = max(0, seq.trim_start_pos + parameters.trim_adjustment)
+        seq.trim_end_pos = min(seq_length, seq.trim_end_pos - parameters.trim_adjustment)
 
         bases_trimmed += seq.trim_start_pos
         end_bases_trimmed = seq_length - seq.trim_end_pos
@@ -503,7 +507,13 @@ def get_fastq(name, s, e, sequence, qualities, i, include_piece_number):
 
 class Parameters(object):
     def __init__(self, trim_setting=50, split_setting=50):
-        self.trim_depth_fraction = 0.2       # TEMP
+
+        # Trimming settings
+        self.trim_depth_intercept = 0.0       # TEMP
+        self.trim_depth_slope = 0.2           # TEMP
+        self.trim_adjustment = -2             # TEMP
+
+        # Splitting settings
         self.starting_score = 1.0            # TEMP
         self.pos_score_scaling_factor = 2.0  # TEMP
         self.pos_score_feather_size = 1000   # TEMP
