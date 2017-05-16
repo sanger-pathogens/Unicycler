@@ -31,7 +31,7 @@ except AttributeError as e:
 
 class MinimapAlignment(object):
 
-    def __init__(self, paf_line):
+    def __init__(self, paf_line='read_name\t0\t0\t0\t+\tref_name\t0\t0\t0\t0\t0\t0\tcm:i:0'):
         self.paf_line = paf_line.strip()
         line_parts = self.paf_line.split('\t')
 
@@ -278,3 +278,27 @@ def remove_conflicting_alignments(alignments, allowed_overlap):
         kept_alignment_ranges = simplify_ranges(kept_alignment_ranges + [this_range])
 
     return sorted(kept_alignments, key=lambda x: x.read_start)
+
+
+def get_opposite_alignment(alignment):
+    opposite_alignment = MinimapAlignment()
+
+    opposite_alignment.read_name = alignment.ref_name
+    opposite_alignment.read_length = alignment.ref_length
+    opposite_alignment.read_start = alignment.ref_start
+    opposite_alignment.read_end = alignment.ref_end
+
+    opposite_alignment.ref_name = alignment.read_name
+    opposite_alignment.ref_length = alignment.read_length
+    opposite_alignment.ref_start = alignment.read_start
+    opposite_alignment.ref_end = alignment.read_end
+
+    opposite_alignment.read_strand = alignment.read_strand
+    opposite_alignment.matching_bases = alignment.matching_bases
+    opposite_alignment.num_bases = alignment.num_bases
+    opposite_alignment.minimiser_count = alignment.minimiser_count
+
+    opposite_alignment.read_end_gap = opposite_alignment.read_length - opposite_alignment.read_end
+    opposite_alignment.ref_end_gap = opposite_alignment.ref_length - opposite_alignment.ref_end
+
+    return opposite_alignment

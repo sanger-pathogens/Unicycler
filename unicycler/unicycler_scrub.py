@@ -27,8 +27,8 @@ import sys
 import subprocess
 from collections import defaultdict
 from .misc import MyHelpFormatter, bold, quit_with_error, get_default_thread_count, \
-    check_file_exists, int_to_str, float_to_str, get_sequence_file_type
-from .minimap_alignment import load_minimap_alignments_basic
+    check_file_exists, int_to_str, float_to_str, get_sequence_file_type, print_table
+from .minimap_alignment import load_minimap_alignments_basic, get_opposite_alignment
 from .read_ref import load_long_reads
 from . import log
 
@@ -39,19 +39,10 @@ except AttributeError as att_err:
              'Have you successfully built the library file using make?')
 
 
-# Unicycler-scrub has various hard-coded settings, which I will later optimise using some test
-# read sets:
-TRIM_SETTING_POWER = 2.0
-STARTING_SCORE = 0.5
-SPLIT_SETTING_POWER = 1.0
-POS_SCORE_SCALING_FACTOR = 1.0
-POS_SCORE_FEATHER_SIZE = 1000
-NEG_SCORE_FEATHER_SIZE = 1000
-
-
 def main():
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
+    parameters = get_parameters(args)
     print_intro_message(args, full_command)
     input_type = get_sequence_file_type(args.input)
 
@@ -60,12 +51,12 @@ def main():
     log.log('')
 
     log.log_section_header('Conducting alignments', single_newline=True)
-    alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads)
+    alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads, seq_names)
 
-    # Trim the sequences based on
+    # Trim the sequences based on their alignment depth.
     if args.trim > 0:
         log.log_section_header('Trimming sequences', single_newline=True)
-        trim_sequences(seq_dict, seq_names, alignments, args.trim)
+        trim_sequences(seq_dict, seq_names, alignments, parameters)
     else:
         for seq in seq_dict.values():
             seq.trim_start_pos = 0
@@ -77,8 +68,8 @@ def main():
             log.log_section_header('Discarding chimeras', single_newline=True)
         else:
             log.log_section_header('Splitting chimeras', single_newline=True)
-        split_sequences(seq_dict, seq_names, alignments, args.split, args.min_split_size,
-                        args.discard_chimeras, args.show_sequences)
+        split_sequences(seq_dict, seq_names, alignments, args.min_split_size,
+                        args.discard_chimeras, args.show_sequences, parameters)
     else:
         for seq in seq_dict.values():
             seq.positive_score_ranges = [(0, seq.get_length())]
@@ -107,9 +98,9 @@ def get_arguments():
     parser.add_argument('-o', '--out', type=str, required=True,
                         help='The scrubbed reads or assembly will be saved to this file (will '
                              'have the same format as the --input file format)')
-    parser.add_argument('-r', '--reads', type=str, required=True,
+    parser.add_argument('-r', '--reads', type=str, default='',
                         help='These are the reads used to scrub --input (can be FASTA or FASTQ '
-                             'format, can be the same file as --input)')
+                             'format) (default: same file as --input)')
     parser.add_argument('--trim', type=int, default=50,
                         help='The aggressiveness with which the input will be trimmed (0 to 100, '
                              'where 0 is no trimming and 100 is very aggressive trimming)')
@@ -126,7 +117,15 @@ def get_arguments():
                              'chimeric sequences (mainly for debugging and verification purposes)')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
+    parser.add_argument('--parameters', type=str, required=False, default='',
+                        help='Low-level parameters (for debugging use only)')
+    parser.add_argument('--verbosity', type=int, required=False, default=1,
+                        help='R|Level of stdout information (default: 1)\n  '
+                             '0 = no stdout, 1 = basic progress indicators, '
+                             '2 = extra info, 3 = debugging info')
     args = parser.parse_args()
+
+    log.logger = log.Log(None, args.verbosity)
 
     if args.trim < 0 or args.trim > 100:
         quit_with_error('--trim must be between 0 and 100 (inclusive)')
@@ -137,6 +136,9 @@ def get_arguments():
     if args.threads <= 0:
         quit_with_error('--threads must be at least 1')
 
+    if not args.reads:
+        args.reads = args.input
+
     args.input = os.path.abspath(args.input)
     args.reads = os.path.abspath(args.reads)
     args.out = os.path.abspath(args.out)
@@ -145,6 +147,23 @@ def get_arguments():
     check_file_exists(args.reads)
 
     return args
+
+
+def get_parameters(args):
+    # If the --parameters argument was used, then we set the parameters directly.
+    if args.parameters:
+        parameter_parts = args.parameters.split(',')
+        parameters = Parameters()
+        parameters.trim_depth_fraction = float(parameter_parts[0])
+        parameters.starting_score = float(parameter_parts[1])
+        parameters.pos_score_scaling_factor = float(parameter_parts[2])
+        parameters.pos_score_feather_size = int(parameter_parts[3])
+        parameters.neg_score_feather_size = int(parameter_parts[4])
+
+    # If --parameters wasn't used (more common), then we set the parameters using the values of
+    # the --trim and --split arguments.
+    else:
+        return Parameters(args.trim, args.split)
 
 
 def print_intro_message(args, full_command):
@@ -160,6 +179,11 @@ def print_intro_message(args, full_command):
     log.log_explanation('For more information, please see https://github.com/rrwick/Unicycler')
 
     log.log('Command: ' + bold(full_command))
+    log.log('')
+
+    log.log('Input sequences:  ' + os.path.relpath(args.input))
+    log.log('Aligned reads:    ' + os.path.relpath(args.reads))
+    log.log('Output sequences: ' + os.path.relpath(args.out))
     log.log('')
 
     trim_level_str = '%3d' % args.trim
@@ -194,29 +218,49 @@ def print_intro_message(args, full_command):
     log.log('Split level: ' +  split_level_str)
 
 
-def get_minimap_alignments_by_seq(input, reads, threads):
+def get_minimap_alignments_by_seq(input, reads, threads, seq_names):
     if input == reads:
         minimap_preset = 'scrub reads with reads'
     else:
         minimap_preset = 'scrub assembly with reads'
     minimap_alignments_str = minimap_align_reads(input, reads, threads, 3, minimap_preset)
+
+
+    # Display raw alignment at very high verbosity (for debugging).
+    log.log(minimap_alignments_str, 3)
+    log.log('', 3)
+
     minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
     log.log(int_to_str(len(minimap_alignments)) + ' alignments found')
     alignments_by_seq = defaultdict(list)
     for a in minimap_alignments:
         alignments_by_seq[a.ref_name].append(a)
+        alignments_by_seq[a.read_name].append(get_opposite_alignment(a))
     for seq_name in alignments_by_seq:
         alignments_by_seq[seq_name] = sorted(alignments_by_seq[seq_name], key=lambda x: x.ref_start)
+
+    # Display info about each alignment at high verbosity.
+    if log.logger.stdout_verbosity_level > 1:
+        log.log('', 2)
+        col_widths = [max(len(name) for name in seq_names), 9, 9]
+        alignments_table = [['Sequence name', 'Alignment count', 'Mean alignment depth']]
+        for seq_name in seq_names:
+            seq_alignments = alignments_by_seq[seq_name]
+            table_row = [seq_name, int_to_str(len(seq_alignments)),
+                         float_to_str(get_mean_seq_depth(seq_alignments), 2)]
+            alignments_table.append(table_row)
+        print_table(alignments_table, indent=0, alignments='LRR',
+                    fixed_col_widths=col_widths, left_align_header=False, verbosity=2)
+
     return alignments_by_seq
 
 
-def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
+def trim_sequences(seq_dict, seq_names, alignments, parameters):
     length_before = 0
     for name in seq_names:
         length_before += seq_dict[name].get_length()
     log.log('Total length before trimming: ' + int_to_str(length_before) + ' bp')
 
-    trim_setting = (trim_setting / 100.0) ** TRIM_SETTING_POWER
     bases_trimmed = 0
     length_after = 0
     for name in seq_names:
@@ -224,7 +268,7 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
         seq_alignments = alignments[name]
         seq_length = seq.get_length()
         mean_depth = get_mean_seq_depth(seq_alignments)
-        target_depth = int(math.floor(trim_setting * mean_depth))
+        target_depth = int(math.floor(parameters.trim_depth_fraction * mean_depth))
 
         seq.trim_start_pos = 0
         seq.trim_end_pos = seq_length
@@ -268,9 +312,8 @@ def trim_sequences(seq_dict, seq_names, alignments, trim_setting):
             int_to_str(length_after, max_num=length_before) + ' bp')
 
 
-def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_size,
-                    discard_chimeras, show_sequences):
-    split_setting = (split_setting / 100.0) ** SPLIT_SETTING_POWER
+def split_sequences(seq_dict, seq_names, alignments, min_split_size, discard_chimeras,
+                    show_sequences, parameters):
     chimera_count = 0
 
     for name in seq_names:
@@ -279,7 +322,7 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
         seq_length = seq.get_length()
 
         # Each position in the sequence is scored based on the alignments around it.
-        scores = [STARTING_SCORE] * seq_length
+        scores = [parameters.starting_score] * seq_length
         start_overhang_scores = [0.0] * seq_length
         end_overhang_scores = [0.0] * seq_length
 
@@ -290,16 +333,15 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
             a_start, a_end = a.ref_start, a.ref_end
             for pos in range(a_start, a_end):
                 distance_from_end = min(pos - a_start, a_end - pos)
-                relevant_distance = min(distance_from_end, POS_SCORE_FEATHER_SIZE)
-                score = relevant_distance / POS_SCORE_FEATHER_SIZE
-                score *= POS_SCORE_SCALING_FACTOR
-                score /= split_setting  # lower split settings give larger positive scores
+                relevant_distance = min(distance_from_end, parameters.pos_score_feather_size)
+                score = relevant_distance / parameters.pos_score_feather_size
+                score *= parameters.pos_score_scaling_factor
                 scores[pos] += score
 
             # Tally up the score for start overlaps. Scores are larger for positions in larger
             # overlaps and positions close to where the overlap begins.
-            start_overhang_size = min(a.get_start_overhang(), NEG_SCORE_FEATHER_SIZE)
-            start_overhang_rel_size = start_overhang_size / NEG_SCORE_FEATHER_SIZE
+            start_overhang_size = min(a.get_start_overhang(), parameters.neg_score_feather_size)
+            start_overhang_rel_size = start_overhang_size / parameters.neg_score_feather_size
             for pos in range(a_start - start_overhang_size, a_start):
                 distance_from_clip = a_start - pos
                 score = (start_overhang_size - distance_from_clip) / start_overhang_size
@@ -307,8 +349,8 @@ def split_sequences(seq_dict, seq_names, alignments, split_setting, min_split_si
                 start_overhang_scores[pos] -= score
 
             # Do the same for end overlaps.
-            end_overhang_size = min(a.get_end_overhang(), NEG_SCORE_FEATHER_SIZE)
-            end_overhang_rel_size = end_overhang_size / NEG_SCORE_FEATHER_SIZE
+            end_overhang_size = min(a.get_end_overhang(), parameters.neg_score_feather_size)
+            end_overhang_rel_size = end_overhang_size / parameters.neg_score_feather_size
             for pos in range(a_end, a_end + end_overhang_size):
                 distance_from_clip = pos - a_end
                 score = (end_overhang_size - distance_from_clip) / end_overhang_size
@@ -431,3 +473,12 @@ def get_fastq(name, s, e, sequence, qualities, i, include_piece_number):
         parts.append('_' + str(i+1))
     parts += ['\n', sequence[s:e], '\n+\n', qualities[s:e], '\n']
     return ''.join(parts)
+
+
+class Parameters(object):
+    def __init__(self, trim_setting=50, split_setting=50):
+        self.trim_depth_fraction = 0.2       # TEMP
+        self.starting_score = 1.0            # TEMP
+        self.pos_score_scaling_factor = 2.0  # TEMP
+        self.pos_score_feather_size = 1000   # TEMP
+        self.neg_score_feather_size = 1000   # TEMP
