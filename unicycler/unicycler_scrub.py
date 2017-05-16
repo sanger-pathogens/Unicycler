@@ -255,7 +255,6 @@ def get_minimap_alignments_by_seq(input, reads, threads, seq_names):
 
     # Display info about each alignment at high verbosity.
     if log.logger.stdout_verbosity_level > 1:
-        log.log('', 2)
         col_widths = [max(len(name) for name in seq_names), 9, 9]
         alignments_table = [['Sequence name', 'Alignment count', 'Mean alignment depth']]
         for seq_name in seq_names:
@@ -399,6 +398,7 @@ def split_sequences(seq_dict, seq_names, alignments, discard_chimeras, parameter
                                  a_start + parameters.split_adjustment):
                     distance_from_clip = a_start - pos
                     score = (start_overhang_size - distance_from_clip) / start_overhang_size
+                    score = min(score, 1.0)
                     score *= start_overhang_rel_size
                     try:
                         start_overhang_scores[pos] -= score
@@ -412,6 +412,7 @@ def split_sequences(seq_dict, seq_names, alignments, discard_chimeras, parameter
                 for pos in range(a_end - parameters.split_adjustment, a_end + end_overhang_size):
                     distance_from_clip = pos - a_end
                     score = (end_overhang_size - distance_from_clip) / end_overhang_size
+                    score = min(score, 1.0)
                     score *= end_overhang_rel_size
                     try:
                         end_overhang_scores[pos] -= score
