@@ -43,7 +43,7 @@ def main():
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
     parameters = get_parameters(args)
-    print_intro_message(args, full_command)
+    print_intro_message(args, full_command, parameters)
     input_type = get_sequence_file_type(args.input)
 
     seq_dict, seq_names, _ = load_long_reads(args.input, silent=False,
@@ -154,11 +154,14 @@ def get_parameters(args):
     if args.parameters:
         parameter_parts = args.parameters.split(',')
         parameters = Parameters()
-        parameters.trim_depth_fraction = float(parameter_parts[0])
-        parameters.starting_score = float(parameter_parts[1])
-        parameters.pos_score_scaling_factor = float(parameter_parts[2])
-        parameters.pos_score_feather_size = int(parameter_parts[3])
-        parameters.neg_score_feather_size = int(parameter_parts[4])
+        parameters.trim_depth_intercept = float(parameter_parts[0])
+        parameters.trim_depth_slope = float(parameter_parts[1])
+        parameters.trim_adjustment = int(parameter_parts[2])
+        parameters.starting_score = float(parameter_parts[3])
+        parameters.pos_score_scaling_factor = float(parameter_parts[4])
+        parameters.pos_score_feather_size = int(parameter_parts[5])
+        parameters.neg_score_feather_size = int(parameter_parts[6])
+        return parameters
 
     # If --parameters wasn't used (more common), then we set the parameters using the values of
     # the --trim and --split arguments.
@@ -166,7 +169,7 @@ def get_parameters(args):
         return Parameters(args.trim, args.split)
 
 
-def print_intro_message(args, full_command):
+def print_intro_message(args, full_command, parameters):
     log.log_section_header('Starting Unicycler-scrub', single_newline=True)
 
     log.log_explanation('Unicycler-scrub uses local alignments (from minimap) to trim and/or '
@@ -216,6 +219,19 @@ def print_intro_message(args, full_command):
 
     log.log('Trim level:  ' + trim_level_str)
     log.log('Split level: ' +  split_level_str)
+
+    log.log('', 2)
+    log.log('Low-level trimming parameters:', 2)
+    log.log('  depth intercept:        ' + float_to_str(parameters.trim_depth_intercept, 2), 2)
+    log.log('  depth slope:            ' + float_to_str(parameters.trim_depth_slope, 2), 2)
+    log.log('  adjustment:             ' + str(parameters.trim_adjustment), 2)
+    log.log('', 2)
+    log.log('Low-level splitting parameters:', 2)
+    log.log('  starting score:         ' + float_to_str(parameters.starting_score, 2), 2)
+    log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
+    log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
+    log.log('  pos score feather:      ' + str(parameters.pos_score_feather_size), 2)
+    log.log('  neg score feather:      ' + str(parameters.neg_score_feather_size), 2)
 
 
 def get_minimap_alignments_by_seq(input, reads, threads, seq_names):
@@ -509,9 +525,9 @@ class Parameters(object):
     def __init__(self, trim_setting=50, split_setting=50):
 
         # Trimming settings
-        self.trim_depth_intercept = 0.0       # TEMP
-        self.trim_depth_slope = 0.2           # TEMP
-        self.trim_adjustment = -2             # TEMP
+        self.trim_depth_intercept = 0.0      # TEMP
+        self.trim_depth_slope = 0.2          # TEMP
+        self.trim_adjustment = 0             # TEMP
 
         # Splitting settings
         self.starting_score = 1.0            # TEMP
