@@ -68,8 +68,7 @@ def main():
             log.log_section_header('Discarding chimeras', single_newline=True)
         else:
             log.log_section_header('Splitting chimeras', single_newline=True)
-        split_sequences(seq_dict, seq_names, alignments, args.min_split_size,
-                        args.discard_chimeras, args.show_sequences, parameters)
+        split_sequences(seq_dict, seq_names, alignments, args.discard_chimeras, parameters)
     else:
         for seq in seq_dict.values():
             seq.positive_score_ranges = [(0, seq.get_length())]
@@ -112,9 +111,6 @@ def get_arguments():
                              'least this big')
     parser.add_argument('--discard_chimeras', action='store_true',
                         help='If used, chimeric sequences will be discarded instead of split')
-    parser.add_argument('--show_sequences', action='store_true',
-                        help='If used, the the program will display the nucleotide sequence for '
-                             'chimeric sequences (mainly for debugging and verification purposes)')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
     parser.add_argument('--parameters', type=str, required=False, default='',
@@ -161,6 +157,7 @@ def get_parameters(args):
         parameters.pos_score_scaling_factor = float(parameter_parts[4])
         parameters.pos_score_feather_size = int(parameter_parts[5])
         parameters.neg_score_feather_size = int(parameter_parts[6])
+        parameters.split_adjustment = int(parameter_parts[7])
         return parameters
 
     # If --parameters wasn't used (more common), then we set the parameters using the values of
@@ -173,9 +170,9 @@ def print_intro_message(args, full_command, parameters):
     log.log_section_header('Starting Unicycler-scrub', single_newline=True)
 
     log.log_explanation('Unicycler-scrub uses local alignments (from minimap) to trim and/or '
-                        'split an input sequence. Long reads can be used to scrub themselves (by '
-                        'supplying the same reads to --input and --out) to trim the reads and split '
-                        'chimeric reads. Long reads can also be used to check an assembly by '
+                        'split an input sequence. Long reads can be used to scrub themselves to '
+                        'trim the reads and split chimeric reads (by supplying the same reads to '
+                        '--input and --out). Long reads can also be used to check an assembly by '
                         'searching for misassembly points (by supplying the assembly to --input '
                         'and the long reads to --out).',
                         extra_empty_lines_after=0)
@@ -232,6 +229,7 @@ def print_intro_message(args, full_command, parameters):
     log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
     log.log('  pos score feather:      ' + str(parameters.pos_score_feather_size), 2)
     log.log('  neg score feather:      ' + str(parameters.neg_score_feather_size), 2)
+    log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
 
 
 def get_minimap_alignments_by_seq(input, reads, threads, seq_names):
@@ -349,6 +347,7 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
     print_table(trim_table, indent=0, alignments=trim_table_alignments,
                 fixed_col_widths=trim_table_col_widths, left_align_header=False, verbosity=2)
 
+    log.log('', 2)
     log.log('Total bases trimmed:          ' +
             int_to_str(bases_trimmed, max_num=length_before) + ' bp')
     mean_bases_per_seq = bases_trimmed / len(seq_names)
@@ -358,9 +357,16 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
             int_to_str(length_after, max_num=length_before) + ' bp')
 
 
-def split_sequences(seq_dict, seq_names, alignments, min_split_size, discard_chimeras,
-                    show_sequences, parameters):
+def split_sequences(seq_dict, seq_names, alignments, discard_chimeras, parameters):
     chimera_count = 0
+
+    log.log('', 2)
+    split_table_header = ['Sequence name', 'Good range(s)', 'Bad range(s)']
+    split_table_alignments = 'LLL'
+    split_table_col_widths = [max(len(name) for name in seq_names), 24, 24]
+    print_table([split_table_header], indent=0, alignments=split_table_alignments,
+                fixed_col_widths=split_table_col_widths, left_align_header=False, verbosity=2,
+                col_separation=5)
 
     for name in seq_names:
         seq = seq_dict[name]
@@ -387,63 +393,100 @@ def split_sequences(seq_dict, seq_names, alignments, min_split_size, discard_chi
             # Tally up the score for start overlaps. Scores are larger for positions in larger
             # overlaps and positions close to where the overlap begins.
             start_overhang_size = min(a.get_start_overhang(), parameters.neg_score_feather_size)
-            start_overhang_rel_size = start_overhang_size / parameters.neg_score_feather_size
-            for pos in range(a_start - start_overhang_size, a_start):
-                distance_from_clip = a_start - pos
-                score = (start_overhang_size - distance_from_clip) / start_overhang_size
-                score *= start_overhang_rel_size
-                start_overhang_scores[pos] -= score
+            if start_overhang_size > 0:
+                start_overhang_rel_size = start_overhang_size / parameters.neg_score_feather_size
+                for pos in range(a_start - start_overhang_size,
+                                 a_start + parameters.split_adjustment):
+                    distance_from_clip = a_start - pos
+                    score = (start_overhang_size - distance_from_clip) / start_overhang_size
+                    score *= start_overhang_rel_size
+                    try:
+                        start_overhang_scores[pos] -= score
+                    except IndexError:
+                        pass
 
             # Do the same for end overlaps.
             end_overhang_size = min(a.get_end_overhang(), parameters.neg_score_feather_size)
-            end_overhang_rel_size = end_overhang_size / parameters.neg_score_feather_size
-            for pos in range(a_end, a_end + end_overhang_size):
-                distance_from_clip = pos - a_end
-                score = (end_overhang_size - distance_from_clip) / end_overhang_size
-                score *= end_overhang_rel_size
-                end_overhang_scores[pos] -= score
+            if end_overhang_size > 0:
+                end_overhang_rel_size = end_overhang_size / parameters.neg_score_feather_size
+                for pos in range(a_end - parameters.split_adjustment, a_end + end_overhang_size):
+                    distance_from_clip = pos - a_end
+                    score = (end_overhang_size - distance_from_clip) / end_overhang_size
+                    score *= end_overhang_rel_size
+                    try:
+                        end_overhang_scores[pos] -= score
+                    except IndexError:
+                        pass
 
         # The final score comes from the positive contribution of spanning alignments and the
         # negative contribution of overhangs. But there needs to be both a start overhang and
         # end overhang to really matter.
-        seq.positive_score_ranges = []
-        positive_range_start = 0
-        in_positive_range = True
         for pos in range(seq_length):
             overhang_score = max(start_overhang_scores[pos], end_overhang_scores[pos])
             scores[pos] += overhang_score
+
+        # Now we get the positive and negative scoring regions of the sequence.
+        seq.positive_score_ranges = []
+        seq.negative_score_ranges = []
+        positive_range_start = 0
+        in_positive_range = True
+        negative_range_start = 0
+        in_negative_range = True
+        for pos in range(seq_length):
             if scores[pos] >= 0.0:
                 if not in_positive_range:
                     in_positive_range = True
                     positive_range_start = pos
-            else:
+                if in_negative_range:
+                    in_negative_range = False
+                    if pos > negative_range_start:
+                        seq.negative_score_ranges.append((negative_range_start, pos))
+            else:  # negative score
                 if in_positive_range:
                     in_positive_range = False
-                    seq.positive_score_ranges.append((positive_range_start, pos))
+                    if pos > positive_range_start:
+                        seq.positive_score_ranges.append((positive_range_start, pos))
+                if not in_negative_range:
+                    in_negative_range = True
+                    negative_range_start = pos
+
         if in_positive_range:
             seq.positive_score_ranges.append((positive_range_start, seq_length))
+        if in_negative_range:
+            seq.negative_score_ranges.append((negative_range_start, seq_length))
 
-        is_chimera = seq.positive_score_ranges != [(0, seq_length)]
+        # Sanity check - can probably remove later.
+        total_range_size = 0
+        for positive_range in seq.positive_score_ranges:
+            assert positive_range[1] > positive_range[0]
+            total_range_size += positive_range[1] - positive_range[0]
+        for negative_range in seq.negative_score_ranges:
+            assert negative_range[1] > negative_range[0]
+            total_range_size += negative_range[1] - negative_range[0]
+        assert total_range_size == seq_length
+
+        is_chimera = len(seq.negative_score_ranges) > 0
         if is_chimera:
             chimera_count += 1
-            if discard_chimeras:
-                seq.positive_score_ranges = []
-            else:
-                # Clean up small ranges.
-                seq.positive_score_ranges = [x for x in seq.positive_score_ranges
-                                             if x[1] - x[0] >= min_split_size]
-            if seq.positive_score_ranges:
-                log.log('\nSplit ' + seq.name + ' into pieces: ' +
-                        get_read_range_str(seq.positive_score_ranges))
-                if show_sequences:
-                    log.log(seq.sequence)
-            else:
-                log.log('\nDiscarded ' + seq.name)
-                if show_sequences:
-                    log.log(seq.sequence)
-        else:
+            if log.logger.stdout_verbosity_level == 1:
+                log.log('\nChimera: ' + seq.name)
+        elif log.logger.stdout_verbosity_level == 1:
             log.log('.', end='')
 
+        if log.logger.stdout_verbosity_level > 1:
+            split_table_row = [name, get_read_range_str(seq.positive_score_ranges),
+                               get_read_range_str(seq.negative_score_ranges)]
+            colour = 'red' if is_chimera else 'normal'
+            print_table([split_table_row], indent=0, alignments=split_table_alignments,
+                        fixed_col_widths=split_table_col_widths, left_align_header=False,
+                        verbosity=2, header_format='normal', col_separation=5,
+                        row_colour={0: colour})
+
+        # If the user used the --discard_chimeras option, any chimeric read is thrown out entirely.
+        if is_chimera and discard_chimeras:
+            seq.positive_score_ranges = []
+
+    log.log('', 2)
     log.log('\n')
     log.log('Detected ' + int_to_str(chimera_count) + ' chimeras out of ' +
             int_to_str(len(seq_names)) + ' total reads')
@@ -530,7 +573,8 @@ class Parameters(object):
         self.trim_adjustment = 0             # TEMP
 
         # Splitting settings
-        self.starting_score = 1.0            # TEMP
+        self.starting_score = 0.1            # TEMP
         self.pos_score_scaling_factor = 2.0  # TEMP
         self.pos_score_feather_size = 1000   # TEMP
         self.neg_score_feather_size = 1000   # TEMP
+        self.split_adjustment = 1            # TEMP
