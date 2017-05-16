@@ -263,6 +263,21 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
 
     bases_trimmed = 0
     length_after = 0
+
+    trim_table_header = ['Sequence name']
+    trim_table_alignments = 'L'
+    trim_table_col_widths = [max(len(name) for name in seq_names)]
+    if log.logger.stdout_verbosity_level > 2:
+        trim_table_header += ['Mean depth', 'Target depth']
+        trim_table_alignments += 'RR'
+        trim_table_col_widths += [6, 6]
+    if log.logger.stdout_verbosity_level > 1:
+        trim_table_header += ['Start trim', 'End trim']
+        trim_table_alignments += 'RR'
+        trim_table_col_widths += [5, 5]
+
+    trim_table = [trim_table_header]
+
     for name in seq_names:
         seq = seq_dict[name]
         seq_alignments = alignments[name]
@@ -300,8 +315,19 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
                     break
 
         bases_trimmed += seq.trim_start_pos
-        bases_trimmed += seq_length - seq.trim_end_pos
+        end_bases_trimmed = seq_length - seq.trim_end_pos
+        bases_trimmed += end_bases_trimmed
         length_after += seq.trim_end_pos - seq.trim_start_pos
+
+        trim_table_row = [name]
+        if log.logger.stdout_verbosity_level > 2:
+            trim_table_row += [float_to_str(mean_depth, 2), int_to_str(target_depth)]
+        if log.logger.stdout_verbosity_level > 1:
+            trim_table_row += [int_to_str(seq.trim_start_pos), int_to_str(end_bases_trimmed)]
+        trim_table.append(trim_table_row)
+
+    print_table(trim_table, indent=0, alignments=trim_table_alignments,
+                fixed_col_widths=trim_table_col_widths, left_align_header=False, verbosity=2)
 
     log.log('Total bases trimmed:          ' +
             int_to_str(bases_trimmed, max_num=length_before) + ' bp')
