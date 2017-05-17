@@ -33,7 +33,7 @@ from .read_ref import load_long_reads
 from . import log
 
 try:
-    from .cpp_wrappers import minimap_align_reads
+    from .cpp_wrappers import minimap_align_reads_with_settings
 except AttributeError as att_err:
     sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
              'Have you successfully built the library file using make?')
@@ -51,7 +51,8 @@ def main():
     log.log('')
 
     log.log_section_header('Conducting alignments', single_newline=True)
-    alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads, seq_names)
+    alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads, seq_names,
+                                               parameters)
 
     # Trim the sequences based on their alignment depth.
     if args.trim > 0:
@@ -150,14 +151,23 @@ def get_parameters(args):
     if args.parameters:
         parameter_parts = args.parameters.split(',')
         parameters = Parameters()
-        parameters.trim_depth_intercept = float(parameter_parts[0])
-        parameters.trim_depth_slope = float(parameter_parts[1])
-        parameters.trim_adjustment = int(parameter_parts[2])
-        parameters.starting_score = float(parameter_parts[3])
-        parameters.pos_score_scaling_factor = float(parameter_parts[4])
-        parameters.pos_score_feather_size = int(parameter_parts[5])
-        parameters.neg_score_feather_size = int(parameter_parts[6])
-        parameters.split_adjustment = int(parameter_parts[7])
+
+        parameters.kmer_size = int(parameter_parts[0])
+        parameters.minimiser_size = int(parameter_parts[1])
+        parameters.merge_fraction = float(parameter_parts[2])
+        parameters.min_match_len = int(parameter_parts[3])
+        parameters.max_gap = int(parameter_parts[4])
+
+        parameters.trim_depth_intercept = float(parameter_parts[5])
+        parameters.trim_depth_slope = float(parameter_parts[6])
+        parameters.trim_adjustment = int(parameter_parts[7])
+
+        parameters.starting_score = float(parameter_parts[8])
+        parameters.pos_score_scaling_factor = float(parameter_parts[9])
+        parameters.pos_score_feather_size = int(parameter_parts[10])
+        parameters.neg_score_feather_size = int(parameter_parts[11])
+        parameters.split_adjustment = int(parameter_parts[12])
+
         return parameters
 
     # If --parameters wasn't used (more common), then we set the parameters using the values of
@@ -232,13 +242,14 @@ def print_intro_message(args, full_command, parameters):
     log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
 
 
-def get_minimap_alignments_by_seq(input, reads, threads, seq_names):
-    if input == reads:
-        minimap_preset = 'scrub reads with reads'
-    else:
-        minimap_preset = 'scrub assembly with reads'
-    minimap_alignments_str = minimap_align_reads(input, reads, threads, 3, minimap_preset)
-
+def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters):
+    minimap_alignments_str = \
+        minimap_align_reads_with_settings(input, reads, threads, all_vs_all=(input == reads),
+                                          kmer_size=parameters.kmer_size,
+                                          minimiser_size=parameters.minimiser_size,
+                                          merge_fraction=parameters.merge_fraction,
+                                          min_match_len=parameters.min_match_len,
+                                          max_gap=parameters.max_gap)
 
     # Display raw alignment at very high verbosity (for debugging).
     log.log(minimap_alignments_str, 3)
@@ -419,6 +430,19 @@ def split_sequences(seq_dict, seq_names, alignments, discard_chimeras, parameter
                     except IndexError:
                         pass
 
+        # print('Alignment X\tAlignment Y')  # TEMP
+        # for i, a in enumerate(seq_alignments):  # TEMP
+        #     print(str(a.ref_start) + '\t' + str(i))  # TEMP
+        #     print(str(a.ref_end) + '\t' + str(i))  # TEMP
+        # print('\n\n\n')  # TEMP
+        # print('Positive\tStart overhang\tEnd overhang\tSum overhang')  # TEMP
+        # for pos in range(seq_length):  # TEMP
+        #     print(str(scores[pos]) + '\t' +  # TEMP
+        #           str(start_overhang_scores[pos]) + '\t' +  # TEMP
+        #           str(end_overhang_scores[pos]) + '\t' +  # TEMP
+        #           str(max(start_overhang_scores[pos], end_overhang_scores[pos])))  # TEMP
+        # quit()  # TEMP
+
         # The final score comes from the positive contribution of spanning alignments and the
         # negative contribution of overhangs. But there needs to be both a start overhang and
         # end overhang to really matter.
@@ -567,6 +591,13 @@ def get_fastq(name, s, e, sequence, qualities, i, include_piece_number):
 
 class Parameters(object):
     def __init__(self, trim_setting=50, split_setting=50):
+
+        # Alignment settings                 # TEMP
+        self.kmer_size=12                    # TEMP
+        self.minimiser_size=5                # TEMP
+        self.merge_fraction = 0.0            # TEMP
+        self.min_match_len = 100             # TEMP
+        self.max_gap = 10000                 # TEMP
 
         # Trimming settings
         self.trim_depth_intercept = 0.0      # TEMP

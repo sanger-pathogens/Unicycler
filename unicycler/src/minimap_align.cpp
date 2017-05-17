@@ -15,6 +15,7 @@
 #include <zlib.h>
 #include <iostream>
 #include <sstream>
+#include <minimap/minimap.h>
 
 #pragma GCC diagnostic ignored "-Wunused-function"
 
@@ -80,6 +81,50 @@ char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads
 
 	// Return the stdout buffer to its original state.
 	std::cout.rdbuf(old);
+
+    return cppStringToCString(outputBuffer.str());
+}
+
+
+
+char * minimapAlignReadsWithSettings(char * referenceFasta, char * readsFastq, int n_threads,
+                                     bool allVsAll, int kmerSize, int minimiserSize,
+                                     float mergeFrac, int minMatchLength, int maxGap,
+                                     int bandwidth, int minMinimiserCount) {
+    mm_verbose = 0;
+    mm_mapopt_t opt;
+    mm_mapopt_init(&opt);
+    int tbatch_size = 100000000;
+    uint64_t ibatch_size = 4000000000ULL;
+    float f = 0.001;
+
+    if (allVsAll)
+        opt.flag |= MM_F_AVA | MM_F_NO_SELF;
+
+    opt.min_match = minMatchLength;
+    opt.merge_frac = mergeFrac;
+    opt.max_gap = maxGap;
+    opt.radius = bandwidth;
+    opt.min_cnt = minMinimiserCount;
+
+    std::stringstream outputBuffer;
+    std::streambuf * old = std::cout.rdbuf(outputBuffer.rdbuf());
+
+    bseq_file_t *fp = bseq_open(referenceFasta);
+    for (;;) {
+        mm_idx_t *mi = 0;
+        if (!bseq_eof(fp))
+            mi = mm_idx_gen(fp, minimiserSize, kmerSize, MM_IDX_DEF_B, tbatch_size, n_threads,
+                            ibatch_size, 1);
+        if (mi == 0)
+            break;
+        mm_idx_set_max_occ(mi, f);
+        mm_map_file(mi, readsFastq, &opt, n_threads, tbatch_size);
+        mm_idx_destroy(mi);
+    }
+    bseq_close(fp);
+
+    std::cout.rdbuf(old);
 
     return cppStringToCString(outputBuffer.str());
 }

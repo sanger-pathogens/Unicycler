@@ -21,6 +21,11 @@ extern "C" {
 
     char * minimapAlignReads(char * referenceFasta, char * readsFastq, int n_threads,
                              int sensitivityLevel, int preset);
+
+    char * minimapAlignReadsWithSettings(char * referenceFasta, char * readsFastq, int n_threads,
+                                         bool allVsAll, int kmerSize, int minimiserSize,
+                                         float mergeFrac, int minMatchLength, int maxGap,
+                                         int bandwidth, int minMinimiserCount);
 }
 
 #endif // MINIMAP_ALIGN_H

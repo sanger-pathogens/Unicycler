@@ -15,7 +15,8 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import os
-from ctypes import CDLL, cast, c_char_p, c_int, c_uint, c_ulong, c_double, c_void_p, c_bool, POINTER
+from ctypes import CDLL, cast, c_char_p, c_int, c_uint, c_ulong, c_double, c_void_p, c_bool, \
+    c_float, POINTER
 from .misc import quit_with_error
 
 
@@ -249,7 +250,7 @@ def consensus_alignment(sequences, qualities, scoring_scheme, bandwidth=1000):
 
 
 
-# This function conducts a minimap alignment between reads and reference.
+# These functions conduct a minimap alignment between reads and reference.
 C_LIB.minimapAlignReads.argtypes = [c_char_p,  # Reference FASTA filename
                                     c_char_p,  # Reads FASTQ filename
                                     c_int,     # Threads
@@ -270,6 +271,29 @@ def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level
         preset = 2
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
                                   threads, sensitivity_level, preset)
+    return c_string_to_python_string(ptr)
+
+C_LIB.minimapAlignReadsWithSettings.argtypes = [c_char_p,  # Reference FASTA filename
+                                                c_char_p,  # Reads FASTQ filename
+                                                c_int,     # Threads
+                                                c_bool,    # Whether an all vs all alignment (-S)
+                                                c_int,     # K-mer size (-k)
+                                                c_int,     # Minimiser size (-w)
+                                                c_float,   # Merge fraction (-m)
+                                                c_int,     # Minimum match length (-L)
+                                                c_int,     # Maximum minimiser gap (-g)
+                                                c_int,     # Bandwidth radius (-r)
+                                                c_int]     # Minimum minimiser count (-c)
+C_LIB.minimapAlignReadsWithSettings.restype = c_void_p     # String describing alignments
+
+
+def minimap_align_reads_with_settings(reference_fasta, reads_fastq, threads, all_vs_all=False,
+                                      kmer_size=15, minimiser_size=10, merge_fraction=0.5,
+                                      min_match_len=40, max_gap=10000, bandwidth=500, min_count=4):
+    ptr = C_LIB.minimapAlignReadsWithSettings(reference_fasta.encode('utf-8'),
+                                              reads_fastq.encode('utf-8'), threads, all_vs_all,
+                                              kmer_size, minimiser_size, merge_fraction,
+                                              min_match_len, max_gap, bandwidth, min_count)
     return c_string_to_python_string(ptr)
 
 
