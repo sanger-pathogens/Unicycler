@@ -277,7 +277,7 @@ def get_arguments():
                               help='R|Level of stdout and log file information (default: 1)\n  '
                                    '0 = no stdout, 1 = basic progress indicators, '
                                    '2 = extra info, 3 = debugging info')
-    output_group.add_argument('--min_fasta_length', type=int, required=False, default=1,
+    output_group.add_argument('--min_fasta_length', type=int, required=False, default=100,
                               help='Exclude contigs from the FASTA file which are shorter than '
                                    'this length (default: 1)')
     output_group.add_argument('--keep', type=int, default=1,
