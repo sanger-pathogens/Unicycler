@@ -228,6 +228,13 @@ def print_intro_message(args, full_command, parameters):
     log.log('Split level: ' +  split_level_str)
 
     log.log('', 2)
+    log.log('Low-level alignment parameters:', 2)
+    log.log('  k-mer size:             ' + str(parameters.kmer_size), 2)
+    log.log('  minimiser window size:  ' + str(parameters.minimiser_size), 2)
+    log.log('  merge fraction:         ' + float_to_str(parameters.merge_fraction, 2), 2)
+    log.log('  min matching length:    ' + str(parameters.min_match_len), 2)
+    log.log('  max gap size:           ' + str(parameters.max_gap), 2)
+    log.log('', 2)
     log.log('Low-level trimming parameters:', 2)
     log.log('  depth intercept:        ' + float_to_str(parameters.trim_depth_intercept, 2), 2)
     log.log('  depth slope:            ' + float_to_str(parameters.trim_depth_slope, 2), 2)
