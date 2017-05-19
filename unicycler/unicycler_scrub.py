@@ -599,9 +599,9 @@ def get_fastq(name, s, e, sequence, qualities, i, include_piece_number):
 class Parameters(object):
     def __init__(self, trim_setting=50, split_setting=50):
 
-        # Alignment settings                 # TEMP
-        self.kmer_size=12                    # TEMP
-        self.minimiser_size=5                # TEMP
+        # Alignment settings
+        self.kmer_size = 12                  # TEMP
+        self.minimiser_size = 5              # TEMP
         self.merge_fraction = 0.0            # TEMP
         self.min_match_len = 100             # TEMP
         self.max_gap = 10000                 # TEMP
