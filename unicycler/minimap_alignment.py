@@ -31,28 +31,46 @@ except AttributeError as e:
 
 class MinimapAlignment(object):
 
-    def __init__(self, paf_line='read_name\t0\t0\t0\t+\tref_name\t0\t0\t0\t0\t0\t0\tcm:i:0'):
-        self.paf_line = paf_line.strip()
-        line_parts = self.paf_line.split('\t')
+    def __init__(self, paf_line=None):
+        if paf_line is None:
+            self.paf_line = ''
+            self.read_name = ''
+            self.read_length = 0
+            self.read_start = 0
+            self.read_end = 0
+            self.read_strand = '+'
+            self.ref_name = ''
+            self.ref_length = 0
+            self.ref_start = 0
+            self.ref_end = 0
+            self.matching_bases = 0
+            self.num_bases = 0
+            self.minimiser_count = 0
+            self.read_end_gap = 0
+            self.ref_end_gap = 0
 
-        self.read_name = line_parts[0]
-        self.read_length = int(line_parts[1])
-        self.read_start = int(line_parts[2])
-        self.read_end = int(line_parts[3])
-        self.read_strand = line_parts[4]
+        else:
+            self.paf_line = paf_line.strip()
+            line_parts = self.paf_line.split('\t')
 
-        self.ref_name = get_nice_header(line_parts[5])
-        self.ref_length = int(line_parts[6])
-        self.ref_start = int(line_parts[7])
-        self.ref_end = int(line_parts[8])
+            self.read_name = line_parts[0]
+            self.read_length = int(line_parts[1])
+            self.read_start = int(line_parts[2])
+            self.read_end = int(line_parts[3])
+            self.read_strand = line_parts[4]
 
-        self.matching_bases = int(line_parts[9])
-        self.num_bases = int(line_parts[10])
-        # Mapping quality is part 11, not currently used
-        self.minimiser_count = int(line_parts[12].split('cm:i:')[-1])
+            self.ref_name = get_nice_header(line_parts[5])
+            self.ref_length = int(line_parts[6])
+            self.ref_start = int(line_parts[7])
+            self.ref_end = int(line_parts[8])
 
-        self.read_end_gap = self.read_length - self.read_end
-        self.ref_end_gap = self.ref_length - self.ref_end
+            self.matching_bases = int(line_parts[9])
+            self.num_bases = int(line_parts[10])
+            # Mapping quality is part 11, not currently used
+            self.minimiser_count = int(line_parts[12].split('cm:i:')[-1])
+
+            self.read_end_gap = self.read_length - self.read_end
+            self.ref_end_gap = self.ref_length - self.ref_end
 
     def get_concise_string(self):
         return ','.join([str(x) for x in [self.read_start, self.read_end, self.read_strand,
@@ -91,10 +109,12 @@ class MinimapAlignment(object):
             return 0.0
 
     def get_start_overhang(self):
-        return min(self.read_start, self.ref_start)
+        # return min(self.read_start, self.ref_start)
+        return self.read_start if self.read_start < self.ref_start else self.ref_start
 
     def get_end_overhang(self):
-        return min(self.read_end_gap, self.ref_end_gap)
+        # return min(self.read_end_gap, self.ref_end_gap)
+        return self.read_end_gap if self.read_end_gap < self.ref_end_gap else self.ref_end_gap
 
     def get_total_overhang(self):
         return self.get_start_overhang() + self.get_end_overhang()

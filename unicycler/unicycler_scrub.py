@@ -52,7 +52,7 @@ def main():
 
     log.log_section_header('Conducting alignments', single_newline=True)
     alignments = get_minimap_alignments_by_seq(args.input, args.reads, args.threads, seq_names,
-                                               parameters)
+                                               parameters, args.keep_paf)
 
     # Trim the sequences based on their alignment depth.
     if args.trim > 0:
@@ -84,7 +84,8 @@ def main():
             if e - s >= args.min_split_size:
                 seq.final_ranges.append((s, e))
 
-    output_sequences(args.out, seq_names, seq_dict, input_type)
+    if args.out.lower() != 'none':
+        output_sequences(args.out, seq_names, seq_dict, input_type)
 
 
 def get_arguments():
@@ -97,7 +98,8 @@ def get_arguments():
                              'FASTQ format')
     parser.add_argument('-o', '--out', type=str, required=True,
                         help='The scrubbed reads or assembly will be saved to this file (will '
-                             'have the same format as the --input file format)')
+                             'have the same format as the --input file format) or use "none" to '
+                             'not produce an output file')
     parser.add_argument('-r', '--reads', type=str, default='',
                         help='These are the reads used to scrub --input (can be FASTA or FASTQ '
                              'format) (default: same file as --input)')
@@ -114,6 +116,9 @@ def get_arguments():
                         help='If used, chimeric sequences will be discarded instead of split')
     parser.add_argument('-t', '--threads', type=int, required=False,
                         default=get_default_thread_count(), help='Number of threads used')
+    parser.add_argument('--keep_paf', action='store_true',
+                        help='Save the alignments to file (makes repeated runs faster because '
+                             'alignments can be loaded from file)')
     parser.add_argument('--parameters', type=str, required=False, default='',
                         help='Low-level parameters (for debugging use only)')
     parser.add_argument('--verbosity', type=int, required=False, default=1,
@@ -138,7 +143,9 @@ def get_arguments():
 
     args.input = os.path.abspath(args.input)
     args.reads = os.path.abspath(args.reads)
-    args.out = os.path.abspath(args.out)
+
+    if args.out.lower() != 'none':
+        args.out = os.path.abspath(args.out)
 
     check_file_exists(args.input)
     check_file_exists(args.reads)
@@ -249,14 +256,37 @@ def print_intro_message(args, full_command, parameters):
     log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
 
 
-def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters):
-    minimap_alignments_str = \
-        minimap_align_reads_with_settings(input, reads, threads, all_vs_all=(input == reads),
-                                          kmer_size=parameters.kmer_size,
-                                          minimiser_size=parameters.minimiser_size,
-                                          merge_fraction=parameters.merge_fraction,
-                                          min_match_len=parameters.min_match_len,
-                                          max_gap=parameters.max_gap)
+def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters, keep_paf):
+
+    paf_file_name = os.path.basename(input) + '_' + \
+                    os.path.basename(reads) + '_' + \
+                    str(parameters.kmer_size) + '_' + \
+                    str(parameters.minimiser_size) + '_' + \
+                    '%.4f' % parameters.merge_fraction + '_' + \
+                    str(parameters.min_match_len) + '_' + \
+                    str(parameters.max_gap)
+    paf_file_name = paf_file_name.replace('.', '_') + '.paf'
+
+    # If the alignments already exist, load them in.
+    if os.path.isfile(paf_file_name):
+        log.log('Loading existing alignments from file:')
+        log.log(paf_file_name)
+        with open(paf_file_name, 'rt') as paf:
+            minimap_alignments_str = paf.read()
+        log.log('')
+
+    # If the alignments don't exist, do them.
+    else:
+        minimap_alignments_str = \
+            minimap_align_reads_with_settings(input, reads, threads, all_vs_all=(input == reads),
+                                              kmer_size=parameters.kmer_size,
+                                              minimiser_size=parameters.minimiser_size,
+                                              merge_fraction=parameters.merge_fraction,
+                                              min_match_len=parameters.min_match_len,
+                                              max_gap=parameters.max_gap)
+        if keep_paf:
+            with open(paf_file_name, 'wt') as paf:
+                paf.write(minimap_alignments_str)
 
     # Display raw alignment at very high verbosity (for debugging).
     log.log(minimap_alignments_str, 3)
@@ -272,7 +302,7 @@ def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters):
         alignments_by_seq[seq_name] = sorted(alignments_by_seq[seq_name], key=lambda x: x.ref_start)
 
     # Display info about each alignment at high verbosity.
-    if log.logger.stdout_verbosity_level > 1:
+    if log.logger.stdout_verbosity_level > 2:
         col_widths = [max(len(name) for name in seq_names), 9, 9]
         alignments_table = [['Sequence name', 'Alignment count', 'Mean alignment depth']]
         for seq_name in seq_names:
@@ -607,8 +637,8 @@ class Parameters(object):
         self.max_gap = 10000                 # TEMP
 
         # Trimming settings
-        self.trim_depth_intercept = 0.0      # TEMP
-        self.trim_depth_slope = 0.2          # TEMP
+        self.trim_depth_intercept = 0.7      # TEMP
+        self.trim_depth_slope = 0.05         # TEMP
         self.trim_adjustment = 0             # TEMP
 
         # Splitting settings
