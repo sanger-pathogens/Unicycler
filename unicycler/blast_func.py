@@ -72,8 +72,7 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
 
     # Run the tblastn search.
     command = [tblastn_path, '-db', replicon_fasta_filename, '-query', start_genes_fasta, '-outfmt',
-               '6 qseqid sstart send pident qlen qseq qstart bitscore', '-num_threads',
-               str(min(threads, 4))]
+               '6 qseqid sstart send pident qlen qseq qstart bitscore', '-num_threads', '1']
     log.log('  ' + ' '.join(command), 2)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     blast_out, blast_err = process.communicate()
