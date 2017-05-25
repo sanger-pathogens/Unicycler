@@ -33,7 +33,7 @@ from .read_ref import load_long_reads
 from . import log
 
 try:
-    from .cpp_wrappers import minimap_align_reads_with_settings
+    from .cpp_wrappers import minimap_align_reads_with_settings, split_sequences_cpp
 except AttributeError as att_err:
     sys.exit('Error when importing C++ library: ' + str(att_err) + '\n'
              'Have you successfully built the library file using make?')
@@ -241,19 +241,23 @@ def print_intro_message(args, full_command, parameters):
     log.log('  merge fraction:         ' + float_to_str(parameters.merge_fraction, 2), 2)
     log.log('  min matching length:    ' + str(parameters.min_match_len), 2)
     log.log('  max gap size:           ' + str(parameters.max_gap), 2)
-    log.log('', 2)
-    log.log('Low-level trimming parameters:', 2)
-    log.log('  depth intercept:        ' + float_to_str(parameters.trim_depth_intercept, 2), 2)
-    log.log('  depth slope:            ' + float_to_str(parameters.trim_depth_slope, 2), 2)
-    log.log('  adjustment:             ' + str(parameters.trim_adjustment), 2)
-    log.log('', 2)
-    log.log('Low-level splitting parameters:', 2)
-    log.log('  starting score:         ' + float_to_str(parameters.starting_score, 2), 2)
-    log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
-    log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
-    log.log('  pos score feather:      ' + str(parameters.pos_score_feather_size), 2)
-    log.log('  neg score feather:      ' + str(parameters.neg_score_feather_size), 2)
-    log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
+
+    if args.trim > 0.0:
+        log.log('', 2)
+        log.log('Low-level trimming parameters:', 2)
+        log.log('  depth intercept:        ' + float_to_str(parameters.trim_depth_intercept, 2), 2)
+        log.log('  depth slope:            ' + float_to_str(parameters.trim_depth_slope, 2), 2)
+        log.log('  adjustment:             ' + str(parameters.trim_adjustment), 2)
+
+    if args.split > 0.0:
+        log.log('', 2)
+        log.log('Low-level splitting parameters:', 2)
+        log.log('  starting score:         ' + float_to_str(parameters.starting_score, 2), 2)
+        log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
+        log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
+        log.log('  pos score feather:      ' + str(parameters.pos_score_feather_size), 2)
+        log.log('  neg score feather:      ' + str(parameters.neg_score_feather_size), 2)
+        log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
 
 
 def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters, keep_paf):
@@ -420,102 +424,8 @@ def split_sequences(seq_dict, seq_names, alignments, discard_chimeras, parameter
         seq_alignments = alignments[name]
         seq_length = seq.get_length()
 
-        # Each position in the sequence is scored based on the alignments around it.
-        scores = [parameters.starting_score] * seq_length
-        start_overhang_scores = [0.0] * seq_length
-        end_overhang_scores = [0.0] * seq_length
-
-        for a in seq_alignments:
-
-            # Alignments which span the position earn it positive points (because they suggest
-            # contiguity). The larger the span (up to a maximum), the more points are earned.
-            a_start, a_end = a.ref_start, a.ref_end
-            for pos in range(a_start, a_end):
-                distance_from_end = min(pos - a_start, a_end - pos)
-                relevant_distance = min(distance_from_end, parameters.pos_score_feather_size)
-                score = relevant_distance / parameters.pos_score_feather_size
-                score *= parameters.pos_score_scaling_factor
-                scores[pos] += score
-
-            # Tally up the score for start overlaps. Scores are larger for positions in larger
-            # overlaps and positions close to where the overlap begins.
-            start_overhang_size = min(a.get_start_overhang(), parameters.neg_score_feather_size)
-            if start_overhang_size > 0:
-                start_overhang_rel_size = start_overhang_size / parameters.neg_score_feather_size
-                for pos in range(a_start - start_overhang_size,
-                                 a_start + parameters.split_adjustment):
-                    distance_from_clip = a_start - pos
-                    score = (start_overhang_size - distance_from_clip) / start_overhang_size
-                    score = min(score, 1.0)
-                    score *= start_overhang_rel_size
-                    try:
-                        start_overhang_scores[pos] -= score
-                    except IndexError:
-                        pass
-
-            # Do the same for end overlaps.
-            end_overhang_size = min(a.get_end_overhang(), parameters.neg_score_feather_size)
-            if end_overhang_size > 0:
-                end_overhang_rel_size = end_overhang_size / parameters.neg_score_feather_size
-                for pos in range(a_end - parameters.split_adjustment, a_end + end_overhang_size):
-                    distance_from_clip = pos - a_end
-                    score = (end_overhang_size - distance_from_clip) / end_overhang_size
-                    score = min(score, 1.0)
-                    score *= end_overhang_rel_size
-                    try:
-                        end_overhang_scores[pos] -= score
-                    except IndexError:
-                        pass
-
-        # print('Alignment X\tAlignment Y')  # TEMP
-        # for i, a in enumerate(seq_alignments):  # TEMP
-        #     print(str(a.ref_start) + '\t' + str(i))  # TEMP
-        #     print(str(a.ref_end) + '\t' + str(i))  # TEMP
-        # print('\n\n\n')  # TEMP
-        # print('Positive\tStart overhang\tEnd overhang\tSum overhang')  # TEMP
-        # for pos in range(seq_length):  # TEMP
-        #     print(str(scores[pos]) + '\t' +  # TEMP
-        #           str(start_overhang_scores[pos]) + '\t' +  # TEMP
-        #           str(end_overhang_scores[pos]) + '\t' +  # TEMP
-        #           str(max(start_overhang_scores[pos], end_overhang_scores[pos])))  # TEMP
-        # quit()  # TEMP
-
-        # The final score comes from the positive contribution of spanning alignments and the
-        # negative contribution of overhangs. But there needs to be both a start overhang and
-        # end overhang to really matter.
-        for pos in range(seq_length):
-            overhang_score = max(start_overhang_scores[pos], end_overhang_scores[pos])
-            scores[pos] += overhang_score
-
-        # Now we get the positive and negative scoring regions of the sequence.
-        seq.positive_score_ranges = []
-        seq.negative_score_ranges = []
-        positive_range_start = 0
-        in_positive_range = True
-        negative_range_start = 0
-        in_negative_range = True
-        for pos in range(seq_length):
-            if scores[pos] >= 0.0:
-                if not in_positive_range:
-                    in_positive_range = True
-                    positive_range_start = pos
-                if in_negative_range:
-                    in_negative_range = False
-                    if pos > negative_range_start:
-                        seq.negative_score_ranges.append((negative_range_start, pos))
-            else:  # negative score
-                if in_positive_range:
-                    in_positive_range = False
-                    if pos > positive_range_start:
-                        seq.positive_score_ranges.append((positive_range_start, pos))
-                if not in_negative_range:
-                    in_negative_range = True
-                    negative_range_start = pos
-
-        if in_positive_range:
-            seq.positive_score_ranges.append((positive_range_start, seq_length))
-        if in_negative_range:
-            seq.negative_score_ranges.append((negative_range_start, seq_length))
+        seq.positive_score_ranges, seq.negative_score_ranges = \
+            split_sequences_cpp(seq_alignments, seq_length, parameters)
 
         # Sanity check - can probably remove later.
         total_range_size = 0

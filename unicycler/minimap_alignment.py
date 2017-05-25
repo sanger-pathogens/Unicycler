@@ -76,6 +76,10 @@ class MinimapAlignment(object):
         return ','.join([str(x) for x in [self.read_start, self.read_end, self.read_strand,
                                           self.ref_name, self.ref_start, self.ref_end]])
 
+    def get_string_for_cpp_scrub(self):
+        return '\t'.join([str(x) for x in [self.read_length, self.read_start, self.read_end,
+                                          self.ref_length, self.ref_start, self.ref_end]])
+
     def __repr__(self):
         return str(self.read_start) + '-' + str(self.read_end) + '(' + self.read_strand + '):' + \
             self.ref_name + ':' + str(self.ref_start) + '-' + str(self.ref_end) + \
