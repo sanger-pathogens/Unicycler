@@ -187,7 +187,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
         make sure they are the same.
         """
         temp_gfa = os.path.join(os.path.dirname(__file__), 'temp.gfa')
-        self.graph.save_to_gfa(temp_gfa)
+        self.graph.save_to_gfa(temp_gfa, include_insert_size=True)
         graph2 = unicycler.assembly_graph.AssemblyGraph(temp_gfa, 25)
         self.assertEqual(self.graph.overlap, graph2.overlap)
         self.assertEqual(self.graph.insert_size_mean, graph2.insert_size_mean)

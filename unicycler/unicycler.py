@@ -279,7 +279,7 @@ def get_arguments():
                                    '2 = extra info, 3 = debugging info')
     output_group.add_argument('--min_fasta_length', type=int, required=False, default=100,
                               help='Exclude contigs from the FASTA file which are shorter than '
-                                   'this length (default: 1)')
+                                   'this length')
     output_group.add_argument('--keep', type=int, default=1,
                               help='R|Level of file retention (default: 1)\n  '
                                    '0 = only keep final files: assembly (FASTA, GFA and log), '
@@ -446,7 +446,7 @@ def get_arguments():
     # If no arguments were used, print the entire help (argparse default is to just give an error
     # like '--out is required').
     if len(sys.argv) == 1:
-        parser.print_help()
+        parser.print_help(file=sys.stderr)
         sys.exit(1)
 
     args = parser.parse_args()
