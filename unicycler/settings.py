@@ -128,10 +128,6 @@ CLEANING_USEDUPNESS_THRESHOLD = 0.5
 # but it will take much longer.
 MAX_READS_FOR_CONSENSUS = 25
 
-# When cleaning a SPADes assembly, Unicycler will delete graph segments will less depth than
-# this, if doing so will not break up the graph.
-READ_DEPTH_FILTER = 0.5
-
 # The different bridging modes have different minimum bridge quality thresholds.
 CONSERVATIVE_MIN_BRIDGE_QUAL = 25.0
 NORMAL_MIN_BRIDGE_QUAL = 10.0

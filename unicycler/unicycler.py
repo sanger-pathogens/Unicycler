@@ -80,7 +80,7 @@ def main():
             graph = AssemblyGraph(best_spades_graph, None)
         else:
             graph = get_best_spades_graph(args.short1, args.short2, args.unpaired, args.out,
-                                          settings.READ_DEPTH_FILTER, args.verbosity,
+                                          args.depth_filter, args.verbosity,
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.no_correct, args.linear_seqs)
@@ -331,6 +331,10 @@ def get_arguments():
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--kmer_count', type=int, default=10,
                               help='Number of k-mer steps to use in SPAdes assembly'
+                                   if show_all_args else argparse.SUPPRESS)
+    spades_group.add_argument('--depth_filter', type=float, default=0.5,
+                              help='Filter out contigs lower than this fraction of the chromosomal '
+                                   'depth, if doing so does not result in graph dead ends'
                                    if show_all_args else argparse.SUPPRESS)
 
     # Miniasm assembly options
