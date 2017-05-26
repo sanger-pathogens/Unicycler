@@ -164,16 +164,17 @@ def get_parameters(args):
         parameters.merge_fraction = float(parameter_parts[2])
         parameters.min_match_len = int(parameter_parts[3])
         parameters.max_gap = int(parameter_parts[4])
+        parameters.max_overhang = int(parameter_parts[5])
 
-        parameters.trim_depth_intercept = float(parameter_parts[5])
-        parameters.trim_depth_slope = float(parameter_parts[6])
-        parameters.trim_adjustment = int(parameter_parts[7])
+        parameters.trim_depth_intercept = float(parameter_parts[6])
+        parameters.trim_depth_slope = float(parameter_parts[7])
+        parameters.trim_adjustment = int(parameter_parts[8])
 
-        parameters.starting_score = float(parameter_parts[8])
-        parameters.pos_score_scaling_factor = float(parameter_parts[9])
-        parameters.pos_score_feather_size = int(parameter_parts[10])
-        parameters.neg_score_feather_size = int(parameter_parts[11])
-        parameters.split_adjustment = int(parameter_parts[12])
+        parameters.starting_score = float(parameter_parts[9])
+        parameters.pos_score_scaling_factor = float(parameter_parts[10])
+        parameters.pos_score_feather_size = int(parameter_parts[11])
+        parameters.neg_score_feather_size = int(parameter_parts[12])
+        parameters.split_adjustment = int(parameter_parts[13])
 
         return parameters
 
@@ -241,6 +242,7 @@ def print_intro_message(args, full_command, parameters):
     log.log('  merge fraction:         ' + float_to_str(parameters.merge_fraction, 2), 2)
     log.log('  min matching length:    ' + str(parameters.min_match_len), 2)
     log.log('  max gap size:           ' + str(parameters.max_gap), 2)
+    log.log('  max overhang:           ' + str(parameters.max_overhang), 2)
 
     if args.trim > 0.0:
         log.log('', 2)
@@ -298,11 +300,22 @@ def get_minimap_alignments_by_seq(input, reads, threads, seq_names, parameters, 
     minimap_alignments = load_minimap_alignments_basic(minimap_alignments_str)
     log.log(int_to_str(len(minimap_alignments)) + ' alignments found')
     alignments_by_seq = defaultdict(list)
+    excluded_for_overhang_count = 0
     for a in minimap_alignments:
+
+        # Exclude alignments with too much overhang (likely to be local alignments).
+        if a.get_smallest_overhang() > parameters.max_overhang:
+            log.log('EXCLUDED FOR OVERHANG: ' + str(a), 3)
+            excluded_for_overhang_count += 1
+            continue
+
         alignments_by_seq[a.ref_name].append(a)
         alignments_by_seq[a.read_name].append(get_opposite_alignment(a))
     for seq_name in alignments_by_seq:
         alignments_by_seq[seq_name] = sorted(alignments_by_seq[seq_name], key=lambda x: x.ref_start)
+    log.log(int_to_str(excluded_for_overhang_count, max_num=len(minimap_alignments)) +
+            ' alignments excluded due to excessive overhang')
+    log.log('')
 
     # Display info about each alignment at high verbosity.
     if log.logger.stdout_verbosity_level > 2:
@@ -544,6 +557,7 @@ class Parameters(object):
         self.merge_fraction = 0.0            # TEMP
         self.min_match_len = 100             # TEMP
         self.max_gap = 10000                 # TEMP
+        self.max_overhang = 1000             # TEMP
 
         # Trimming settings
         self.trim_depth_intercept = 0.7      # TEMP

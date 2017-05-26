@@ -123,6 +123,11 @@ class MinimapAlignment(object):
     def get_total_overhang(self):
         return self.get_start_overhang() + self.get_end_overhang()
 
+    def get_smallest_overhang(self):
+        start_overhang = self.get_start_overhang()
+        end_overhang = self.get_end_overhang()
+        return start_overhang if start_overhang < end_overhang else end_overhang
+
 
 def load_minimap_alignments_basic(minimap_alignments_str):
     """
