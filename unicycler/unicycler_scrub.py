@@ -351,7 +351,7 @@ def trim_sequences(seq_dict, seq_names, alignments, parameters):
     if log.logger.stdout_verbosity_level > 1:
         trim_table_header += ['Start trim', 'End trim']
         trim_table_alignments += 'RR'
-        trim_table_col_widths += [5, 5]
+        trim_table_col_widths += [6, 6]
 
     trim_table = [trim_table_header]
 
