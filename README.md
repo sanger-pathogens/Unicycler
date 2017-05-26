@@ -1,7 +1,8 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Illumina](http://www.illumina.com/) reads and long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
+Unicycler is a assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
 
+While Unicycler can produce the best assemblies from hybrid read sets, it can also assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
 
 
 # Table of contents
@@ -53,24 +54,24 @@ Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Ill
 
 # Introduction
 
-As input, Unicycler takes a good set of Illumina reads from a bacterial isolate (required) and long reads from the same isolate (optional). If the input is sufficient, it will produce a completed assembly of circularised sequences.
+As input, Unicycler takes one of the following:
+   * Illumina reads from a bacterial isolate (ideally paired-end, but unpaired works too)
+   * A set of long reads (either PacBio or Nanopore) from a bacterial isolate
+   * Illumina reads and long reads from the same isolate (best case)
 
 Reasons to use Unicycler:
+   * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
+   * It correctly handles plasmid-rich genomes.
+   * When performing hybrid assembly, it can use long reads of any depth and quality. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
+   * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
    * It has very low misassembly rates.
    * It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
-   * It correctly handles plasmids of varying depth.
-   * It works with long reads of any quality – even Nanopore reads classed as 'fail' can be used as input.
-   * It works with any long read depth. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
-   * Even if you have no long reads, it functions as a [SPAdes](http://bioinf.spbau.ru/spades) optimiser and produces very good Illumina assemblies.
-   * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
-   * It's easy to use, runs with just one command and doesn't require tinkering with parameters!
+   * It's easy to use, runs with just one command and usually doesn't require tinkering with parameters.
 
 Reasons to __not__ use Unicycler:
-   * You only have long reads, not Illumina reads (try [Canu](https://github.com/marbl/canu) instead).
-   * Your Illumina reads are poor quality (Unicycler requires a good short read assembly graph – [more info here](#bad-illumina-reads)).
-   * You're assembling a large eukaryotic genome or a metagenome (Unicycler is designed for small genomes like bacterial isolates).
-   * Your Illumina reads and long reads are from different isolates.
-   * You're very impatient (Unicycler is not as fast as alternatives).
+   * You're assembling a eukaryotic genome or a metagenome (Unicycler is designed exclusively for bacterial isolates).
+   * Your Illumina reads and long reads are from different isolates (Unicycler struggles with sample heterogeneity).
+   * You're impatient (Unicycler is thorough but not especially fast).
 
 
 
@@ -85,9 +86,7 @@ Reasons to __not__ use Unicycler:
     * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I haven't figured out the minimum required version number)
 * [SPAdes](http://bioinf.spbau.ru/spades) 3.6.2 or later
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
-
-Unicycler needs the following tools for certain parts of its pipeline. They are optional, but without them Unicycler will not be able to perform all tasks:
-
+* [Racon](https://github.com/isovic/racon)
 * [Pilon](https://github.com/broadinstitute/pilon/wiki) (required for polishing)
 * Java (required for polishing)
 * [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/) (required for polishing)
