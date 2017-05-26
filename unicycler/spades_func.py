@@ -331,7 +331,7 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
         read_lengths = get_read_lengths(short1) + get_read_lengths(short2) + \
                        get_read_lengths(unpaired)
         insert_size_mean = statistics.mean(read_lengths)
-        insert_size_deviation = max(statistics.stdev(read_lengths), 1)
+        insert_size_deviation = max(statistics.stdev(read_lengths), 1.0)
 
     log.log('', 2)
     log.log('Insert size mean: ' + float_to_str(insert_size_mean, 1) + ' bp', 2)
