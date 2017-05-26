@@ -443,6 +443,12 @@ def get_arguments():
                                             if show_all_args else argparse.SUPPRESS)
     add_aligning_arguments(align_group, show_all_args)
 
+    # If no arguments were used, print the entire help (argparse default is to just give an error
+    # like '--out is required').
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
     args = parser.parse_args()
     fix_up_arguments(args)
 
