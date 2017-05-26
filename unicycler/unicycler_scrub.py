@@ -254,7 +254,6 @@ def print_intro_message(args, full_command, parameters):
         log.log('Low-level splitting parameters:', 2)
         log.log('  starting score:         ' + float_to_str(parameters.starting_score, 2), 2)
         log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
-        log.log('  pos score scale factor: ' + float_to_str(parameters.pos_score_scaling_factor, 2), 2)
         log.log('  pos score feather:      ' + str(parameters.pos_score_feather_size), 2)
         log.log('  neg score feather:      ' + str(parameters.neg_score_feather_size), 2)
         log.log('  adjustment:             ' + str(parameters.split_adjustment), 2)
