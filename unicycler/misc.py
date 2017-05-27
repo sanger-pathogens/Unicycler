@@ -927,7 +927,7 @@ def java_path_and_version(java_path):
     out, _ = process.communicate()
 
     # more flexible version string
-    version = re.match(r'^.* version \'"([^\'"]+).*$', out.decode(), re.MULTILINE)
+    version = re.match(r'^.* version[ \'"]+([^ \'"]+).*$', out.decode(), re.MULTILINE)
     version = version.group(1) if version else ''
 
     # Make sure Java is 1.7+
