@@ -208,7 +208,7 @@ def main():
     insert_size_1st, insert_size_99th = None, None
     if short_reads_available and not args.no_pilon:
         insert_size_1st, insert_size_99th = \
-            final_polish(graph, args, counter)
+            final_polish(graph, args, counter, long_reads_available)
 
     if not args.no_rotate:
         rotate_completed_replicons(graph, args, counter)
@@ -876,7 +876,7 @@ def rotate_completed_replicons(graph, args, counter):
             shutil.rmtree(blast_dir)
 
 
-def final_polish(graph, args, counter):
+def final_polish(graph, args, counter, do_pilon_reassembly):
     log.log_section_header('Polishing assembly with Pilon')
     log.log_explanation('Unicycler now conducts multiple rounds of Pilon in an attempt to repair '
                         'any remaining small-scale errors with the assembly.',
@@ -885,7 +885,7 @@ def final_polish(graph, args, counter):
     insert_size_1st, insert_size_99th = None, None
     try:
         insert_size_1st, insert_size_99th = \
-            polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir)
+            polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir, do_pilon_reassembly)
     except CannotPolish as e:
         log.log('Unable to polish assembly using Pilon: ' + e.message)
     else:

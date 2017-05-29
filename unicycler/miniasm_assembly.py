@@ -27,7 +27,6 @@ from .string_graph import StringGraph, StringGraphSegment, \
     merge_string_graph_segments_into_unitig_graph
 from .read_ref import load_references, load_long_reads
 from .unicycler_align import semi_global_align_long_reads
-from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
 from . import log
 from . import settings
 
@@ -172,13 +171,8 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             if not short_reads_available and args.keep > 0:
                 unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
 
-            if short_reads_available:
-                # polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir)
-                # if args.keep >= 3:
-                #     unitig_graph.save_to_gfa(pilon_polished_filename)
-                if args.keep > 0:
-                    unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
-                                                      'long_read_assembly'))
+            if short_reads_available and args.keep > 0:
+                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
         log.log('')
@@ -379,18 +373,6 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
         unitig_graph.normalise_read_depths()
     else:
         log.log(red('Polishing failed'))
-
-
-def polish_unitigs_with_pilon(unitig_graph, graph, args, miniasm_dir):
-    log.log_section_header('Polishing miniasm assembly with Pilon')
-    log.log_explanation('Unicycler now uses Pilon to polish the miniasm assembly with short '
-                        'reads, taking it to very high accuracy. Like for the Racon polish, '
-                        'circular contigs are rotated between rounds.')
-    try:
-        polish_dir = os.path.join(miniasm_dir, 'pilon_polish')
-        polish_with_pilon_multiple_rounds(unitig_graph, graph, args, polish_dir)
-    except CannotPolish as e:
-        log.log('Unable to polish assembly using Pilon: ' + e.message)
 
 
 def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_scheme,

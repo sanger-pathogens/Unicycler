@@ -33,7 +33,8 @@ class CannotPolish(Exception):
         return repr(self.message)
 
 
-def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir):
+def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir,
+                                      do_pilon_reassembly):
     """
     This function does multiple rounds of Pilon polishing, until either it stops making changes
     or the limit is reached. It takes two graphs - one for polishing and one for insert size
@@ -62,7 +63,7 @@ def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir
         change_count = polish_with_pilon(graph, args, polish_dir, insert_size_1st,
                                          insert_size_99th, i+1, fix_type)
         if change_count == 0:
-            if fix_type == 'bases':
+            if fix_type == 'bases' and do_pilon_reassembly:
                 fix_type = 'all'
             else:
                 break
