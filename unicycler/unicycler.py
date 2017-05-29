@@ -332,7 +332,7 @@ def get_arguments():
     spades_group.add_argument('--kmer_count', type=int, default=10,
                               help='Number of k-mer steps to use in SPAdes assembly'
                                    if show_all_args else argparse.SUPPRESS)
-    spades_group.add_argument('--depth_filter', type=float, default=0.5,
+    spades_group.add_argument('--depth_filter', type=float, default=0.25,
                               help='Filter out contigs lower than this fraction of the chromosomal '
                                    'depth, if doing so does not result in graph dead ends'
                                    if show_all_args else argparse.SUPPRESS)
