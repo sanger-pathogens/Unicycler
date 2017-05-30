@@ -105,7 +105,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         if segment_count == 0:
             score = 0.0
         else:
-            score = 1.0 / (segment_count * ((adjusted_dead_ends + 1) ** 2))
+            score = 1.0 / (segment_count * (adjusted_dead_ends + 2))
 
         # Prepare the table line for this k-mer graph.
         table_line += [int_to_str(segment_count)]
