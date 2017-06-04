@@ -38,15 +38,8 @@ While Unicycler can produce the best assemblies from hybrid read sets, it can al
     * [Very short contigs](#very-short-contigs)
     * [Chromosome and plasmid depth](#chromosomes-and-plasmid-depth)
     * [Known contamination](#known-contamination)
-* [Unicycler align](#unicycler-align)
-    * [Semi-global alignment](#semi-global-alignment)
-    * [Versus local alignment](#versus-local-alignment)
-    * [Example commands](#example-commands)
-* [Unicycler polish](#unicycler-polish)
-    * [Requirements](#requirements-1)
-    * [Process](#process)
-    * [Example commands](#example-commands-1)
-* [Citation](#citation)
+* [Other included tools](#other-included-tools)
+* [Paper](#paper)
 * [Acknowledgements](#acknowledgements)
 * [License](#license)
 
@@ -494,101 +487,17 @@ Some Oxford Nanopore protocols include a lambda phage spike-in as a control. Sin
 
 
 
-# Unicycler align
+# Other included tools
 
-Unicycler's algorithm for sensitive semi-global alignment is available as a stand-alone alignment tool with the command `unicycler_align`.
+Unicycler also comes with a few other tools which may be of interest:
 
+* [Unicycler-align](docs/unicycler-align.md): semi-global alignment of long reads
+* [Unicycler-polish](docs/unicycler-polish.md): hybrid assembly polishing
+* [Unicycler-scrub](docs/unicycler-scrub.md): read scrubber for trimming ends and splitting chimeras
+* [Unicycler-check](docs/unicycler-check.md): misassembly detection and alignment visualisation
 
-### Semi-global alignment
+These tools may be experimental, incomplete or no longer under development, so use with caution!
 
-Semi-global alignment (a.k.a. glocal, overlap or free end-gap alignment) will not clip an alignment until one of the two sequences ends. This can be where one sequence is contained within the other or where the two sequences overlap:
-```
-  TAGAA        GTGCCGGAACA         GGCCACAC     AGTAAGAT
-  |||||          |||||||           |||||           |||||
-ACTAGAACG        GCCGGAA       GGCTGGCCA           AAGATCTTG
-```
-
-In contrast, local alignment will align only the best matching parts, clipping the alignment where the quality becomes poor:
-```
-      CGAACAGCATACTTG
-          ||||||||
-ACGTCAGACTCAGCATACGCATCTAGA
-```
-
-Semi-global alignment is appropriate when there are no structural differences between the query and reference sequences. For example, when you have a short read assembly graph and long reads from the same bacterial isolate (as is the case in the Unicycler pipeline). In this scenario, there may be small scale differences (due to read errors) but no large scale differences, and semi-global alignment is ideal.
-
-
-### Versus local alignment
-
-Semi-global alignment is probably not appropriate for mapping reads to a more distant reference genome. It does not cope with points of structural variation between the sample and the reference. For example, if the sample had a deletion relative to the reference, a read spanning that deletion would align poorly with semi-global alignment:
-```
-read:            AACACTAAACTTAGTCCCAA
-                 |||||||||||  |   | |    
-reference: GATCCCAACACTAAACTCTGGGGCGAACGGCGTAGTCCCAAGAGT
-```
-
-Local alignment (which can align only part of the read) would be more appropriate:
-```
-read:            AACACTAAACT               TAGTCCCAA
-                 |||||||||||               |||||||||
-reference: GATCCCAACACTAAACTCTGGGGCGAACGGCGTAGTCCCAAGAGT
-```
-Try [BWA-MEM](http://bio-bwa.sourceforge.net/), [LAST](http://last.cbrc.jp/) or [BLASR](https://github.com/PacificBiosciences/blasr) if you need a local alignment tool.
-
-
-### Example commands
-
-__Regular alignment:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam`
-
-__Very sensitive (and slow) alignment:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam --sensitivity_level 3`
-
-__Setting some additional thresholds:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam --min_len 1000 --low_score 80.0`
-
-
-
-# Unicycler polish
-
-Unicycler polish is a script to repeatedly polish a completed assembly using all available reads. It can be given Illumina reads, long reads or (ideally) both. When both Illumina and long reads are available, Unicycler polish can fix assembly errors, even in repetitive parts of the genome which cannot be polished by short reads alone.
-
-### Requirements
-
-* If polishing with Illumina reads: [Pilon](https://github.com/broadinstitute/pilon/wiki), Java, [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/), [Samtools](http://www.htslib.org/) (version 1.0 or later)
-* If polishing with PacBio reads: [pbalign](https://github.com/PacificBiosciences/pbalign), [BLASR](https://github.com/PacificBiosciences/blasr), [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)
-    * PacBio software is most easily installed using [pitchfork](https://github.com/PacificBiosciences/pitchfork).
-* If polishing with both Illumina and long reads (e.g. Nanopore): [Racon](https://github.com/isovic/racon), [FreeBayes](https://github.com/ekg/freebayes)
-
-
-### Process
-
-Unicycler polish uses an exhaustive iterative process that is time-consuming but can be necessary to resolve the sequence in repeat regions. For example, consider a genome with two very similar regions, A and B, and there are assembly errors in both. Polishing is initially difficult because the errors may cause reads which should map to A to instead map to B and vice versa. However, after some of these errors are fixed, more reads will map to their correct locations, allowing for more errors to be fixes, allowing more reads to map correctly, etc.
-
-1. If Illumina reads are available:
-    1. Run [Pilon](https://github.com/broadinstitute/pilon/wiki) in 'bases' mode (substitutions and small indels). If any changes were suggested, apply them and repeat this step.
-    2. Run Pilon in 'local' mode (larger variants), and assess each change with ALE. If any variant improves the ALE score, apply it and go back to step 1-i.
-2. If long reads are available:
-    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Racon](https://github.com/isovic/racon) and gather all suggested small changes.
-    2. Use [FreeBayes](https://github.com/ekg/freebayes) to assess each long read-suggested change by looking for ambiguity in the Illumina read mapping. If any were found, apply them and go back to step 2-i.
-3. If Illumina reads are available:
-    1. Execute step 1 again.
-    2. Run Pilon/GenomicConsensus/Racon again (all that apply) and assess each suggested variant with ALE. If any improves the ALE score, apply it and repeat this step.
-
-
-### Example commands
-
-__Polishing with only Illumina reads:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -a assembly.fasta`
-
-__Polishing with only PacBio reads:__<br>
-`unicycler_polish --pb_bax path/to/*bax.h5 -a assembly.fasta`
-
-__Hybrid read set (Illumina and PacBio) polishing:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --pb_bax *bax.h5 -a assembly.fasta`
-
-__Hybrid read set (Illumina and Nanopore) polishing:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --long_reads nanopore.fastq.gz -a assembly.fasta`
 
 
 # Paper
