@@ -899,7 +899,6 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
                                        read_dict, read_names, long_read_filename):
     alignment_dir = os.path.join(args.out, 'read_alignment')
     graph_fasta = os.path.join(alignment_dir, 'all_segments.fasta')
-    anchor_segments_fasta = os.path.join(alignment_dir, 'anchor_segments.fasta')
     anchor_segment_names = set(str(x.number) for x in anchor_segments)
     alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
     scoring_scheme = AlignmentScoringScheme(args.scores)
@@ -908,8 +907,6 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
     if not os.path.exists(alignment_dir):
         os.makedirs(alignment_dir)
     graph.save_to_fasta(graph_fasta, silent=True)
-    graph.save_specific_segments_to_fasta(anchor_segments_fasta, anchor_segments,
-                                          silent=True)
     references = load_references(graph_fasta, section_header=None, show_progress=False)
     reference_dict = {x.name: x for x in references}
 
@@ -946,8 +943,6 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
             os.remove(alignments_sam)
         if args.keep < 3 and os.path.isfile(graph_fasta):
             os.remove(graph_fasta)
-        if args.keep < 3 and os.path.isfile(anchor_segments_fasta):
-            os.remove(anchor_segments_fasta)
 
     # Discard any reads that mostly align to known contamination.
     if args.contamination:
