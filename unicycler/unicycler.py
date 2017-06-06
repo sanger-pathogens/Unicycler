@@ -152,8 +152,8 @@ def main():
     if not short_reads_available and string_graph is None:
         quit_with_error('miniasm assembly failed')
 
-    if short_reads_available and long_reads_available and not args.no_miniasm:
-        if string_graph is not None:
+    if short_reads_available and long_reads_available:
+        if string_graph is not None and not args.no_miniasm:
             bridges += create_miniasm_bridges(graph, string_graph, anchor_segments,
                                               scoring_scheme, args.verbosity, args.min_bridge_qual)
 
