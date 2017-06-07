@@ -90,7 +90,7 @@ def load_references(fasta_filename, contamination=False, section_header='Loading
     return references
 
 
-def load_long_reads(filename, silent=False, section_header='Loading reads'):
+def load_long_reads(filename, silent=False, section_header='Loading reads', output_dir=None):
     """
     This function loads in long reads from a FASTQ file and returns a dictionary where key = read
     name and value = Read object. It also returns a list of read names, in the order they are in
@@ -205,12 +205,21 @@ def load_long_reads(filename, silent=False, section_header='Loading reads'):
     # If there were duplicate read names, then we save the reads back out to file with their fixed
     # names.
     if duplicate_read_names_found:
-        no_dup_filename = os.path.join(os.path.dirname(os.path.abspath(filename)),
-                                       strip_read_extensions(filename) + '_no_duplicates')
+        no_dup_filename = strip_read_extensions(filename) + '_no_duplicates'
         if file_type == 'FASTQ':
             no_dup_filename += '.fastq.gz'
         else:  # file_type == 'FASTA'
             no_dup_filename += '.fasta.gz'
+
+        # If an output directory was provided, we put the no duplicate read file there.
+        if output_dir is not None:
+            no_dup_filename = os.path.join(output_dir, no_dup_filename)
+
+        # If an output directory wasn't provided, we put the no duplicate read file in the same
+        # directory as the normal read file.
+        else:
+            no_dup_filename = os.path.join(os.path.dirname(os.path.abspath(filename)),
+                                           no_dup_filename)
 
         if not silent:
             log.log('\nDuplicate read names found. Saving duplicate-free file:')

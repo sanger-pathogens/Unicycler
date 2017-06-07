@@ -135,7 +135,7 @@ def main():
         scoring_scheme = AlignmentScoringScheme(args.scores)
 
     if long_reads_available:
-        read_dict, read_names, long_read_filename = load_long_reads(args.long)
+        read_dict, read_names, long_read_filename = load_long_reads(args.long, output_dir=args.out)
         read_nicknames = get_read_nickname_dict(read_names)
     else:
         read_dict, read_names, long_read_filename = {}, [], ''
