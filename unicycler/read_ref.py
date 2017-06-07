@@ -19,7 +19,7 @@ import os
 import math
 from .misc import quit_with_error, get_nice_header, get_compression_type, get_sequence_file_type,\
     strip_read_extensions, print_table, float_to_str, range_is_contained, range_overlap_size, \
-    simplify_ranges
+    simplify_ranges, add_line_breaks_to_sequence
 from . import settings
 from . import log
 
@@ -180,7 +180,16 @@ def load_long_reads(filename, silent=False, section_header='Loading reads'):
                                 log.log_progress_line(len(read_dict), num_reads, total_bases)
                             last_progress = progress_rounded_down
                         sequence = ''
-                    name = get_nice_header(line[1:])
+
+                    # Don't allow duplicate read names, so add a trailing number when they occur.
+                    original_name = get_nice_header(line[1:])
+                    name = original_name
+                    duplicate_name_number = 1
+                    while name in read_dict:
+                        duplicate_read_names_found = True
+                        duplicate_name_number += 1
+                        name = original_name + '_' + str(duplicate_name_number)
+
                 else:
                     sequence += line
             if name:
@@ -196,15 +205,24 @@ def load_long_reads(filename, silent=False, section_header='Loading reads'):
     # If there were duplicate read names, then we save the reads back out to file with their fixed
     # names.
     if duplicate_read_names_found:
-        no_dup_filename = os.path.abspath(strip_read_extensions(filename) +
-                                          '_no_duplicates.fastq.gz')
+        no_dup_filename = os.path.join(os.path.dirname(os.path.abspath(filename)),
+                                       strip_read_extensions(filename) + '_no_duplicates')
+        if file_type == 'FASTQ':
+            no_dup_filename += '.fastq.gz'
+        else:  # file_type == 'FASTA'
+            no_dup_filename += '.fasta.gz'
+
         if not silent:
             log.log('\nDuplicate read names found. Saving duplicate-free file:')
             log.log(no_dup_filename)
         with gzip.open(no_dup_filename, 'wb') as f:
             for read_name in read_names:
                 read = read_dict[read_name]
-                f.write(read.get_fastq().encode())
+                if file_type == 'FASTQ':
+                    f.write(read.get_fastq().encode())
+                else:  # file_type == 'FASTA'
+                    f.write(read.get_fasta().encode())
+
     else:
         no_dup_filename = filename
 
@@ -321,6 +339,12 @@ class Read(object):
                self.sequence + '\n' + \
                '+\n' + \
                self.qualities + '\n'
+
+    def get_fasta(self):
+        """
+        Returns a string for the read in FASTA format (ending in a line break).
+        """
+        return '>' + self.name + '\n' + add_line_breaks_to_sequence(self.sequence, 70)
 
     def get_fraction_aligned(self):
         """
