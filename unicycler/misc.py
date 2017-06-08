@@ -843,8 +843,8 @@ def racon_path_and_version(racon_path):
     command = [found_racon_path]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
-    if 'racon [options] <reads.fastq> <overlaps.paf> <raw_contigs.fasta> <out_consensus.fasta>' \
-            in out.decode():
+    out = out.decode().lower()
+    if 'racon' in out and 'options' in out:
         return found_racon_path, '-', 'good'
     else:
         return found_racon_path, '-', 'bad'
