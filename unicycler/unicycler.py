@@ -902,7 +902,7 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
     anchor_segment_names = set(str(x.number) for x in anchor_segments)
     alignments_sam = os.path.join(alignment_dir, 'long_read_alignments.sam')
     scoring_scheme = AlignmentScoringScheme(args.scores)
-    min_alignment_length = graph.overlap * settings.MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP
+    min_alignment_length = settings.MIN_LONG_READ_ALIGNMENT_LENGTH
 
     if not os.path.exists(alignment_dir):
         os.makedirs(alignment_dir)

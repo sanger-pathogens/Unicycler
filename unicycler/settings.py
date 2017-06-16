@@ -43,10 +43,8 @@ FOUND_CONTIG_MAX_RATIO = 1.11111
 FOUND_CONTIG_MAX_OVERLAP_SIZE = 250
 
 # Unicycler will only work with read alignments if they are long enough. This values specifies
-# the threshold relative to the graph overlap. E.g. if this value is 2 and the graph used was a
-# SPAdes 95-mer graph, it would have an overlap of 95 bp and so the minimum used alignment would
-# be 190 bp.
-MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP = 2
+# the minimum threshold.
+MIN_LONG_READ_ALIGNMENT_LENGTH = 50
 
 # If less than this fraction of a read was aligned in the first aligning pass, Unicycler will try
 # again using much more sensitive alignment settings. This helps to align reads which come from
