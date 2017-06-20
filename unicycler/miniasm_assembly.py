@@ -183,7 +183,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             unitig_graph.save_to_gfa(contigs_placed_filename, include_depth=False)
 
     if args.keep < 3:
-        shutil.rmtree(miniasm_dir)
+        shutil.rmtree(miniasm_dir, ignore_errors=True)
     return unitig_graph
 
 

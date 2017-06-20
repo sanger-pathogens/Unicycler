@@ -70,7 +70,7 @@ def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir
 
     os.chdir(starting_dir)
     if args.keep < 3 and os.path.exists(polish_dir):
-        shutil.rmtree(polish_dir)
+        shutil.rmtree(polish_dir, ignore_errors=True)
 
     return insert_size_1st, insert_size_99th
 

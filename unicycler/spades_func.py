@@ -163,7 +163,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     # Clean up.
     if keep < 3 and os.path.isdir(spades_dir):
         log.log('\nDeleting ' + spades_dir + '/')
-        shutil.rmtree(spades_dir)
+        shutil.rmtree(spades_dir, ignore_errors=True)
 
     return assembly_graph
 
@@ -248,7 +248,7 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
             shutil.move(file_path, corrected_2)
         elif using_unpaired_reads and '_unpaired' in spades_file:
             shutil.move(file_path, corrected_u)
-    shutil.rmtree(read_correction_dir)
+    shutil.rmtree(read_correction_dir, ignore_errors=True)
 
     corrected_1_exists = os.path.isfile(corrected_1)
     corrected_2_exists = os.path.isfile(corrected_2)

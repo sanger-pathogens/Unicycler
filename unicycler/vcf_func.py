@@ -114,4 +114,4 @@ def make_vcf(vcf_filename, args, assembly_file, insert_size_1st, insert_size_99t
 
     os.chdir(starting_dir)
     if args.keep < 3 and os.path.exists(vcf_dir):
-        shutil.rmtree(vcf_dir)
+        shutil.rmtree(vcf_dir, ignore_errors=True)

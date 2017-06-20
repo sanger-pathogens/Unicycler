@@ -873,7 +873,7 @@ def rotate_completed_replicons(graph, args, counter):
         if rotation_count and args.keep > 0:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
         if args.keep < 3 and os.path.exists(blast_dir):
-            shutil.rmtree(blast_dir)
+            shutil.rmtree(blast_dir, ignore_errors=True)
 
 
 def final_polish(graph, args, counter, do_pilon_reassembly):
@@ -937,7 +937,7 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
         shutil.move(alignments_in_progress, alignments_sam)
 
         if args.keep < 2:
-            shutil.rmtree(alignment_dir)
+            shutil.rmtree(alignment_dir, ignore_errors=True)
             log.log('\nDeleting ' + alignment_dir + '/')
         if args.keep < 3 and os.path.isfile(alignments_sam):
             os.remove(alignments_sam)

@@ -133,7 +133,7 @@ def create_simple_long_read_bridges(graph, out_dir, keep, threads, read_dict, lo
                                    minimap_alignments, read_dict, scoring_scheme, threads,
                                    anchor_segments)
     if keep < 3:
-        shutil.rmtree(bridging_dir)
+        shutil.rmtree(bridging_dir, ignore_errors=True)
     return bridges
 
 
