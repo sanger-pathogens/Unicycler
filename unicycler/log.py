@@ -19,12 +19,19 @@ import datetime
 import re
 import shutil
 import textwrap
+import subprocess
 
 
 class Log(object):
 
     def __init__(self, log_filename=None, stdout_verbosity_level=1, log_file_verbosity_level=None):
         self.log_filename = log_filename
+
+        # Determine if the terminal supports colours or not.
+        try:
+            self.colours = int(subprocess.check_output(['tput', 'colors']).decode().strip())
+        except (ValueError, subprocess.CalledProcessError, FileNotFoundError, AttributeError):
+            self.colours = 1
 
         # There are two verbosity levels: one for stdout and one for the log file. They are the
         # same, except that the log file verbosity level is never 0.
@@ -55,9 +62,15 @@ class Log(object):
 logger = Log()
 
 def log(text, verbosity=1, stderr=False, end='\n', print_to_screen=True, write_to_log_file=True):
+    text_no_formatting = remove_formatting(text)
 
-    # The text is printed to the screen with ANSI formatting.
+    # The text is printed to the screen with ANSI formatting, if supported. If there are only 8
+    # colours available, then remove the 'dim' format which doesn't work.
     if stderr or (verbosity <= logger.stdout_verbosity_level and print_to_screen):
+        if logger.colours <= 1:
+            text = text_no_formatting
+        elif logger.colours <= 8:
+            text = remove_dim_formatting(text)
         if stderr:
             print(text, file=sys.stderr, end=end, flush=True)
         else:
@@ -65,7 +78,7 @@ def log(text, verbosity=1, stderr=False, end='\n', print_to_screen=True, write_t
 
     # The text is written to file without ANSI formatting.
     if logger.log_file and verbosity <= logger.log_file_verbosity_level and write_to_log_file:
-        logger.log_file.write(remove_formatting(text))
+        logger.log_file.write(text_no_formatting)
         logger.log_file.write('\n')
 
 
@@ -74,12 +87,16 @@ def log_section_header(message, verbosity=1, single_newline=False):
     Logs a section header. Also underlines the header using a row of dashes to the log file
     (because log files don't have ANSI formatting).
     """
-    time = get_timestamp()
     if single_newline:
         log('', verbosity)
     else:
         log('\n', verbosity)
-    log(bold_yellow_underline(message) + ' ' + dim('(' + time + ')'), verbosity)
+
+    time = get_timestamp()
+    time_str = '(' + time + ')'
+    if logger.colours > 8:
+        time_str = dim(time_str)
+    log(bold_yellow_underline(message) + ' ' + time_str, verbosity)
     log('-' * (len(message) + 3 + len(time)), verbosity, print_to_screen=False)
 
 
@@ -114,7 +131,10 @@ def log_explanation(text, verbosity=1, print_to_screen=True, write_to_log_file=T
     if print_to_screen:
         terminal_width = shutil.get_terminal_size().columns
         for line in textwrap.wrap(text, width=terminal_width - 1):
-            formatted_text = dim(line)
+            if logger.colours > 8:
+                formatted_text = dim(line)
+            else:
+                formatted_text = line
             log(formatted_text, verbosity=verbosity, print_to_screen=True, write_to_log_file=False)
     if write_to_log_file:
         log(text, verbosity=verbosity, print_to_screen=False, write_to_log_file=True)
@@ -169,3 +189,7 @@ def dim(text):
 
 def remove_formatting(text):
     return re.sub('\033.*?m', '', text)
+
+
+def remove_dim_formatting(text):
+    return re.sub('\033\[2m', '', text)

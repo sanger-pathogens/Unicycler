@@ -938,6 +938,7 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
 
         if args.keep < 2:
             shutil.rmtree(alignment_dir, ignore_errors=True)
+            shutil.rmtree(alignment_dir, ignore_errors=True)
             log.log('\nDeleting ' + alignment_dir + '/')
         if args.keep < 3 and os.path.isfile(alignments_sam):
             os.remove(alignments_sam)
