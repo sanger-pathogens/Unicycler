@@ -10,6 +10,7 @@
 #pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wvla"
 #pragma GCC diagnostic ignored "-Wvla-extension"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 
 #include "miniasm/sdict.h"
 #include "miniasm/paf.h"
