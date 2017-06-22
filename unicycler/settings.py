@@ -100,17 +100,12 @@ PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.995
 #     depths from one segment to the next.
 #   * MIN_SINGLE_COPY_LENGTH is how short of a segment can be called single copy when adding
 #     additional single copy segments.
-#   * MIN_HALF_MEDIAN_FOR_DIPLOID is used when determining whether a graph should be considered
-#     diploid or not for copy depths. At least this fraction of the bases must be near in depth to
-#     half of the graph's median value in order for the single copy depth to be shifted down to
-#     0.5.
 #   * MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS caps the number of possible ways to redistribute a
 #     segment's copy depths to its neighbours. If there are more possibilities than this,
 #     Unicycler won't bother trying.
 INITIAL_SINGLE_COPY_TOLERANCE = 0.1
 COPY_PROPAGATION_TOLERANCE = 0.5
 MIN_SINGLE_COPY_LENGTH = 1000
-MIN_HALF_MEDIAN_FOR_DIPLOID = 0.1
 MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS = 10000
 COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH = 35
 
