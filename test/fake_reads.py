@@ -23,7 +23,7 @@ def make_fake_qual_string(length):
     return qual_string
 
 
-def make_fake_reads(seq):
+def make_fake_reads(seq, read_config_choice=None):
     """
     This function makes super-simple fake reads (no errors and even distribution) for a circular
     genome and saves them to FASTQ files.
@@ -40,10 +40,11 @@ def make_fake_reads(seq):
     reads_2 = os.path.join(out_dir, 'reads_2.fastq')
     unpaired_reads = os.path.join(out_dir, 'reads_unpaired.fastq')
 
-    rand_choice = random.randint(0, 2)
-    if rand_choice == 0:
+    if read_config_choice is None:
+        read_config_choice = random.randint(0, 2)
+    if read_config_choice == 0:
         read_set_type = 'paired'
-    elif rand_choice == 1:
+    elif read_config_choice == 1:
         read_set_type = 'unpaired'
     else:
         read_set_type = 'both'

@@ -26,7 +26,6 @@ import unicycler.unicycler
 import unicycler.assembly_graph
 import unicycler.misc
 import test.fake_reads
-import random
 
 col_widths = [22, 10, 9, 80]
 
@@ -49,7 +48,22 @@ def main():
             shutil.rmtree(temp_dir)
 
 
-def run_unicycler(out_dir, verbosity=None):
+def get_random_options():
+    options = []
+    if one_third_chance():
+        options.append('--no_rotate')
+    if one_third_chance():
+        options.append('--no_pilon')
+    if one_third_chance():
+        options.append('--no_correct')
+
+    thread_count = 2 ** random.randint(0, 3)
+    options += ['--threads', str(thread_count)]
+
+    return options
+
+
+def run_unicycler(out_dir, verbosity=None, options=None):
     """
     This function runs Unicycler. It randomly uses different options.
     """
@@ -69,12 +83,10 @@ def run_unicycler(out_dir, verbosity=None):
     if using_unpaired_reads:
         unicycler_cmd += ['-s', unpaired_reads]
 
-    if one_third_chance():
-        unicycler_cmd.append('--no_rotate')
-    if one_third_chance():
-        unicycler_cmd.append('--no_pilon')
-    if one_third_chance():
-        unicycler_cmd.append('--no_correct')
+    if options is None:
+        options = get_random_options()
+    unicycler_cmd += options
+
     if verbosity is not None:
         unicycler_cmd += ['--verbosity', str(verbosity)]
 
@@ -152,12 +164,12 @@ def test_circular_one_repeat():
     assert len(graph.segments) == 3
     assert len(graph.forward_links) == 6
     assert len(graph.reverse_links) == 6
-    assert graph.segments[1].depth > 0.9
-    assert graph.segments[1].depth < 1.1
-    assert graph.segments[2].depth > 0.9
-    assert graph.segments[2].depth < 1.1
-    assert graph.segments[3].depth > 1.9
-    assert graph.segments[3].depth < 2.1
+    assert graph.segments[1].depth > 0.8
+    assert graph.segments[1].depth < 1.2
+    assert graph.segments[2].depth > 0.8
+    assert graph.segments[2].depth < 1.2
+    assert graph.segments[3].depth > 1.6
+    assert graph.segments[3].depth < 2.4
 
     assembled_len = len(seq_1) + len(seq_2) + 2 * len(seq_3)
     assert assembled_len == random_seq_length
@@ -187,9 +199,13 @@ def test_stdout_size():
     stdout_sizes = []
     random_seq_length = random.randint(1000, 5000)
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)
+
+    read_config_choice = random.randint(0, 2)
+    options = get_random_options()
+
     for verbosity in range(4):
-        out_dir = test.fake_reads.make_fake_reads(random_seq)
-        stdout, stderr, cmd_string, ms = run_unicycler(out_dir, verbosity)
+        out_dir = test.fake_reads.make_fake_reads(random_seq, read_config_choice)
+        stdout, stderr, cmd_string, ms = run_unicycler(out_dir, verbosity, options)
         assert bool(stderr) is False, stderr
         stdout_sizes.append(len(stdout))
         shutil.rmtree(out_dir)
