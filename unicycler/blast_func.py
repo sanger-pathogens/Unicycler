@@ -25,7 +25,7 @@ class CannotFindStart(Exception):
 
 
 def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_threshold, blast_dir,
-                    makeblastdb_path, tblastn_path, threads):
+                    makeblastdb_path, tblastn_path):
     """
     This function uses tblastn to look for start genes in the sequence. It returns the first gene
     (using the order in the file) which meets the identity and coverage thresholds, as well as

@@ -855,7 +855,7 @@ def rotate_completed_replicons(graph, args, counter):
             try:
                 blast_hit = find_start_gene(sequence, args.start_genes, args.start_gene_id,
                                             args.start_gene_cov, blast_dir, args.makeblastdb_path,
-                                            args.tblastn_path, args.threads)
+                                            args.tblastn_path)
             except CannotFindStart:
                 rotation_result_row += ['none found', '', '', '', '']
             else:
