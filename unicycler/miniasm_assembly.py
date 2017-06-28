@@ -243,8 +243,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, seg
             fastq.write('\n+\n')
             fastq.write(quals)
             fastq.write('\n')
-        log.log('  ' + str(len(read_names)) + ' long reads (out of ' + str(len(read_dict)) +
-                ' total long reads)')
+        log.log('  ' + str(len(read_names)) + ' long reads')
         log.log('')
 
 
