@@ -173,7 +173,6 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             if linear_count > 0:
                 log.log('  ' + int_to_str(linear_count) + ' linear unitig' +
                         ('' if linear_count == 1 else 's'))
-            log.log('')
 
             if args.keep >= 3:
                 unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
