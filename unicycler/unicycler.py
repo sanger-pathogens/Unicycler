@@ -231,7 +231,7 @@ def get_arguments():
     """
     Parse the command line arguments.
     """
-    description = bold('Unicycler: a hybrid assembly pipeline for bacterial genomes')
+    description = bold('Unicycler: an assembly pipeline for bacterial genomes')
     this_script_dir = os.path.dirname(os.path.realpath(__file__))
 
     if '--helpall' in sys.argv or '--allhelp' in sys.argv or '--all_help' in sys.argv:
@@ -339,12 +339,12 @@ def get_arguments():
 
     # Miniasm assembly options
     miniasm_group = parser.add_argument_group('miniasm+Racon assembly',
-                                              'These options control the use of miniasm and Racon'
-                                              'to produce long read bridges.'
+                                              'These options control the use of miniasm and Racon '
+                                              'to produce long-read bridges.'
                                               if show_all_args else argparse.SUPPRESS)
     miniasm_group.add_argument('--no_miniasm', action='store_true',
                                help='Skip miniasm+Racon bridging (default: use miniasm and Racon '
-                                    'to produce long read bridges)'
+                                    'to produce long-read bridges)'
                                     if show_all_args else argparse.SUPPRESS)
     miniasm_group.add_argument('--racon_path', type=str, default='racon',
                                help='Path to the Racon executable'
@@ -417,7 +417,8 @@ def get_arguments():
                                              'the final assembly.'
                                              if show_all_args else argparse.SUPPRESS)
     output_group.add_argument('--vcf', action='store_true',
-                              help='Produce a VCF by mapping the short reads to the final assembly')
+                              help='Produce a VCF by mapping the short reads to the final '
+                                   'assembly (experimental, default: do not produce a vcf file)')
     polish_group.add_argument('--bcftools_path', type=str, default='bcftools',
                               help='Path to the bcftools executable'
                                    if show_all_args else argparse.SUPPRESS)
