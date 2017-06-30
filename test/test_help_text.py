@@ -42,7 +42,7 @@ class TestBasicHelpText(unittest.TestCase):
         self.assertEqual(len(self.stderr), 0)
 
     def test_title(self):
-        self.assertTrue('Unicycler: a hybrid assembly pipeline for bacterial genomes'
+        self.assertTrue('Unicycler: an assembly pipeline for bacterial genomes'
                         in self.stdout)
 
     def test_basic_options(self):
@@ -99,7 +99,7 @@ class TestExtendedHelpText(unittest.TestCase):
         self.assertEqual(len(self.stderr), 0)
 
     def test_title(self):
-        self.assertTrue('Unicycler: a hybrid assembly pipeline for bacterial genomes'
+        self.assertTrue('Unicycler: an assembly pipeline for bacterial genomes'
                         in self.stdout)
 
     def test_basic_options(self):

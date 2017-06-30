@@ -82,7 +82,7 @@ class TestUnicyclerOptions(unittest.TestCase):
         with captured_output() as (out, err):
             with self.assertRaises(SystemExit):
                 unicycler.unicycler.get_arguments()
-        help_text = out.getvalue().strip().split('Unicycler: a hybrid assembly pipeline for '
+        help_text = out.getvalue().strip().split('Unicycler: an assembly pipeline for '
                                                  'bacterial genomes')[1]
         verbosity_default = int(get_default_from_help('--verbosity', help_text))
         min_fasta_length_default = int(get_default_from_help('--min_fasta_length', help_text))
