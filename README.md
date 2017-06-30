@@ -1,8 +1,8 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is a assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
+Unicycler is a assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and/or long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
 
-While Unicycler can produce the best assemblies from hybrid read sets, it can also assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
+While Unicycler can produce the best assemblies from hybrid read sets, it will assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
 
 
 # Table of contents
@@ -13,17 +13,19 @@ While Unicycler can produce the best assemblies from hybrid read sets, it can al
     * [Install from source](#install-from-source)
     * [Build and run without installation](#build-and-run-without-installation)
 * [Quick usage](#quick-usage)
-* [How it works](#how-it-works)
+* [Background](#background)
     * [Assembly graphs](#assembly-graphs)
     * [Limitations of short reads](#limitations-of-short-reads)
-    * [Unicycler pipeline in brief](#unicycler-pipeline-in-brief)
+    * [SPAdes graphs](#spades-graphs)
+* [How it works](#how-it-works)
     * [1. Read correction](#1-read-correction)
     * [2. SPAdes assembly](#2-spades-assembly)
     * [3. Multiplicity](#3-multiplicity)
     * [4. Short read bridging](#4-short-read-bridging)
     * [5. Long read bridging](#5-long-read-bridging)
-    * [6. Bridge application](#6-bridge-application)
-    * [7. Finalisation](#7-finalisation)
+    * [6. Long read   contig assembly and bridging](#6-long-read--contig-assembly-and-bridging)
+    * [7. Bridge application](#7-bridge-application)
+    * [8. Finalisation](#8-finalisation)
 * [Conservative, normal and bold](#conservative-normal-and-bold)
 * [Options and usage](#options-and-usage)
     * [Standard options](#standard-options)
@@ -34,9 +36,10 @@ While Unicycler can produce the best assemblies from hybrid read sets, it can al
     * [Necessary read length](#necessary-read-length)
     * [Poretools](#poretools)
     * [Nanopore: 1D vs 2D](#nanopore-1d-vs-2d)
+    * [Porechop](#porechop)
     * [Bad Illumina reads](#bad-illumina-reads)
     * [Very short contigs](#very-short-contigs)
-    * [Chromosome and plasmid depth](#chromosomes-and-plasmid-depth)
+    * [Chromosomes and plasmid depth](#chromosomes-and-plasmid-depth)
     * [Known contamination](#known-contamination)
 * [Other included tools](#other-included-tools)
 * [Paper](#paper)
@@ -54,7 +57,7 @@ As input, Unicycler takes one of the following:
 
 Reasons to use Unicycler:
    * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
-   * It correctly handles plasmid-rich genomes.
+   * It handles plasmid-rich genomes.
    * When performing hybrid assembly, it can use long reads of any depth and quality. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
    * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
    * It has very low misassembly rates.
@@ -72,19 +75,24 @@ Reasons to __not__ use Unicycler:
 
 * Linux or macOS
 * [Python](https://www.python.org/) 3.4 or later
-* C++ compiler
-    * C++14 support is required, so you'll need a relatively recent version:
+* C++ compiler with C++14 support:
     * [GCC](https://gcc.gnu.org/) 4.9.1 or later
     * [Clang](http://clang.llvm.org/) 3.5 or later
-    * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I haven't figured out the minimum required version number)
-* [SPAdes](http://bioinf.spbau.ru/spades) 3.6.2 or later
+    * [ICC](https://software.intel.com/en-us/c-compilers) also works, though I haven't figured out the minimum required version number
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
-* [Racon](https://github.com/isovic/racon)
-* [Pilon](https://github.com/broadinstitute/pilon/wiki) (required for polishing)
-* Java (required for polishing)
-* [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/) (required for polishing)
-* [Samtools](http://www.htslib.org/) version 1.0 or later (required for polishing)
-* [BLAST+](https://www.ncbi.nlm.nih.gov/books/NBK279690/) (required for rotating finished assemblies)
+* For short-read or hybrid assembly:
+  * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 or later (`spades.py`)
+* For long-read or hybrid assembly:
+  * [Racon](https://github.com/isovic/racon) (`racon`)
+* For polishing
+  * [Pilon](https://github.com/broadinstitute/pilon/wiki) (`pilon1.xx.jar`)
+  * [Java](https://www.java.com/download/) (`java`)
+  * [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/) (`bowtie2-build` and `bowtie2`)
+  * [Samtools](http://www.htslib.org/) v1.0 or later (`samtools`)
+* For rotating circular contigs:
+  * [BLAST+](https://www.ncbi.nlm.nih.gov/books/NBK279690/) (`makeblastdb` and `tblastn`)
+
+Some of these dependencies can be removed by turning off parts of the Unicycler pipeline (e.g. `--no_polish`). Unicycler expects these tools to be available in `$PATH`. If they aren't, you can specify their location using Unicycler options (e.g. `--samtools_path`).
 
 [Bandage](https://github.com/rrwick/Bandage) isn't required to run Unicycler, but it is very helpful for manually investigating assemblies (the graph images in this README were made with Bandage). Make sure to get the [latest release](https://github.com/rrwick/Bandage/releases) for full compatibility with Unicycler.
 
@@ -134,7 +142,7 @@ __Hybrid assembly:__<br>
 
 
 
-# How it works
+# Background
 
 ### Assembly graphs
 
@@ -149,7 +157,7 @@ CTTGTTTA                                         \        /
                                                   TGTCCATT
 ```
 
-Most assemblers use graphs internally to produce their assemblies, but users often ignore the graph in favour of the conceptually simpler FASTA file of contigs. When a genome assembly is 100% complete, we have one contig per chromosome/plasmid and there's no real need for the graph. But most assemblies are not complete (especially short read assemblies), and a graph can describe an incomplete assembly much better than contigs alone.
+Most assemblers use graphs internally to produce their assemblies, but users often ignore the graph in favour of the conceptually simpler FASTA file of contigs. When a genome assembly is 100% complete, we have one contig per chromosome/plasmid and there's no real need for the graph. But most assemblies are not complete (especially short-read assemblies), and a graph can describe an incomplete assembly much better than contigs alone.
 
 
 ### Limitations of short reads
@@ -173,13 +181,14 @@ SPAdes graphs are made by performing a De Bruijn graph assembly with a range of 
 After producing the graph, SPAdes can perform further repeat resolution by using paired-end information. Since two reads in a pair are close to each other in the original DNA, SPAdes can use this to trace paths in the graph to form larger contigs (see [their paper on ExSPAnder](http://bioinformatics.oxfordjournals.org/content/30/12/i293.short)). However, the SPAdes contigs with repeat resolution do not come in graph form – they are only available in a FASTA file.
 
 
-### Unicycler pipeline in brief
 
-Unicycler uses SPAdes to get an assembly graph made from Illumina reads. Since Illumina reads are accurate, this graph has very few mistakes. But since Illumina reads are short, it will also contain unresolved repeats. Unicycler then uses the SPAdes repeat resolution and long read alignments to build 'bridges' between non-repeat contigs, simplifying the graph into fewer, longer contigs.
+# How it works
+
+Unicycler uses SPAdes to get an assembly graph made from Illumina reads. Since Illumina reads are accurate, this graph has very few mistakes. But since Illumina reads are short, it will also contain unresolved repeats. Unicycler then uses the SPAdes repeat resolution and long-read alignments to build 'bridges' between non-repeat contigs, simplifying the graph into fewer, longer contigs.
 
 Essentially, Unicycler is a scaffolder which uses long reads to properly arrange Illumina contigs. But unlike a naive scaffolding tool which operates on assembled _contigs_, Unicycler works on an assembly _graph_. This gives it much more information to complete assemblies and a lower risk of mistakes.
 
-Here is the process in a bit more detail:
+Here is the hybrid assembly process in a bit more detail:
 
 
 ### 1. Read correction
@@ -219,19 +228,25 @@ Long reads are the most useful source of information for resolving the assembly 
 <p align="center"><img src="misc/long_read_bridging.png" alt="Long read bridging"></p>
 
 
-### 6. Bridge application
+### 6. Long read + contig assembly and bridging
+
+Unicycler performs a long-read assembly (using [miniasm](https://github.com/lh3/miniasm)) with the big contigs from the short-read assembly and the actual long reads. The resulting assembly is polished up using [Racon](https://github.com/isovic/racon). It then aligns short-read contigs to the new assembly, so it can find intervening sequence and build bridges.
+
+This step is somewhat redundant with the previous step, as both use long reads to build bridges between short-read contigs. They are both included because they have different strengths. The previous approach can tolerate low long-read depth but requires a good short-read assembly graph (i.e. few dead ends). This step requires decent long-read depth but can tolerate poor short-read assembly graphs. By using the two strategies together, Unicycler can successfully handle many types of input.
+
+
+### 7. Bridge application
 
 At this point of the pipeline there can be many bridges, some of which may conflict. Unicycler therefore assigns a quality score to each based on all available evidence (e.g. read alignment quality, graph path match, read depth consistency). Bridges are then applied in order of decreasing quality so whenever there is a conflict, only the most supported bridge is used. A minimum quality threshold prevents the application of low evidence bridges (see [Conservative, normal and bold](#conservative-normal-and-bold) for more information).
 
 <p align="center"><img src="misc/bridge_application.png" alt="Application of bridges"></p>
 
 
-### 7. Finalisation
+### 8. Finalisation
 
 If the above steps have resulted in any simple, circular sequences, then Unicycler will attempt to rotate/flip them to begin at a consistent starting gene. By default this is [dnaA](http://www.uniprot.org/uniprot/?query=gene_exact%3AdnaA&sort=score) or [repA](http://www.uniprot.org/uniprot/?query=gene_exact%3ArepA&sort=score), but users can specify their own with the `--start_genes` option.
 
-Finally, Unicycler does a single pass of short read polishing using [Pilon](https://github.com/broadinstitute/pilon/wiki). For a more extensive polishing process, see the section on [Unicycler polish](#unicycler-polish)
-
+Finally, Unicycler does multiple rounds of short-read polishing using [Pilon](https://github.com/broadinstitute/pilon/wiki).
 
 
 # Conservative, normal and bold
@@ -261,9 +276,9 @@ In the above example, the conservative assembly is incomplete because some bridg
 Run `unicycler --help` to view the program's most commonly used options:
 
 ```
-usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s UNPAIRED] [-l LONG] -o OUT
-                           [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep KEEP] [-t THREADS]
-                           [--mode {conservative,normal,bold}] [--linear_seqs LINEAR_SEQS]
+usage: unicycler [-h] [--help_all] [--version] [-1 SHORT1] [-2 SHORT2] [-s UNPAIRED] [-l LONG] -o OUT
+                 [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep KEEP] [-t THREADS]
+                 [--mode {conservative,normal,bold}] [--linear_seqs LINEAR_SEQS] [--vcf]
 
        __
        \ \___
@@ -278,7 +293,7 @@ usage: unicycler-runner.py [-h] [--help_all] [--version] -1 SHORT1 -2 SHORT2 [-s
                                         __/ |
                                        |___/
 
-Unicycler: a hybrid assembly pipeline for bacterial genomes
+Unicycler: an assembly pipeline for bacterial genomes
 
 Help:
   -h, --help                           Show this help message and exit
@@ -297,12 +312,14 @@ Output:
                                          0 = no stdout, 1 = basic progress indicators, 2 = extra info,
                                          3 = debugging info
   --min_fasta_length MIN_FASTA_LENGTH  Exclude contigs from the FASTA file which are shorter than this length
-                                       (default: 1)
+                                       (default: 100)
   --keep KEEP                          Level of file retention (default: 1)
                                          0 = only keep final files: assembly (FASTA, GFA and log),
                                          1 = also save graphs at main checkpoints,
                                          2 = also keep SAM (enables fast rerun in different mode),
                                          3 = keep all temp files and save all graphs (for debugging)
+  --vcf                                Produce a VCF by mapping the short reads to the final assembly
+                                       (experimental, default: do not produce a vcf file)
 
 Other:
   -t THREADS, --threads THREADS        Number of threads used (default: 8)
@@ -312,68 +329,86 @@ Other:
                                          bold = longest contigs, higher misassembly rate
   --linear_seqs LINEAR_SEQS            The expected number of linear (i.e. non-circular) sequences in the
                                        underlying sequence (default: 0)
+
 ```
 
 ### Advanced options
 
 Run `unicycler --help_all` to see a complete list of the program's options. These allow you to turn off parts of the pipeline, specify the location of tools (only necessary if they are not in PATH) and adjust various settings:
+
 ```
 SPAdes assembly:
   These options control the short read SPAdes assembly at the beginning of the Unicycler pipeline.
 
-  --spades_path SPADES_PATH            Path to the SPAdes executable (default: spades.py)
-  --no_correct                         Skip SPAdes error correction step (default: conduct SPAdes error correction)
-  --min_kmer_frac MIN_KMER_FRAC        Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read
-                                       length (default: 0.2)
-  --max_kmer_frac MAX_KMER_FRAC        Highest k-mer size for SPAdes assembly, expressed as a fraction of the read
-                                       length (default: 0.95)
-  --kmer_count KMER_COUNT              Number of k-mer steps to use in SPAdes assembly (default: 10)
+  --spades_path SPADES_PATH           Path to the SPAdes executable (default: spades.py)
+  --no_correct                        Skip SPAdes error correction step (default: conduct SPAdes error
+                                      correction)
+  --min_kmer_frac MIN_KMER_FRAC       Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read
+                                      length (default: 0.2)
+  --max_kmer_frac MAX_KMER_FRAC       Highest k-mer size for SPAdes assembly, expressed as a fraction of the read
+                                      length (default: 0.95)
+  --kmer_count KMER_COUNT             Number of k-mer steps to use in SPAdes assembly (default: 10)
+  --depth_filter DEPTH_FILTER         Filter out contigs lower than this fraction of the chromosomal depth, if
+                                      doing so does not result in graph dead ends (default: 0.25)
+
+miniasm+Racon assembly:
+  These options control the use of miniasm and Racon to produce long-read bridges.
+
+  --no_miniasm                        Skip miniasm+Racon bridging (default: use miniasm and Racon to produce
+                                      long-read bridges)
+  --racon_path RACON_PATH             Path to the Racon executable (default: racon)
 
 Assembly rotation:
   These options control the rotation of completed circular sequence near the end of the Unicycler pipeline.
 
-  --no_rotate                          Do not rotate completed replicons to start at a standard gene (default:
-                                       completed replicons are rotated)
-  --start_genes START_GENES            FASTA file of genes for start point of rotated replicons (default:
-                                       start_genes.fasta)
-  --start_gene_id START_GENE_ID        The minimum required BLAST percent identity for a start gene search
-                                       (default: 90.0)
-  --start_gene_cov START_GENE_COV      The minimum required BLAST percent coverage for a start gene search
-                                       (default: 95.0)
-  --makeblastdb_path MAKEBLASTDB_PATH  Path to the makeblastdb executable (default: makeblastdb)
-  --tblastn_path TBLASTN_PATH          Path to the tblastn executable (default: tblastn)
+  --no_rotate                         Do not rotate completed replicons to start at a standard gene (default:
+                                      completed replicons are rotated)
+  --start_genes START_GENES           FASTA file of genes for start point of rotated replicons (default:
+                                      start_genes.fasta)
+  --start_gene_id START_GENE_ID       The minimum required BLAST percent identity for a start gene search
+                                      (default: 90.0)
+  --start_gene_cov START_GENE_COV     The minimum required BLAST percent coverage for a start gene search
+                                      (default: 95.0)
+  --makeblastdb_path MAKEBLASTDB_PATH
+                                      Path to the makeblastdb executable (default: makeblastdb)
+  --tblastn_path TBLASTN_PATH         Path to the tblastn executable (default: tblastn)
 
 Pilon polishing:
   These options control the final assembly polish using Pilon at the end of the Unicycler pipeline.
 
-  --no_pilon                           Do not use Pilon to polish the final assembly (default: Pilon is used)
-  --bowtie2_path BOWTIE2_PATH          Path to the bowtie2 executable (default: bowtie2)
+  --no_pilon                          Do not use Pilon to polish the final assembly (default: Pilon is used)
+  --bowtie2_path BOWTIE2_PATH         Path to the bowtie2 executable (default: bowtie2)
   --bowtie2_build_path BOWTIE2_BUILD_PATH
-                                       Path to the bowtie2_build executable (default: bowtie2-build)
-  --samtools_path SAMTOOLS_PATH        Path to the samtools executable (default: samtools)
-  --pilon_path PILON_PATH              Path to a Pilon executable or the Pilon Java archive file (default: pilon)
-  --java_path JAVA_PATH                Path to the java executable (default: java)
-  --min_polish_size MIN_POLISH_SIZE    Contigs shorter than this value (bp) will not be polished using Pilon
-                                       (default: 10000)
+                                      Path to the bowtie2_build executable (default: bowtie2-build)
+  --samtools_path SAMTOOLS_PATH       Path to the samtools executable (default: samtools)
+  --pilon_path PILON_PATH             Path to a Pilon executable or the Pilon Java archive file (default: pilon)
+  --java_path JAVA_PATH               Path to the java executable (default: java)
+  --min_polish_size MIN_POLISH_SIZE   Contigs shorter than this value (bp) will not be polished using Pilon
+                                      (default: 10000)
+
+VCF:
+  These options control the production of the VCF of the final assembly.
+
+  --bcftools_path BCFTOOLS_PATH       Path to the bcftools executable (default: bcftools)
 
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.
 
   --min_component_size MIN_COMPONENT_SIZE
-                                       Unbridged graph components smaller than this size (bp) will be removed from
-                                       the final graph (default: 1000)
+                                      Graph components smaller than this size (bp) will be removed from the final
+                                      graph (default: 1000)
   --min_dead_end_size MIN_DEAD_END_SIZE
-                                       Graph dead ends smaller than this size (bp) will be removed from the final
-                                       graph (default: 1000)
+                                      Graph dead ends smaller than this size (bp) will be removed from the final
+                                      graph (default: 1000)
 
 Long read alignment:
   These options control the alignment of long reads to the assembly graph.
 
-  --contamination CONTAMINATION        FASTA file of known contamination in long reads
-  --scores SCORES                      Comma-delimited string of alignment scores: match, mismatch, gap open, gap
-                                       extend (default: 3,-6,-5,-2)
-  --low_score LOW_SCORE                Score threshold - alignments below this are considered poor (default: set
-                                       threshold automatically)
+  --contamination CONTAMINATION       FASTA file of known contamination in long reads
+  --scores SCORES                     Comma-delimited string of alignment scores: match, mismatch, gap open, gap
+                                      extend (default: 3,-6,-5,-2)
+  --low_score LOW_SCORE               Score threshold - alignments below this are considered poor (default: set
+                                      threshold automatically)
 ```
 
 
@@ -383,7 +418,7 @@ Long read alignment:
 Unicycler's most important output files are `assembly.gfa`, `assembly.fasta` and `unicycler.log`. These are produced by every Unicycler run. Which other files are saved to its output directory depends on the value of `--keep`:
 * `--keep 0` retains only the important files. Use this setting to save drive space.
 * `--keep 1` (the default) also saves some intermediate graphs.
-* `--keep 2` also retains the SAM file of long read alignments to the graph. This ensures that if you rerun Unicycler with the same output directory (for example changing the mode to conservative or bold) it will run faster because it does not have to repeat the alignment step.
+* `--keep 2` also retains the SAM file of long-read alignments to the graph. This ensures that if you rerun Unicycler with the same output directory (for example changing the mode to conservative or bold) it will run faster because it does not have to repeat the alignment step.
 * `--keep 3` retains all files and saves many intermediate graphs. This is for debugging purposes and uses a lot of space. Most users should probably avoid this setting.
 
 All files and directories are described in the table below. Intermediate output files (everything except for `assembly.gfa`, `assembly.fasta` and `unicycler.log`) will be prefixed with a number so they are in chronological order.
@@ -391,7 +426,7 @@ All files and directories are described in the table below. Intermediate output 
 File                           | Description                                                                                       | `--keep` level
 ------------------------------ | ------------------------------------------------------------------------------------------------- | --------------
 spades_assembly/               | directory containing all SPAdes files and each k-mer graph                                        | 3
-best_spades_graph.gfa          | the best SPAdes short read assembly graph, with a bit of graph clean-up                           | 1
+best_spades_graph.gfa          | the best SPAdes short-read assembly graph, with a bit of graph clean-up                           | 1
 overlaps_removed.gfa           | overlap-free version of the SPAdes graph, with some more graph clean-up                           | 3
 miniasm_assembly/              | directory containing miniasm string graphs and unitig graphs                                      | 3
 read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 3
@@ -411,7 +446,7 @@ __unicycler.log__              | Unicycler log file (same info as stdout)       
 
 ### Running time
 
-Unicycler is thorough and accurate, but not particularly fast. In particular, the [long read bridging](#long-read-bridging) step of the pipeline can take a while to complete. Two main factors influence the running time: the number of long reads (more reads take longer to align) and the genome size/complexity (finding bridge paths is more difficult in complex graphs).
+Unicycler is thorough and accurate, but not particularly fast. In particular, the [long read bridging](#5-long-read-bridging) step of the pipeline can take a while to complete. Two main factors influence the running time: the number of long reads (more reads take longer to align) and the genome size/complexity (finding bridge paths is more difficult in complex graphs).
 
 Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads, you can make Unicycler run faster by subsampling for only the longest reads.
 
@@ -443,20 +478,27 @@ If you have 2D reads, `--type best` makes Poretools give only one FASTQ read per
 
 Since Unicycler can tolerate low accuracy reads, [Oxford Nanopore 1D sequencing](https://nanoporetech.com/applications/dna-nanopore-sequencing) is preferable to 2D, as it can provide twice as many reads. Unicycler will of course work with 2D reads, but you can get more out of your flow cell with 1D.
 
+Update: 2D reads are now a thing of the past, replaced by 1D<sup>2</sup>. I haven't tried 1D<sup>2</sup> yet, thought I suspect the above advice still holds.
+
+
+### Porechop
+
+If you are using Oxford Nanopore reads, then I'd recommend using [Porechop](https://github.com/rrwick/Porechop) before assembly. This will trim adapters off read ends and split some chimeric reads, both of which make Unicycler's job a little bit easier.
+
 
 ### Bad Illumina reads
 
-Unicycler needs decent Illumina reads as input – ideally with uniform read depth and 100% genome coverage.
+Unicycler prefers decent Illumina reads as input – ideally with uniform read depth and 100% genome coverage. Bad Illumina read sets can still work in Unicycler, but greater long-read depth will be required to compensate.
 
-You can look at the `unbridged_graph.gfa` file (the first graph Unicycler saves to file) in Bandage to get a quick impression of the Illumina read quality:
+You can look at the `best_spades_graph.gfa` file (the first graph Unicycler saves to file) in Bandage to get a quick impression of the Illumina read quality:
 
 <p align="center"><img src="misc/illumina_graph_comparison.png" alt="Graphs of varying quality" width="750"></p>
 
-__A__ is an very good Illumina read graph – the contigs are long and there are no dead ends. This read set is ideally suited for use in Unicycler.
+__A__ is an very good Illumina read graph – the contigs are long and there are no dead ends. This read set is ideally suited for use in Unicycler and shouldn't require too many long reads to complete (10–15x would probably be enough).
 
-__B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler.
+__B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler, though more long reads may be required to get a complete genome (maybe 20x or so).
 
-__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. While you can still use Unicycler to resolve this assembly with long reads, the risk of small errors and misassemblies is considerably higher. If you have sufficient long reads, I would instead recommend assembling the long reads with [Canu](https://github.com/marbl/canu) and the polishing the resulting assembly using the Illumina reads and [Pilon](https://github.com/broadinstitute/pilon/wiki).
+__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. This genome may take lots of long reads to complete in Unicycler, possibly 30x or more. The final assembly will probably have more small errors (SNPs and indels), as parts of the genome cannot be polished well with Illumina reads.
 
 
 ### Very short contigs
@@ -502,13 +544,16 @@ These tools may be experimental, incomplete or no longer under development, so u
 
 # Paper
 
-A preprint version of the Unicycler manuscript is currently available on bioRxiv: [biorxiv.org/content/early/2016/12/22/096412](http://biorxiv.org/content/early/2016/12/22/096412)
+An open access article describing Unicycler is available from _PLOS Computational Biology_:<br>
+[Unicycler: Resolving bacterial genome assemblies from short and long sequencing reads](http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005595)
+
+If you use Unicycler in your research, a citation would be appreciated!
 
 
 
 # Acknowledgements
 
-Unicycler would not have been possible without [Kat Holt](https://holtlab.net/), my fellow researchers in her lab and the many other people I work with at the University of Melbourne's [Centre for Systems Genomics](https://sysgenmelb.org/). In particular, [Margaret Lam](https://scholar.google.com.au/citations?user=cWmhzUIAAAAJ&hl=en), [Kelly Wyres](https://holtlab.net/kelly-wyres/) and [David Edwards](https://scholar.google.com.au/citations?hl=en&user=rZ1RJK0AAAAJ) worked with me on many challenging genomes during Unicycler's development.
+Unicycler would not have been possible without [Kat Holt](https://holtlab.net/), my fellow researchers in her lab and the many other people I work with at the University of Melbourne's [Bio21 Molecular Science & Biotechnology Institute](http://www.bio21.unimelb.edu.au/). In particular, [Margaret Lam](https://scholar.google.com.au/citations?user=cWmhzUIAAAAJ), [Kelly Wyres](https://scholar.google.com.au/citations?user=anwFM9oAAAAJ), [David Edwards](https://scholar.google.com.au/citations?hl=en&user=rZ1RJK0AAAAJ) and [Claire Gorrie](https://scholar.google.com.au/citations?user=mSO9WPUAAAAJ) worked with me on many challenging genomes during Unicycler's development. [Louise Judd](https://scholar.google.com.au/citations?user=eO22mYUAAAAJ) is a whizz with the MinION and produced many of the long reads I have used when developing Unicycler.
 
 Unicycler uses [SeqAn](https://www.seqan.de/) to perform alignments and other sequence manipulations. The authors of this library have been very helpful during Unicycler's development and I owe them a great deal of thanks! It also uses [minimap](https://github.com/lh3/minimap) for alignment and [miniasm](https://github.com/lh3/minimap) for long read assembly, and so I'd like to thank [Heng Li](https://github.com/lh3) for these tools. Finally, Unicycler uses [nanoflann](https://github.com/jlblancoc/nanoflann), a delightfully fast and lightweight nearest neighbour library, to perform its line-finding in semi-global alignment.
 
