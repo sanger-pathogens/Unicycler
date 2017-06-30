@@ -109,13 +109,22 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
         # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
         # alignments are excluded (because single-copy contigs, by definition, should not
         # significantly overlap each other).
+        log.log('Finding overlaps with minimap... ', end='')
         minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
                                                      args.threads, 0, 'read vs read')
+        overlap_count = 0
         with open(mappings_filename, 'wt') as mappings:
             for minimap_alignment_str in line_iterator(minimap_alignments_str):
                 if minimap_alignment_str.count('CONTIG_') < 2:
                     mappings.write(minimap_alignment_str)
                     mappings.write('\n')
+                    overlap_count += 1
+
+        if overlap_count == 0:
+            log.log(red('failed'))
+        else:
+            log.log(green('success'))
+            log.log('  ' + int_to_str(overlap_count) + ' overlaps\n')
 
         # TO DO: refine these overlaps? Perhaps using Unicycler-align? I suspect that the quality
         # of a miniasm assembly is highly dependent on the input overlaps.
@@ -123,7 +132,6 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
         # I could even try to do more sophisticated stuff, like using the alignments to identify
         # repeat regions, then finding these repeat regions in reads and tossing out alignments
         # which are contained only in repeat regions.
-
 
         # TO DO: Unicycler's mode (conservative, normal or bold) should appropriately affect the
         # miniasm settings.
@@ -143,8 +151,8 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
 
         else:
             log.log(green('success'))
-            log.log('  ' + str(len(string_graph.segments)) + ' segments, ' +
-                    str(len(string_graph.links) // 2) + ' links', verbosity=2)
+            log.log('  ' + int_to_str(len(string_graph.segments)) + ' segments, ' +
+                    int_to_str(len(string_graph.links) // 2) + ' links\n')
 
             if not short_reads_available and args.keep > 0:
                 shutil.copyfile(string_graph_filename,
@@ -154,8 +162,19 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             if args.keep >= 3:
                 string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
+            log.log('Merging segments into unitigs:')
             unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph,
                                                                          read_nicknames)
+            circular_count = unitig_graph.get_circular_segment_count()
+            linear_count = unitig_graph.get_linear_segment_count()
+            if circular_count > 0:
+                log.log('  ' + int_to_str(circular_count) + ' circular unitig' +
+                        ('' if circular_count == 1 else 's'))
+            if linear_count > 0:
+                log.log('  ' + int_to_str(linear_count) + ' linear unitig' +
+                        ('' if linear_count == 1 else 's'))
+            log.log('')
+
             if args.keep >= 3:
                 unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
 
@@ -226,7 +245,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, seg
                         fastq.write('\n')
                     seg_count += 1
             if contig_copy_count > 0:
-                message = '  ' + str(seg_count) + ' short-read contigs'
+                message = '  ' + int_to_str(seg_count) + ' short-read contigs'
                 if contig_copy_count > 1:
                     message += ' (duplicated ' + str(contig_copy_count) + ' times)'
                 log.log(message)
@@ -243,7 +262,7 @@ def save_assembly_reads_to_file(read_filename, read_names, read_dict, graph, seg
             fastq.write('\n+\n')
             fastq.write(quals)
             fastq.write('\n')
-        log.log('  ' + str(len(read_names)) + ' long reads')
+        log.log('  ' + int_to_str(len(read_names)) + ' long reads')
         log.log('')
 
 

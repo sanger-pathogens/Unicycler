@@ -158,7 +158,6 @@ class StringGraph(object):
         self.segments.pop(seg_name_to_remove, None)
 
     def remove_branching_paths(self):
-        log.log('', verbosity=2)
         log.log_explanation('Unicycler removes any links from the string graph which create '
                             'branches. I.e. if any segment has two or more links connected to one '
                             'end, those links are removed. This will result in a graph with only '
@@ -501,6 +500,18 @@ class StringGraph(object):
         for segment in self.segments.values():
             segment.depth /= median_depth
 
+    def get_circular_segment_count(self):
+        circular_count = 0
+        for seg_name in self.segments.keys():
+            circular_count += (1 if self.segment_is_circular(seg_name) else 0)
+        return circular_count
+
+    def get_linear_segment_count(self):
+        linear_count = 0
+        for seg_name in self.segments.keys():
+            linear_count += (0 if self.segment_is_circular(seg_name) else 1)
+        return linear_count
+
 
 class StringGraphSegment(object):
 
@@ -631,8 +642,7 @@ def merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames):
     Creates a unitig graph from a string graph. In essence, reimplements make_unitig_graph function
     in miniasm. Assumes that branching paths have already been removed from the string graph.
     """
-    log.log_explanation('Unicycler now trims off overlaps to turn the string graph into a simpler '
-                        'unitig graph.', verbosity=2)
+    log.log('', verbosity=2)
     unitig_sequences = []
     for component in string_graph.get_connected_components():
         segments_with_dead_ends = []

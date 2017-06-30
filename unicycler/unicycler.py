@@ -638,9 +638,9 @@ def print_intro_message(args, full_command, out_dir_message):
     log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
     log.log('')
     log.log(out_dir_message)
-    log.log('', 2)
 
     if short_reads_available:
+        log.log('', 2)
         if args.mode == 0:
             log.log('Bridging mode: conservative', 2)
             if args.min_bridge_qual == settings.CONSERVATIVE_MIN_BRIDGE_QUAL:
