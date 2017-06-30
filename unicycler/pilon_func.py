@@ -15,11 +15,13 @@ not, see <http://www.gnu.org/licenses/>.
 
 import os
 import subprocess
-import statistics
+import shutil
 from collections import defaultdict
-from .misc import load_fasta, reverse_complement, int_to_str, float_to_str, \
-    get_percentile_sorted, dim
-
+from .misc import load_fasta, reverse_complement, int_to_str, underline, get_percentile_sorted, dim
+from .assembly_graph import AssemblyGraph
+from .assembly_graph_segment import Segment
+from .string_graph import StringGraph, StringGraphSegment
+from . import settings
 from . import log
 
 
@@ -31,28 +33,76 @@ class CannotPolish(Exception):
         return repr(self.message)
 
 
-def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_path, samtools_path,
-                      min_polish_size, polish_dir, short_1, short_2, threads):
+def polish_with_pilon_multiple_rounds(graph, insert_size_graph, args, polish_dir,
+                                      do_pilon_reassembly):
     """
-    Runs Pilon on the graph to hopefully fix up small mistakes.
+    This function does multiple rounds of Pilon polishing, until either it stops making changes
+    or the limit is reached. It takes two graphs - one for polishing and one for insert size
+    determination. They can be the same graph, but when polishing long read unitigs, it's quicker
+    to get the insert size from a short read graph.
     """
-    segments_to_polish = [x for x in graph.segments.values() if x.get_length() >= min_polish_size]
-    if not segments_to_polish:
-        raise CannotPolish('no segments are long enough to polish')
+    if not os.path.exists(polish_dir):
+        os.makedirs(polish_dir)
+
+    # TO DO: I'd like to come up with a way to polish (maybe with Pilon, maybe with something else)
+    # that has a sensitivity adjustment. That way early rounds of polishing can take care of the
+    # obvious errors and later rounds can make more tough calls. I hope this means that long read
+    # problems (e.g. homopolymer runs) get fixed first and tougher problems (e.g. SNPs in repeat
+    # regions) get fixed later, when the sequence is cleaner and easier to align to.
 
     # To avoid issues with paths that contain spaces, we will move into the temporary directory
     # to run these commands.
+    starting_dir = os.getcwd()
     os.chdir(polish_dir)
 
-    polish_fasta = open('polish_input.fasta', 'w')
-    for segment in segments_to_polish:
-        polish_fasta.write('>' + str(segment.number) + '\n')
-        polish_fasta.write(segment.forward_sequence)
-        polish_fasta.write('\n')
-    polish_fasta.close()
+    fix_type = 'bases'
+    insert_size_1st, insert_size_99th = get_insert_size_range(insert_size_graph, args, polish_dir)
+    for i in range(settings.MAX_PILON_POLISH_COUNT):
+        if i > 0:
+            graph.rotate_circular_sequences()
+        change_count = polish_with_pilon(graph, args, polish_dir, insert_size_1st,
+                                         insert_size_99th, i+1, fix_type)
+        if change_count == 0:
+            if fix_type == 'bases' and do_pilon_reassembly:
+                fix_type = 'all'
+            else:
+                break
+
+    os.chdir(starting_dir)
+    if args.keep < 3 and os.path.exists(polish_dir):
+        shutil.rmtree(polish_dir, ignore_errors=True)
+
+    return insert_size_1st, insert_size_99th
+
+
+def get_insert_size_range(graph, args, polish_dir):
+    """
+    This function just does a quick alignment of the paired-end reads to figure out the 1st and
+    99th percentiles for the insert size.
+    """
+    using_paired_reads = bool(args.short1) and bool(args.short2)
+    if not using_paired_reads:
+        return 0, 1000
+
+    log.log('Aligning reads to find appropriate insert size range...')
+
+    segments_to_polish = [x for x in graph.segments.values()
+                          if x.get_length() >= args.min_polish_size]
+    if not segments_to_polish:
+        raise CannotPolish('segments are too short')
+
+    fasta_filename = '0_insert_size_check.fasta'
+    sam_filename = '0_alignments.sam'
+
+    with open(fasta_filename, 'w') as polish_fasta:
+        for segment in segments_to_polish:
+            polish_fasta.write('>' + get_segment_name(segment) + '\n')
+            polish_fasta.write(segment.forward_sequence)
+            polish_fasta.write('\n')
 
     # Prepare the FASTA for Bowtie2 alignment.
-    bowtie2_build_command = [bowtie2_build_path, 'polish_input.fasta', 'polish_input.fasta']
+    bowtie2_build_command = [args.bowtie2_build_path, fasta_filename, fasta_filename]
+    log.log(dim('  ' + ' '.join(bowtie2_build_command)), 2)
     try:
         subprocess.check_output(bowtie2_build_command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
@@ -61,96 +111,144 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
         raise CannotPolish('bowtie2-build failed to build an index')
 
     # Perform the alignment with Bowtie2.
-    raw_sam_filename = os.path.join(polish_dir, 'alignments_raw.sam')
-    bowtie2_command = [bowtie2_path, '--end-to-end', '--very-sensitive', '--threads', str(threads),
-                       '--no-discordant', '--no-mixed', '--no-unal', '-I', '0', '-X', '2000',
-                       '-x', 'polish_input.fasta', '-1', short_1, '-2', short_2,
-                       '-S', raw_sam_filename]
-    log.log('Aligning short reads to assembly using Bowtie2')
-    log.log('  ' + ' '.join(bowtie2_command), 2)
+    bowtie2_command = [args.bowtie2_path, '-1', args.short1, '-2', args.short2,
+                       '-x', fasta_filename, '--local', '--fast-local',
+                       '--threads', str(args.threads), '-I', '0', '-X', '5000', '-S', sam_filename]
+    log.log(dim('  ' + ' '.join(bowtie2_command)), 2)
     try:
         subprocess.check_output(bowtie2_command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         raise CannotPolish('Bowtie2 encountered an error:\n' + e.output.decode())
 
-    # Loop through alignments_raw.sam once to collect the insert sizes.
     insert_sizes = []
-    raw_sam = open(raw_sam_filename, 'rt')
-    for sam_line in raw_sam:
-        try:
-            insert_size = float(sam_line.split('\t')[8])
-            if insert_size > 0.0:
-                insert_sizes.append(insert_size)
-        except (ValueError, IndexError):
-            pass
-    raw_sam.close()
+    with open(sam_filename, 'rt') as raw_sam:
+        for sam_line in raw_sam:
+            try:
+                sam_parts = sam_line.split('\t')
+                sam_flags = int(sam_parts[1])
+                if sam_flags & 2:  # if read mapped in proper pair
+                    insert_size = int(sam_parts[8])
+                    if insert_size > 0.0:
+                        insert_sizes.append(insert_size)
+            except (ValueError, IndexError):
+                pass
     if not insert_sizes:
         raise CannotPolish('no read pairs aligned')
-    insert_mean = statistics.mean(insert_sizes)
-    log.log('', 2)
-    log.log('Mean fragment size = ' + float_to_str(insert_mean, 1) + ' bp')
     insert_sizes = sorted(insert_sizes)
-    insert_size_5th = get_percentile_sorted(insert_sizes, 5.0)
-    log.log('Fragment size 5th percentile = ' + float_to_str(insert_size_5th, 0) + ' bp', 2)
-    insert_size_95th = get_percentile_sorted(insert_sizes, 95.0)
-    log.log('Fragment size 95th percentile = ' + float_to_str(insert_size_95th, 0) + ' bp', 2)
+    insert_size_1st = get_percentile_sorted(insert_sizes, 1.0)
+    insert_size_99th = get_percentile_sorted(insert_sizes, 99.0)
 
-    # Produce a new sam file including only the pairs with an appropriate insert size.
-    filtered_sam_filename = os.path.join(polish_dir, 'alignments_filtered.sam')
-    log.log('Filtering alignments to fragment size range: ' +
-            float_to_str(insert_size_5th, 0) + ' to ' + float_to_str(insert_size_95th, 0))
-    filtered_sam = open(filtered_sam_filename, 'w')
-    raw_sam = open(raw_sam_filename, 'rt')
-    for sam_line in raw_sam:
-        try:
-            insert_size = abs(float(sam_line.split('\t')[8]))
-            if insert_size_5th <= insert_size <= insert_size_95th:
-                filtered_sam.write(sam_line)
-        except (ValueError, IndexError):
-            filtered_sam.write(sam_line)
-    raw_sam.close()
-    filtered_sam.close()
+    log.log('Insert size 1st percentile:  ' + str(insert_size_1st))
+    log.log('Insert size 99th percentile: ' + str(insert_size_99th))
+    log.log('')
+
+    if args.keep < 3:
+        for f in [fasta_filename, sam_filename, fasta_filename + '.1.bt2',
+                  fasta_filename + '.2.bt2', fasta_filename + '.3.bt2', fasta_filename + '.4.bt2',
+                  fasta_filename + '.rev.1.bt2', fasta_filename + '.rev.2.bt2']:
+            try:
+                os.remove(f)
+            except FileNotFoundError:
+                pass
+
+    return insert_size_1st, insert_size_99th
+
+
+def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th, round_num,
+                      fix_type):
+    """
+    Runs Pilon on the graph to hopefully fix up small mistakes.
+    """
+    log.log(underline('Pilon polish round ' + str(round_num)))
+
+    using_paired_reads = bool(args.short1) and bool(args.short2)
+    using_unpaired_reads = bool(args.unpaired)
+
+    input_filename = str(round_num) + '_polish_input.fasta'
+    sam_filename = str(round_num) + '_alignments.sam'
+    bam_filename = str(round_num) + '_alignments.bam'
+    output_prefix = str(round_num) + '_pilon'
+    pilon_fasta_filename = str(round_num) + '_pilon.fasta'
+    pilon_changes_filename = str(round_num) + '_pilon.changes'
+    pilon_output_filename = str(round_num) + '_pilon.out'
+
+    segments_to_polish = [x for x in graph.segments.values()
+                          if x.get_length() >= args.min_polish_size]
+    if not segments_to_polish:
+        raise CannotPolish('no segments are long enough to polish')
+
+    with open(input_filename, 'w') as polish_fasta:
+        for segment in segments_to_polish:
+            polish_fasta.write('>' + get_segment_name(segment) + '\n')
+            polish_fasta.write(segment.forward_sequence)
+            polish_fasta.write('\n')
+
+    # Prepare the FASTA for Bowtie2 alignment.
+    bowtie2_build_command = [args.bowtie2_build_path, input_filename, input_filename]
+    log.log(dim('  ' + ' '.join(bowtie2_build_command)), 2)
+    try:
+        subprocess.check_output(bowtie2_build_command, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        raise CannotPolish('bowtie2-build encountered an error:\n' + e.output.decode())
+    if not any(x.endswith('.bt2') for x in os.listdir(polish_dir)):
+        raise CannotPolish('bowtie2-build failed to build an index')
+
+    # Perform the alignment with Bowtie2.
+    bowtie2_command = [args.bowtie2_path, '--local', '--very-sensitive-local',
+                       '--threads', str(args.threads), '-I', str(insert_size_1st),
+                       '-X', str(insert_size_99th), '-x', input_filename, '-S', sam_filename]
+    if using_paired_reads:
+        bowtie2_command += ['-1', args.short1, '-2', args.short2]
+    if using_unpaired_reads:
+        bowtie2_command += ['-U', args.unpaired]
+
+    log.log(dim('  ' + ' '.join(bowtie2_command)), 2)
+    try:
+        subprocess.check_output(bowtie2_command, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        raise CannotPolish('Bowtie2 encountered an error:\n' + e.output.decode())
 
     # Sort the alignments.
-    bam_filename = os.path.join(polish_dir, 'alignments.bam')
-    samtools_sort_command = [samtools_path, 'sort', '-@', str(threads), '-o', bam_filename, '-O',
-                             'bam', '-T', 'temp', filtered_sam_filename]
-    log.log('', 2)
-    log.log('Sorting and indexing alignments')
-    log.log('  ' + ' '.join(samtools_sort_command), 2)
+    samtools_sort_command = [args.samtools_path, 'sort', '-@', str(args.threads),
+                             '-o', bam_filename, '-O', 'bam', '-T', 'temp', sam_filename]
+    log.log(dim('  ' + ' '.join(samtools_sort_command)), 2)
     try:
         subprocess.check_output(samtools_sort_command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         raise CannotPolish('Samtools encountered an error:\n' + e.output.decode())
 
+    # Always delete the SAM file, regardless of keep level (it's big).
+    try:
+        os.remove(sam_filename)
+    except FileNotFoundError:
+        pass
+
     # Index the alignments.
-    samtools_index_command = [samtools_path, 'index', bam_filename]
-    log.log('  ' + ' '.join(samtools_index_command), 2)
+    samtools_index_command = [args.samtools_path, 'index', bam_filename]
+    log.log(dim('  ' + ' '.join(samtools_index_command)), 2)
     try:
         subprocess.check_output(samtools_index_command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         raise CannotPolish('Samtools encountered an error:\n' + e.output.decode())
 
     # Polish with Pilon.
-    if pilon_path.endswith('.jar'):
-        pilon_command = [java_path, '-jar', pilon_path]
+    if args.pilon_path.endswith('.jar'):
+        pilon_command = [args.java_path, '-jar', args.pilon_path]
     else:
-        pilon_command = [pilon_path]
-    pilon_command += ['--genome', 'polish_input.fasta', '--frags', bam_filename,
-                      '--fix', 'bases', '--changes', '--outdir', polish_dir]
-    log.log('', 2)
-    log.log('Running Pilon')
-    log.log('  ' + ' '.join(pilon_command), 2)
+        pilon_command = [args.pilon_path]
+    pilon_command += ['--genome', input_filename, '--frags', bam_filename, '--changes',
+                      '--output', output_prefix, '--outdir', polish_dir, '--fix', fix_type]
+    log.log(dim('  ' + ' '.join(pilon_command)), 2)
     try:
-        subprocess.check_output(pilon_command, stderr=subprocess.STDOUT)
+        pilon_stdout = subprocess.check_output(pilon_command, stderr=subprocess.STDOUT)
+        with open(pilon_output_filename, 'wb') as pilon_out:
+            pilon_out.write(pilon_stdout)
     except subprocess.CalledProcessError as e:
         raise CannotPolish('Pilon encountered an error:\n' + e.output.decode())
-    pilon_fasta_filename = os.path.join(polish_dir, 'pilon.fasta')
-    pilon_changes_filename = os.path.join(polish_dir, 'pilon.changes')
     if not os.path.isfile(pilon_fasta_filename):
-        raise CannotPolish('Pilon did not produce pilon.fasta')
+        raise CannotPolish('Pilon did not produce FASTA file')
     if not os.path.isfile(pilon_changes_filename):
-        raise CannotPolish('Pilon did not produce pilon.changes')
+        raise CannotPolish('Pilon did not produce changes file')
 
     # Display Pilon changes.
     change_count = defaultdict(int)
@@ -159,47 +257,80 @@ def polish_with_pilon(graph, bowtie2_path, bowtie2_build_path, pilon_path, java_
     pilon_changes = open(pilon_changes_filename, 'rt')
     for line in pilon_changes:
         try:
-            seg_num = int(line.split(':')[0])
-            change_count[seg_num] += 1
+            seg_name = line.split(':')[0]
+            change_count[seg_name] += 1
             total_count += 1
-            change_lines[seg_num].append(line.strip())
+            change_lines[seg_name].append(line.strip())
         except ValueError:
             pass
-    log.log('', 2)
     if total_count == 0:
         log.log('No Pilon changes')
     else:
-        log.log('Number of Pilon changes: ' + int_to_str(total_count))
-        seg_nums = sorted(graph.segments)
-        polish_input_seg_nums = set(x.number for x in segments_to_polish)
-        for seg_num in seg_nums:
-            if seg_num in polish_input_seg_nums:
-                count = change_count[seg_num]
+        log.log('Total number of changes: ' + int_to_str(total_count))
+        log.log('', 2)
+        seg_names = sorted(graph.segments)
+        polish_input_seg_names = set(get_segment_name_or_number(x) for x in segments_to_polish)
+        for seg_name in seg_names:
+            if seg_name in polish_input_seg_names:
+                count = change_count[str(seg_name)]
                 if count < 1:
                     continue
-                log.log('', 2)
-                log.log('Segment ' + str(seg_num) + ' (' +
-                        int_to_str(graph.segments[seg_num].get_length()) + ' bp): ' +
+                log.log('Segment ' + str(seg_name) + ' (' +
+                        int_to_str(graph.segments[seg_name].get_length()) + ' bp): ' +
                         int_to_str(count) + ' change' +
                         ('s' if count > 1 else ''), 2)
                 try:
-                    changes = change_lines[seg_num]
+                    changes = change_lines[str(seg_name)]
                     changes = sorted(changes, key=lambda x:
                                      int(x.replace(' ', ':').replace('-', ':').split(':')[1]))
                     for change in changes:
-                        log.log('  ' + dim(change), 2)
+                        log.log('  ' + dim(change), 3)
                 except (ValueError, IndexError):
                     pass
 
-    # Replace segment sequences with Pilon-polished versions.
-    pilon_results = load_fasta(pilon_fasta_filename)
-    for header, sequence in pilon_results:
-        if header.endswith('_pilon'):
-            header = header[:-6]
-        try:
-            seg_num = int(header)
-            segment = graph.segments[seg_num]
+        # Replace segment sequences with Pilon-polished versions.
+        pilon_results = load_fasta(pilon_fasta_filename)
+        for header, sequence in pilon_results:
+            if header.endswith('_pilon'):
+                header = header[:-6]
+            if isinstance(graph, AssemblyGraph):
+                segment = graph.segments[int(header)]
+            elif isinstance(graph, StringGraph):
+                segment = graph.segments[header]
+            else:
+                assert False
             segment.forward_sequence = sequence
             segment.reverse_sequence = reverse_complement(sequence)
-        except (ValueError, KeyError):
-            pass
+
+    log.log('')
+
+    if args.keep < 3:
+        for f in [input_filename, bam_filename, bam_filename + '.bai',
+                  pilon_fasta_filename, pilon_changes_filename,
+                  input_filename + '.1.bt2', input_filename + '.2.bt2', input_filename + '.3.bt2',
+                  input_filename + '.4.bt2', input_filename + '.rev.1.bt2',
+                  input_filename + '.rev.2.bt2', pilon_output_filename]:
+            try:
+                os.remove(f)
+            except FileNotFoundError:
+                pass
+
+    return total_count
+
+
+def get_segment_name(segment):
+    if isinstance(segment, Segment):
+        return str(segment.number)
+    elif isinstance(segment, StringGraphSegment):
+        return segment.full_name
+    else:
+        assert False
+
+
+def get_segment_name_or_number(segment):
+    if isinstance(segment, Segment):
+        return segment.number
+    elif isinstance(segment, StringGraphSegment):
+        return segment.full_name
+    else:
+        assert False

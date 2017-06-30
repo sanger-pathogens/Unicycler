@@ -25,6 +25,18 @@ def determine_copy_depth(graph):
     # Reset any existing copy depths.
     graph.copy_depths = {}
 
+    log.log_section_header('Determining graph multiplicity')
+    log.log_explanation('Multiplicity is the number of times a '
+                        'sequence occurs in the underlying sequence. Single-copy contigs '
+                        '(those with a multiplicity of one, occurring only once in the underlying '
+                        'sequence) are particularly useful.',
+                        verbosity=1, extra_empty_lines_after=0)
+
+    log.log_explanation('Multiplicity determination begins by identifying contigs which are '
+                        'clearly single-copy because they are of low depth and do not have more '
+                        'than one link per side.',
+                        verbosity=2)
+
     single_copy_depth = graph.get_single_copy_depth()
 
     # Assign single copy status to segments within the tolerance of the single copy depth.
@@ -36,13 +48,22 @@ def determine_copy_depth(graph):
             graph.copy_depths[segment.number] = [segment.depth]
             initial_single_copy_segments.append(segment.number)
     if initial_single_copy_segments:
-        log.log('\nInitial single copy segments:\n' +
-                ', '.join([str(x) for x in initial_single_copy_segments]), 2)
+        log.log('\nInitial single copy segments:', 2)
+        log.log_number_list(initial_single_copy_segments, 2)
     else:
         log.log('Initial single copy segments: none', 2)
-    log.log('', 2)
 
-    # Propagate copy depth as possible using those initial assignments.
+    log.log('', verbosity=2)
+    log.log_explanation('Unicycler now uses a greedy algorithm to propagate multiplicity '
+                        'through the graph. For example, if two single-copy contigs merge '
+                        'together, the resulting contig will get a multiplicity of two. '
+                        'When no more propagation is possible, additional single-copy contigs '
+                        'are added and the process is repeated. This allows for multiplicity to be '
+                        'correctly assigned to the chromosome (at the median depth) but also for '
+                        'plasmids (which may be higher or lower in depth).',
+                        verbosity=2)
+
+    # Propagate copy depth as much as possible using those initial assignments.
     copy_depth_table = [['Input', '', 'Output']]
     determine_copy_depth_part_2(graph, settings.COPY_PROPAGATION_TOLERANCE, copy_depth_table)
 
@@ -55,6 +76,8 @@ def determine_copy_depth(graph):
             break
 
     # Now propagate with no tolerance threshold to complete the remaining segments.
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['REMOVING PROPAGATION TOLERANCE', '', ''])
     determine_copy_depth_part_2(graph, 1.0, copy_depth_table)
 
     print_table(copy_depth_table, alignments='RLL', max_col_width=999, hide_header=True,
@@ -65,8 +88,12 @@ def determine_copy_depth_part_2(graph, tolerance, copy_depth_table):
     """
     Propagates copy depth repeatedly until assignments stop.
     """
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['MERGING MULTIPLICITY', '', ''])
     while merge_copy_depths(graph, tolerance, copy_depth_table):
         pass
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['SPLITTING MULTIPLICITY', '', ''])
     if redistribute_copy_depths(graph, tolerance, copy_depth_table):
         determine_copy_depth_part_2(graph, tolerance, copy_depth_table)
 
@@ -75,17 +102,18 @@ def assign_single_copy_depth(graph, min_single_copy_length, copy_depth_table):
     """
     This function assigns a single copy to the longest available segment.
     """
+    if log.logger.stdout_verbosity_level >= 3:
+        copy_depth_table.append(['FINDING NEW SINGLE-COPY', '', ''])
     segments = sorted(get_segments_without_copies(graph), key=lambda x: x.get_length(),
                       reverse=True)
-
     for segment in segments:
         if segment.get_length() < min_single_copy_length:
             continue
         if exactly_one_link_per_end(graph, segment):
+            name_depth_before = get_seg_name_depth_str(graph, segment.number)
             graph.copy_depths[segment.number] = [segment.depth]
-            max_seg_num = max(graph.segments.keys())
-            seg_name_depth_str = get_seg_name_depth_str(graph, segment.number, max_seg_num)
-            copy_depth_table.append([seg_name_depth_str, get_right_arrow(), seg_name_depth_str])
+            name_depth_after = get_seg_name_depth_str(graph, segment.number)
+            add_to_copy_depth_table(name_depth_before, name_depth_after, copy_depth_table)
             return 1
     return 0
 
@@ -107,7 +135,6 @@ def merge_copy_depths(graph, error_margin, copy_depth_table):
     best_source_nums = None
     best_new_depths = []
     lowest_error = float('inf')
-    max_seg_num = max(graph.segments.keys())
 
     for segment in segments:
         num = segment.number
@@ -131,17 +158,39 @@ def merge_copy_depths(graph, error_margin, copy_depth_table):
                 best_new_depths = depths
     if best_segment_num and lowest_error < error_margin:
         graph.copy_depths[best_segment_num] = best_new_depths
-        copy_depth_table.append([' + '.join(get_seg_name_depth_str(graph, x, max_seg_num)
-                                            for x in best_source_nums), get_right_arrow(),
-                                 get_seg_name_depth_str(graph, best_segment_num, max_seg_num)])
+        add_to_copy_depth_table(' + '.join(get_seg_name_depth_str(graph, x)
+                                           for x in best_source_nums),
+                                get_seg_name_depth_str(graph, best_segment_num), copy_depth_table)
         return 1
     else:
         return 0
 
 
-def get_seg_name_depth_str(graph, segment_num, max_seg_num):
-    return str(segment_num).rjust(len(str(max_seg_num))) + \
-           ' (' + float_to_str(graph.segments[segment_num].depth, 2) + 'x)'
+def get_seg_name_depth_str(graph, segment_num):
+    if segment_num in graph.copy_depths and len(graph.copy_depths[segment_num]) > 0:
+        copy_str = '(' + str(len(graph.copy_depths[segment_num])) + 'x)'
+    else:
+        copy_str = '(none)'
+    return str(segment_num) + copy_str
+
+
+def add_to_copy_depth_table(before_str, after_str, copy_depth_table):
+    while len(before_str) > settings.COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH:
+        before_str_parts = before_str.split(' + ')
+        partial_before_str = before_str_parts[0]
+        before_str_parts.pop(0)
+        while before_str_parts:
+            if (len(partial_before_str) + 3 + len(before_str_parts[0]) <=
+                    settings.COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH):
+                partial_before_str += ' + ' + before_str_parts[0]
+                before_str_parts.pop(0)
+            else:
+                break
+        copy_depth_table.append([partial_before_str, '', ''])
+        before_str = ' + ' + ' + '.join(before_str_parts)
+
+    copy_depth_table.append([before_str, get_right_arrow(), after_str])
+
 
 
 def redistribute_copy_depths(graph, error_margin, copy_depth_table):
@@ -155,7 +204,6 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
     segments = get_segments_with_two_or_more_copies(graph)
     if not segments:
         return 0
-    max_seg_num = max(graph.segments.keys())
 
     for segment in segments:
         num = segment.number
@@ -191,10 +239,10 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
                 best_arrangement = arrangement
         if lowest_error < error_margin:
             if assign_copy_depths_where_needed(graph, connections, best_arrangement, error_margin):
-                copy_depth_table.append([get_seg_name_depth_str(graph, num, max_seg_num),
-                                         get_right_arrow(),
-                                         ' + '.join(get_seg_name_depth_str(graph, x, max_seg_num)
-                                                    for x in connections)])
+                add_to_copy_depth_table(get_seg_name_depth_str(graph, num),
+                                        ' + '.join(get_seg_name_depth_str(graph, x)
+                                                   for x in connections),
+                                        copy_depth_table)
                 return 1
     return 0
 

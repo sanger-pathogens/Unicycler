@@ -66,8 +66,6 @@ ScoredAlignment * fullyGlobalAlignment(std::string s1, std::string s2,
         else if (lengthDifference < 0)
             upperDiagonal -= lengthDifference;
 
-        // std::cout << "Lower diagonal: " << lowerDiagonal << std::endl; // TEMP
-        // std::cout << "Upper diagonal: " << upperDiagonal << std::endl; // TEMP
         try {
             globalAlignment(alignment, scoringScheme, alignConfig, lowerDiagonal, upperDiagonal);
         }

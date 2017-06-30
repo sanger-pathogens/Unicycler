@@ -47,13 +47,19 @@ import threading
 from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
     weighted_average_list, get_sequence_file_type, MyHelpFormatter, dim, magenta, colour,\
     get_default_thread_count
-from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
-    delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
 from .read_ref import load_references, load_long_reads
 from .alignment import Alignment, AlignmentScoringScheme
 from . import settings
 from .minimap_alignment import load_minimap_alignments
 from . import log
+
+try:
+    from .cpp_wrappers import semi_global_alignment, new_ref_seqs, add_ref_seq, \
+        delete_ref_seqs, get_random_sequence_alignment_mean_and_std_dev, minimap_align_reads
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully built the library file using make?')
+
 
 # Used to ensure that multiple threads writing to the same SAM file don't write at the same time.
 SAM_WRITE_LOCK = threading.Lock()
@@ -198,20 +204,26 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     # If the user supplied a low score threshold, we use that. Otherwise, we'll use the median
     # score minus three times the MAD.
-    if display_low_score:
+    if display_low_score and verbosity > 0:
         log.log_section_header('Determining low score threshold')
+        log.log_explanation('Before conducting semi-global alignment of the long reads to the '
+                            'assembly graph, Unicycler must determine a minimum alignment '
+                            'score threshold such that nonsense alignments are excluded. '
+                            'To choose a threshold automatically, it examines alignments between '
+                            'random sequences and selects a score a few standard deviations above '
+                            'the mean.')
     low_score_threshold = low_score_threshold_list[0]
     if low_score_threshold is not None:
-        if display_low_score:
+        if display_low_score and verbosity > 0:
             log.log('Using user-supplied threshold: ' + float_to_str(low_score_threshold, 2))
     else:
-        if display_low_score:
+        if display_low_score and verbosity > 0:
             log.log('Automatically choosing a threshold using random alignment scores.\n')
         std_devs_over_mean = settings.AUTO_SCORE_STDEV_ABOVE_RANDOM_ALIGNMENT_MEAN
         low_score_threshold, rand_mean, rand_std_dev = get_auto_score_threshold(scoring_scheme,
                                                                                 std_devs_over_mean)
         low_score_threshold_list[0] = low_score_threshold
-        if display_low_score:
+        if display_low_score and verbosity > 0:
             log.log('Random alignment mean score: ' + float_to_str(rand_mean, 2))
             log.log('         standard deviation: ' + float_to_str(rand_std_dev, 2, rand_mean))
             log.log('        Low score threshold: ' + float_to_str(rand_mean, 2) + ' + (' +
@@ -224,12 +236,14 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
     reference_dict = {x.name: x for x in references}
 
-    log.log_section_header('Aligning reads with minimap', verbosity=2)
-    minimap_alignments_str = minimap_align_reads(ref_fasta, reads_fastq, threads, 0)
-    minimap_alignments = load_minimap_alignments(minimap_alignments_str, read_dict, reference_dict)
-    log.log('', 3)
-    log.log('Done! ' + str(len(minimap_alignments)) + ' out of ' +
-            str(len(read_dict)) + ' reads aligned', 2)
+    if verbosity > 0:
+        log.log_section_header('Aligning reads with minimap', verbosity=2)
+    minimap_alignments_str = minimap_align_reads(ref_fasta, reads_fastq, threads, 0, 'default')
+    minimap_alignments = load_minimap_alignments(minimap_alignments_str)
+    if verbosity > 0:
+        log.log('', 3)
+        log.log('Done! ' + str(len(minimap_alignments)) + ' out of ' +
+                str(len(read_dict)) + ' reads aligned', 2)
 
     # Create the SAM file.
     if sam_filename:
@@ -255,8 +269,9 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     reads_to_align = [read_dict[x] for x in read_names]
 
     num_alignments = len(reads_to_align)
-    log.log_section_header(stdout_header)
-    if VERBOSITY <= 1:
+    if verbosity > 0:
+        log.log_section_header(stdout_header)
+    if VERBOSITY == 1:
         log.log_progress_line(0, num_alignments)
     completed_count = 0
 
@@ -273,7 +288,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
                                      sam_filename, allowed_overlap, minimap_alignments[read.name],
                                      sensitivity_level, single_copy_segment_names)
             completed_count += 1
-            if VERBOSITY <= 1:
+            if VERBOSITY == 1:
                 log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
@@ -298,7 +313,7 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
 
         for output in imap_function(seqan_alignment_one_arg, arg_list):
             completed_count += 1
-            if VERBOSITY <= 1:
+            if VERBOSITY == 1:
                 log.log_progress_line(completed_count, num_alignments)
             if VERBOSITY > 1:
                 fraction = str(completed_count) + '/' + str(num_alignments) + ': '
@@ -307,10 +322,11 @@ def semi_global_align_long_reads(references, ref_fasta, read_dict, read_names, r
     # We're done with the C++ ReferenceSeqs object, so delete it now.
     delete_ref_seqs(ref_seqs_ptr)
 
-    if VERBOSITY <= 1:
+    if VERBOSITY == 1:
         log.log_progress_line(completed_count, completed_count, end_newline=True)
 
-    print_alignment_summary_table(read_dict, VERBOSITY, using_contamination)
+    if verbosity > 0:
+        print_alignment_summary_table(read_dict, VERBOSITY, using_contamination)
     return read_dict
 
 

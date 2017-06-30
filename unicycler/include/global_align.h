@@ -27,13 +27,9 @@ extern "C" {
 }
 
 
-
 ScoredAlignment * fullyGlobalAlignment(std::string s1, std::string s2,
                                        int matchScore, int mismatchScore, int gapOpenScore, int gapExtensionScore,
                                        bool useBanding=false, int bandSize=1000);
-
-
-
 
 
 #endif // GLOBAL_ALIGN_H

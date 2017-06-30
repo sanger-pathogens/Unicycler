@@ -1,7 +1,8 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Illumina](http://www.illumina.com/) reads and long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
+Unicycler is a assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
 
+While Unicycler can produce the best assemblies from hybrid read sets, it can also assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
 
 
 # Table of contents
@@ -37,15 +38,8 @@ Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Ill
     * [Very short contigs](#very-short-contigs)
     * [Chromosome and plasmid depth](#chromosomes-and-plasmid-depth)
     * [Known contamination](#known-contamination)
-* [Unicycler align](#unicycler-align)
-    * [Semi-global alignment](#semi-global-alignment)
-    * [Versus local alignment](#versus-local-alignment)
-    * [Example commands](#example-commands)
-* [Unicycler polish](#unicycler-polish)
-    * [Requirements](#requirements-1)
-    * [Process](#process)
-    * [Example commands](#example-commands-1)
-* [Citation](#citation)
+* [Other included tools](#other-included-tools)
+* [Paper](#paper)
 * [Acknowledgements](#acknowledgements)
 * [License](#license)
 
@@ -53,24 +47,24 @@ Unicycler is a hybrid assembly pipeline for bacterial genomes. It uses both [Ill
 
 # Introduction
 
-As input, Unicycler takes a good set of Illumina reads from a bacterial isolate (required) and long reads from the same isolate (optional). If the input is sufficient, it will produce a completed assembly of circularised sequences.
+As input, Unicycler takes one of the following:
+   * Illumina reads from a bacterial isolate (ideally paired-end, but unpaired works too)
+   * A set of long reads (either PacBio or Nanopore) from a bacterial isolate
+   * Illumina reads and long reads from the same isolate (best case)
 
 Reasons to use Unicycler:
+   * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
+   * It correctly handles plasmid-rich genomes.
+   * When performing hybrid assembly, it can use long reads of any depth and quality. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
+   * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
    * It has very low misassembly rates.
    * It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
-   * It correctly handles plasmids of varying depth.
-   * It works with long reads of any quality – even Nanopore reads classed as 'fail' can be used as input.
-   * It works with any long read depth. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
-   * Even if you have no long reads, it functions as a [SPAdes](http://bioinf.spbau.ru/spades) optimiser and produces very good Illumina assemblies.
-   * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
-   * It's easy to use, runs with just one command and doesn't require tinkering with parameters!
+   * It's easy to use, runs with just one command and usually doesn't require tinkering with parameters.
 
 Reasons to __not__ use Unicycler:
-   * You only have long reads, not Illumina reads (try [Canu](https://github.com/marbl/canu) instead).
-   * Your Illumina reads are poor quality (Unicycler requires a good short read assembly graph – [more info here](#bad-illumina-reads)).
-   * You're assembling a large eukaryotic genome or a metagenome (Unicycler is designed for small genomes like bacterial isolates).
-   * Your Illumina reads and long reads are from different isolates.
-   * You're very impatient (Unicycler is not as fast as alternatives).
+   * You're assembling a eukaryotic genome or a metagenome (Unicycler is designed exclusively for bacterial isolates).
+   * Your Illumina reads and long reads are from different isolates (Unicycler struggles with sample heterogeneity).
+   * You're impatient (Unicycler is thorough but not especially fast).
 
 
 
@@ -85,9 +79,7 @@ Reasons to __not__ use Unicycler:
     * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I haven't figured out the minimum required version number)
 * [SPAdes](http://bioinf.spbau.ru/spades) 3.6.2 or later
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
-
-Unicycler needs the following tools for certain parts of its pipeline. They are optional, but without them Unicycler will not be able to perform all tasks:
-
+* [Racon](https://github.com/isovic/racon)
 * [Pilon](https://github.com/broadinstitute/pilon/wiki) (required for polishing)
 * Java (required for polishing)
 * [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/) (required for polishing)
@@ -399,12 +391,11 @@ All files and directories are described in the table below. Intermediate output 
 File                           | Description                                                                                       | `--keep` level
 ------------------------------ | ------------------------------------------------------------------------------------------------- | --------------
 spades_assembly/               | directory containing all SPAdes files and each k-mer graph                                        | 3
-unbridged_graph.gfa            | short read assembly graph before any bridges have been applied                                    | 1
-short_read_bridges_applied.gfa | SPAdes contig bridges applied, before any cleaning or merging                                     | 1
-cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
-merged.gfa                     | contigs merged together where possible                                                            | 3
-long_read_bridges_applied.gfa  | long read bridges applied, before any cleaning or merging                                         | 1
-read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 2
+best_spades_graph.gfa          | the best SPAdes short read assembly graph, with a bit of graph clean-up                           | 1
+overlaps_removed.gfa           | overlap-free version of the SPAdes graph, with some more graph clean-up                           | 3
+miniasm_assembly/              | directory containing miniasm string graphs and unitig graphs                                      | 3
+read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 3
+bridges_applied.gfa            | bridges applied, before any cleaning or merging                                                   | 1
 cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
 merged.gfa                     | contigs merged together where possible                                                            | 3
 final_clean.gfa                | more redundant contigs removed                                                                    | 1
@@ -496,101 +487,17 @@ Some Oxford Nanopore protocols include a lambda phage spike-in as a control. Sin
 
 
 
-# Unicycler align
+# Other included tools
 
-Unicycler's algorithm for sensitive semi-global alignment is available as a stand-alone alignment tool with the command `unicycler_align`.
+Unicycler also comes with a few other tools which may be of interest:
 
+* [Unicycler-align](docs/unicycler-align.md): semi-global alignment of long reads
+* [Unicycler-polish](docs/unicycler-polish.md): hybrid assembly polishing
+* [Unicycler-scrub](docs/unicycler-scrub.md): read scrubber for trimming ends and splitting chimeras
+* [Unicycler-check](docs/unicycler-check.md): misassembly detection and alignment visualisation
 
-### Semi-global alignment
+These tools may be experimental, incomplete or no longer under development, so use with caution!
 
-Semi-global alignment (a.k.a. glocal, overlap or free end-gap alignment) will not clip an alignment until one of the two sequences ends. This can be where one sequence is contained within the other or where the two sequences overlap:
-```
-  TAGAA        GTGCCGGAACA         GGCCACAC     AGTAAGAT
-  |||||          |||||||           |||||           |||||
-ACTAGAACG        GCCGGAA       GGCTGGCCA           AAGATCTTG
-```
-
-In contrast, local alignment will align only the best matching parts, clipping the alignment where the quality becomes poor:
-```
-      CGAACAGCATACTTG
-          ||||||||
-ACGTCAGACTCAGCATACGCATCTAGA
-```
-
-Semi-global alignment is appropriate when there are no structural differences between the query and reference sequences. For example, when you have a short read assembly graph and long reads from the same bacterial isolate (as is the case in the Unicycler pipeline). In this scenario, there may be small scale differences (due to read errors) but no large scale differences, and semi-global alignment is ideal.
-
-
-### Versus local alignment
-
-Semi-global alignment is probably not appropriate for mapping reads to a more distant reference genome. It does not cope with points of structural variation between the sample and the reference. For example, if the sample had a deletion relative to the reference, a read spanning that deletion would align poorly with semi-global alignment:
-```
-read:            AACACTAAACTTAGTCCCAA
-                 |||||||||||  |   | |    
-reference: GATCCCAACACTAAACTCTGGGGCGAACGGCGTAGTCCCAAGAGT
-```
-
-Local alignment (which can align only part of the read) would be more appropriate:
-```
-read:            AACACTAAACT               TAGTCCCAA
-                 |||||||||||               |||||||||
-reference: GATCCCAACACTAAACTCTGGGGCGAACGGCGTAGTCCCAAGAGT
-```
-Try [BWA-MEM](http://bio-bwa.sourceforge.net/), [LAST](http://last.cbrc.jp/) or [BLASR](https://github.com/PacificBiosciences/blasr) if you need a local alignment tool.
-
-
-### Example commands
-
-__Regular alignment:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam`
-
-__Very sensitive (and slow) alignment:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam --sensitivity_level 3`
-
-__Setting some additional thresholds:__<br>
-`unicycler_align --reads queries.fastq --ref target.fasta --sam output.sam --min_len 1000 --low_score 80.0`
-
-
-
-# Unicycler polish
-
-Unicycler polish is a script to repeatedly polish a completed assembly using all available reads. It can be given Illumina reads, long reads or (ideally) both. When both Illumina and long reads are available, Unicycler polish can fix assembly errors, even in repetitive parts of the genome which cannot be polished by short reads alone.
-
-### Requirements
-
-* If polishing with Illumina reads: [Pilon](https://github.com/broadinstitute/pilon/wiki), Java, [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/), [Samtools](http://www.htslib.org/) (version 1.0 or later)
-* If polishing with PacBio reads: [pbalign](https://github.com/PacificBiosciences/pbalign), [BLASR](https://github.com/PacificBiosciences/blasr), [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)
-    * PacBio software is most easily installed using [pitchfork](https://github.com/PacificBiosciences/pitchfork).
-* If polishing with both Illumina and long reads (e.g. Nanopore): [Racon](https://github.com/isovic/racon), [FreeBayes](https://github.com/ekg/freebayes)
-
-
-### Process
-
-Unicycler polish uses an exhaustive iterative process that is time-consuming but can be necessary to resolve the sequence in repeat regions. For example, consider a genome with two very similar regions, A and B, and there are assembly errors in both. Polishing is initially difficult because the errors may cause reads which should map to A to instead map to B and vice versa. However, after some of these errors are fixed, more reads will map to their correct locations, allowing for more errors to be fixes, allowing more reads to map correctly, etc.
-
-1. If Illumina reads are available:
-    1. Run [Pilon](https://github.com/broadinstitute/pilon/wiki) in 'bases' mode (substitutions and small indels). If any changes were suggested, apply them and repeat this step.
-    2. Run Pilon in 'local' mode (larger variants), and assess each change with ALE. If any variant improves the ALE score, apply it and go back to step 1-i.
-2. If long reads are available:
-    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Racon](https://github.com/isovic/racon) and gather all suggested small changes.
-    2. Use [FreeBayes](https://github.com/ekg/freebayes) to assess each long read-suggested change by looking for ambiguity in the Illumina read mapping. If any were found, apply them and go back to step 2-i.
-3. If Illumina reads are available:
-    1. Execute step 1 again.
-    2. Run Pilon/GenomicConsensus/Racon again (all that apply) and assess each suggested variant with ALE. If any improves the ALE score, apply it and repeat this step.
-
-
-### Example commands
-
-__Polishing with only Illumina reads:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -a assembly.fasta`
-
-__Polishing with only PacBio reads:__<br>
-`unicycler_polish --pb_bax path/to/*bax.h5 -a assembly.fasta`
-
-__Hybrid read set (Illumina and PacBio) polishing:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --pb_bax *bax.h5 -a assembly.fasta`
-
-__Hybrid read set (Illumina and Nanopore) polishing:__<br>
-`unicycler_polish -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz --long_reads nanopore.fastq.gz -a assembly.fasta`
 
 
 # Paper
@@ -603,7 +510,7 @@ A preprint version of the Unicycler manuscript is currently available on bioRxiv
 
 Unicycler would not have been possible without [Kat Holt](https://holtlab.net/), my fellow researchers in her lab and the many other people I work with at the University of Melbourne's [Centre for Systems Genomics](https://sysgenmelb.org/). In particular, [Margaret Lam](https://scholar.google.com.au/citations?user=cWmhzUIAAAAJ&hl=en), [Kelly Wyres](https://holtlab.net/kelly-wyres/) and [David Edwards](https://scholar.google.com.au/citations?hl=en&user=rZ1RJK0AAAAJ) worked with me on many challenging genomes during Unicycler's development.
 
-Unicycler uses [SeqAn](https://www.seqan.de/) to perform alignments and other sequence manipulations. The authors of this library have been very helpful during Unicycler's development and I owe them a great deal of thanks! It also uses [minimap](https://github.com/lh3/minimap) to seed alignments and so I'd like to thank [Heng Li](https://github.com/lh3) for writing such a fast long read aligner.
+Unicycler uses [SeqAn](https://www.seqan.de/) to perform alignments and other sequence manipulations. The authors of this library have been very helpful during Unicycler's development and I owe them a great deal of thanks! It also uses [minimap](https://github.com/lh3/minimap) for alignment and [miniasm](https://github.com/lh3/minimap) for long read assembly, and so I'd like to thank [Heng Li](https://github.com/lh3) for these tools. Finally, Unicycler uses [nanoflann](https://github.com/jlblancoc/nanoflann), a delightfully fast and lightweight nearest neighbour library, to perform its line-finding in semi-global alignment.
 
 
 

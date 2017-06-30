@@ -13,11 +13,38 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
+# When aligning minimap reads to the graph (which is overlap-free), we still want to allow a tiny
+# bit of overlap because minimap alignments are a bit course.
+ALLOWED_MINIMAP_OVERLAP = 5
+
+# When aligning minimap reads to the graph, we can exclude hits that are too much worse than the
+# best hit.
+MAX_TO_MIN_MINIMISER_RATIO = 10
+
+# When testing various repeat counts using fully global alignment in Seqan, we use this band size
+# to make the alignment faster.
+SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 50
+
+# Illumina contigs are used as 'reads' in the miniasm and Racon steps. They are given this as a
+# qscore at each base.
+CONTIG_READ_QSCORE = 40
+
+# This is the maximum number of times a bridge will be Racon polished
+RACON_POLISH_LOOP_COUNT = 100
+
+# This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
+# if 6, then each contig is included 6 times as a read (3 forward strand 3 reverse).
+RACON_CONTIG_DUPLICATION_COUNT = 1
+
+CONTIG_SEARCH_END_SIZES = [5000, 2500, 1000, 500]
+CONTIG_SEARCH_MIN_IDENTITY = 95.0
+FOUND_CONTIG_MIN_RATIO = 0.9
+FOUND_CONTIG_MAX_RATIO = 1.11111
+FOUND_CONTIG_MAX_OVERLAP_SIZE = 250
+
 # Unicycler will only work with read alignments if they are long enough. This values specifies
-# the threshold relative to the graph overlap. E.g. if this value is 2 and the graph used was a
-# SPAdes 95-mer graph, it would have an overlap of 95 bp and so the minimum used alignment would
-# be 190 bp.
-MIN_ALIGNMENT_LENGTH_RELATIVE_TO_GRAPH_OVERLAP = 2
+# the minimum threshold.
+MIN_LONG_READ_ALIGNMENT_LENGTH = 50
 
 # If less than this fraction of a read was aligned in the first aligning pass, Unicycler will try
 # again using much more sensitive alignment settings. This helps to align reads which come from
@@ -56,14 +83,14 @@ RELATIVE_PATH_LENGTH_BUFFER_SIZE = 100
 # search (exceeds these thresholds), Unicycler will give up and instead try a progressive path
 # search.
 ALL_PATH_SEARCH_MAX_WORKING_PATHS = 10000
-ALL_PATH_SEARCH_MAX_FINAL_PATHS = 250
+ALL_PATH_SEARCH_MAX_FINAL_PATHS = 500
 
 # These settings are used when Unicycler is progressively searching for paths connecting two graph
 # segments. When its number of working paths reaches PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS, it
 # will cull them down by scoring the alignment of each. Paths which have a score within the
 # PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION of the best are kept.
-PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 500
-PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.99
+PROGRESSIVE_PATH_SEARCH_MAX_WORKING_PATHS = 100
+PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.995
 
 # These settings are used for Unicycler's copy number determination - the process by which it
 # tries to figure out the depth of constituent components of each segment.
@@ -73,18 +100,14 @@ PROGRESSIVE_PATH_SEARCH_SCORE_FRACTION = 0.99
 #     depths from one segment to the next.
 #   * MIN_SINGLE_COPY_LENGTH is how short of a segment can be called single copy when adding
 #     additional single copy segments.
-#   * MIN_HALF_MEDIAN_FOR_DIPLOID is used when determining whether a graph should be considered
-#     diploid or not for copy depths. At least this fraction of the bases must be near in depth to
-#     half of the graph's median value in order for the single copy depth to be shifted down to
-#     0.5.
 #   * MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS caps the number of possible ways to redistribute a
 #     segment's copy depths to its neighbours. If there are more possibilities than this,
 #     Unicycler won't bother trying.
 INITIAL_SINGLE_COPY_TOLERANCE = 0.1
 COPY_PROPAGATION_TOLERANCE = 0.5
 MIN_SINGLE_COPY_LENGTH = 1000
-MIN_HALF_MEDIAN_FOR_DIPLOID = 0.1
 MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS = 10000
+COPY_DEPTH_PROPAGATION_TABLE_ROW_WIDTH = 35
 
 # When Unicycler is cleaning up the graph after bridging, it can delete graph paths and graph
 # components which are mostly (but not entirely) used up in bridges. This value controls the
@@ -97,10 +120,6 @@ CLEANING_USEDUPNESS_THRESHOLD = 0.5
 # better. E.g. a 100 read consensus will likely give a similar sequence as a 25 read consensus,
 # but it will take much longer.
 MAX_READS_FOR_CONSENSUS = 25
-
-# When cleaning a SPADes assembly, Unicycler will delete graph segments will less depth than
-# this, if doing so will not break up the graph.
-READ_DEPTH_FILTER = 0.5
 
 # The different bridging modes have different minimum bridge quality thresholds.
 CONSERVATIVE_MIN_BRIDGE_QUAL = 25.0
@@ -138,3 +157,15 @@ MAX_AUTO_THREAD_COUNT = 8
 
 # The default sequence line wrapping length (e.g. for use in FASTA files).
 BASES_PER_FASTA_LINE = 70
+
+# Pilon is run multiple times to polish things up as nice as possible. It will stop when no more
+# changes are made or this limit is hit.
+MAX_PILON_POLISH_COUNT = 10
+
+MINIASM_BRIDGE_QUAL_WITH_GRAPH_PATH = 1.0
+MINIASM_BRIDGE_QUAL_WITH_DEAD_END = 1.0
+MINIASM_BRIDGE_QUAL_WITHOUT_PATH_OR_DEAD_END = 0.7
+MINIASM_BRIDGE_SCALED_SCORE_TO_USE_GRAPH_PATH = 95.0
+MINIASM_BRIDGE_HALF_QUAL_LENGTH = 5000
+
+LONG_READ_BRIDGE_HALF_QUAL_LENGTH = 2000

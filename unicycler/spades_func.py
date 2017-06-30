@@ -19,7 +19,7 @@ import gzip
 import shutil
 import statistics
 from .misc import round_to_nearest_odd, get_compression_type, int_to_str, quit_with_error,\
-    strip_read_extensions, bold, dim, print_table, get_left_arrow
+    strip_read_extensions, bold, dim, print_table, get_left_arrow, float_to_str
 from .assembly_graph import AssemblyGraph
 from . import log
 
@@ -41,17 +41,24 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     else:
         reads = spades_read_correction(short1, short2, short_unpaired, spades_dir, threads,
                                        spades_path)
-    kmer_range = get_kmer_range(short1, short2, spades_dir, kmer_count, min_k_frac, max_k_frac)
+    kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count, min_k_frac,
+                                max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
+
     log.log_section_header('SPAdes assemblies')
+    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
+                        'assembly graph for each k-mer using the number of contigs (fewer is '
+                        'better) and the number of dead ends (fewer is much better). The score '
+                        'function is 1/(c*(d+1)^2), where c is the contig count and d is the '
+                        'dead end count.')
 
     # Conduct a SPAdes assembly for each k-mer and score them to choose
     # the best.
     if verbosity > 1:
-        spades_results_table = [['K-mer', 'Segments', 'Links', 'Total length', 'N50',
-                                 'Longest segment', 'Dead ends', 'Score']]
+        spades_results_table = [['K-mer', 'Contigs', 'Links', 'Total length', 'N50',
+                                 'Longest contig', 'Dead ends', 'Score']]
     else:
-        spades_results_table = [['K-mer', 'Segments', 'Dead ends', 'Score']]
+        spades_results_table = [['K-mer', 'Contigs', 'Dead ends', 'Score']]
     best_score = 0.0
     best_kmer = 0
     best_graph_filename = ''
@@ -98,7 +105,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         if segment_count == 0:
             score = 0.0
         else:
-            score = 1.0 / (segment_count * ((adjusted_dead_ends + 1) ** 2))
+            score = 1.0 / (segment_count * (adjusted_dead_ends + 2))
 
         # Prepare the table line for this k-mer graph.
         table_line += [int_to_str(segment_count)]
@@ -156,35 +163,55 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     # Clean up.
     if keep < 3 and os.path.isdir(spades_dir):
         log.log('\nDeleting ' + spades_dir + '/')
-        shutil.rmtree(spades_dir)
+        shutil.rmtree(spades_dir, ignore_errors=True)
 
     return assembly_graph
 
 
-def spades_read_correction(short1, short2, short_unpaired, spades_dir, threads, spades_path):
+def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path):
     """
     This runs SPAdes with the --only-error-correction option.
     """
     log.log_section_header('SPAdes read error correction')
+    log.log_explanation('Unicycler uses the SPAdes read error correction module to reduce the '
+                        'number of errors in the short read before SPAdes assembly. This can make '
+                        'the assembly faster and simplify the assembly graph structure.')
+
+    using_paired_reads = bool(short1) and bool(short2)
+    using_unpaired_reads = bool(unpaired)
 
     # If the corrected reads already exist, then we just use them and proceed.
     corrected_1 = os.path.join(spades_dir, 'corrected_1.fastq.gz')
     corrected_2 = os.path.join(spades_dir, 'corrected_2.fastq.gz')
     corrected_u = os.path.join(spades_dir, 'corrected_u.fastq.gz')
-    if os.path.isfile(corrected_1) and os.path.isfile(corrected_2):
+    corrected_1_exists = os.path.isfile(corrected_1)
+    corrected_2_exists = os.path.isfile(corrected_2)
+    corrected_u_exists = os.path.isfile(corrected_u)
+
+    reads_already_exist = True
+    if using_paired_reads and (not corrected_1_exists or not corrected_2_exists):
+        reads_already_exist = False
+    if using_unpaired_reads and not corrected_u_exists:
+        reads_already_exist = False
+
+    if reads_already_exist:
         log.log('Corrected reads already exist. Will use these reads instead of running SPAdes '
               'error correction:')
-        log.log('  ' + corrected_1)
-        log.log('  ' + corrected_2)
-        if os.path.isfile(corrected_u):
+        if using_paired_reads:
+            log.log('  ' + corrected_1)
+            log.log('  ' + corrected_2)
+        if using_unpaired_reads:
             log.log('  ' + corrected_u)
         return corrected_1, corrected_2, corrected_u
 
     # If the corrected reads don't exist, then we run SPAdes in error correction only mode.
     read_correction_dir = os.path.join(spades_dir, 'read_correction')
-    command = [spades_path, '-1', short1, '-2', short2]
-    if short_unpaired:
-        command += ['-s', short_unpaired]
+    command = [spades_path]
+    if using_paired_reads:
+        assert bool(short1) and bool(short2)
+        command += ['-1', short1, '-2', short2]
+    if using_unpaired_reads:
+        command += ['-s', unpaired]
     command += ['-o', read_correction_dir, '--threads', str(threads), '--only-error-correction']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -198,36 +225,52 @@ def spades_read_correction(short1, short2, short_unpaired, spades_dir, threads, 
             log.log(dim(spades_output), 2)
 
     spades_error = process.stderr.readline().strip().decode()
+    return_code = process.returncode
     if spades_error:
         quit_with_error('SPAdes encountered an error: ' + spades_error)
+    if return_code != 0:
+        quit_with_error('SPAdes crashed!')
 
     # Read error correction should be done now, so copy the correct read files to a more permanent
     # location.
-    short1_no_extension = strip_read_extensions(short1)
-    short2_no_extension = strip_read_extensions(short2)
+    if using_paired_reads:
+        short1_no_extension = strip_read_extensions(short1)
+        short2_no_extension = strip_read_extensions(short2)
+    else:
+        short1_no_extension, short2_no_extension = '', ''
     corrected_dir = os.path.join(read_correction_dir, 'corrected')
     files = os.listdir(corrected_dir)
     for spades_file in files:
         file_path = os.path.join(corrected_dir, spades_file)
-        if short1_no_extension in spades_file:
+        if using_paired_reads and short1_no_extension in spades_file:
             shutil.move(file_path, corrected_1)
-        elif short2_no_extension in spades_file:
+        elif using_paired_reads and short2_no_extension in spades_file:
             shutil.move(file_path, corrected_2)
-        elif '_unpaired' in spades_file:
+        elif using_unpaired_reads and '_unpaired' in spades_file:
             shutil.move(file_path, corrected_u)
-    shutil.rmtree(read_correction_dir)
+    shutil.rmtree(read_correction_dir, ignore_errors=True)
 
-    if not os.path.isfile(corrected_1) or not os.path.isfile(corrected_2):
+    corrected_1_exists = os.path.isfile(corrected_1)
+    corrected_2_exists = os.path.isfile(corrected_2)
+    corrected_u_exists = os.path.isfile(corrected_u)
+
+    if using_paired_reads and (not corrected_1_exists or not corrected_2_exists):
+        quit_with_error('SPAdes read error correction failed')
+    if using_unpaired_reads and not corrected_u_exists:
         quit_with_error('SPAdes read error correction failed')
 
-    if not os.path.isfile(corrected_u):
+    if not using_paired_reads:
+        corrected_1 = None
+        corrected_2 = None
+    if not using_unpaired_reads:
         corrected_u = None
 
     log.log('')
     log.log('Corrected reads:')
-    log.log('  ' + corrected_1)
-    log.log('  ' + corrected_2)
-    if corrected_u:
+    if using_paired_reads:
+        log.log('  ' + corrected_1)
+        log.log('  ' + corrected_2)
+    if using_unpaired_reads:
         log.log('  ' + corrected_u)
 
     return corrected_1, corrected_2, corrected_u
@@ -240,14 +283,20 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
     short1 = read_files[0]
     short2 = read_files[1]
     unpaired = read_files[2]
+
+    using_paired_reads = short1 is not None and short2 is not None and \
+                         os.path.isfile(short1) and os.path.isfile(short2)
+    using_unpaired_reads = unpaired is not None and os.path.isfile(unpaired)
+
     kmer_string = ','.join([str(x) for x in kmers])
     command = [spades_path, '-o', out_dir, '-k', kmer_string, '--threads', str(threads)]
     if just_last:
         command += ['--restart-from', 'k' + str(kmers[-1])]
     else:
-        command += ['--only-assembler', '-1', short1, '-2', short2]
-        if unpaired:
-            command += ['-s', unpaired]
+        if using_paired_reads:
+            command += ['--only-assembler', '-1', short1, '-2', short2]
+        if using_unpaired_reads:
+            command += ['--only-assembler', '-s', unpaired]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     insert_size_mean = None
@@ -269,12 +318,24 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
                 log.log(spades_output, 2)
             elif spades_output:
                 log.log(dim(spades_output), 2)
-        if 'Insert size =' in spades_output and 'deviation = ' in spades_output:
-            try:
-                insert_size_mean = float(spades_output.split('Insert size = ')[-1].split(',')[0])
-                insert_size_deviation = float(spades_output.split('deviation = ')[-1].split(',')[0])
-            except ValueError:
-                pass
+
+        try:
+            insert_size_mean = float(spades_output.split('Insert size = ')[-1].split(',')[0])
+            insert_size_deviation = float(spades_output.split('deviation = ')[-1].split(',')[0])
+        except ValueError:
+            pass
+
+    # If we couldn't get the insert size from the SPAdes output (e.g. it was an unpaired-reads-only
+    # assembly), we'll use the read length instead.
+    if insert_size_mean is None or insert_size_deviation is None:
+        read_lengths = get_read_lengths(short1) + get_read_lengths(short2) + \
+                       get_read_lengths(unpaired)
+        insert_size_mean = statistics.mean(read_lengths)
+        insert_size_deviation = max(statistics.stdev(read_lengths), 1.0)
+
+    log.log('', 2)
+    log.log('Insert size mean: ' + float_to_str(insert_size_mean, 1) + ' bp', 2)
+    log.log('Insert size stdev: ' + float_to_str(insert_size_deviation, 1) + ' bp', 2)
     log.log('', 2)
 
     spades_error = process.stderr.readline().strip().decode()
@@ -299,12 +360,15 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
         return graph_files, insert_size_mean, insert_size_deviation
 
 
-def get_kmer_range(reads_1_filename, reads_2_filename, spades_dir, kmer_count, min_kmer_frac,
-                   max_kmer_frac):
+def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, spades_dir,
+                   kmer_count, min_kmer_frac, max_kmer_frac):
     """
     Uses the read lengths to determine the k-mer range to be used in the SPAdes assembly.
     """
     log.log_section_header('Choosing k-mer range for assembly')
+    log.log_explanation('Unicycler chooses a k-mer range for SPAdes based on the length of the '
+                        'input reads. It uses a wide range of many k-mer sizes to maximise the '
+                        'chance of finding an ideal assembly.')
 
     # If the k-mer range file already exists, we use its values and proceed.
     kmer_range_filename = os.path.join(spades_dir, 'kmer_range')
@@ -324,7 +388,8 @@ def get_kmer_range(reads_1_filename, reads_2_filename, spades_dir, kmer_count, m
 
     # If the code got here, then the k-mer range doesn't already exist and we'll create one by
     # examining the read lengths.
-    read_lengths = get_read_lengths(reads_1_filename) + get_read_lengths(reads_2_filename)
+    read_lengths = get_read_lengths(reads_1_filename) + get_read_lengths(reads_2_filename) + \
+        get_read_lengths(unpaired_reads_filename)
     read_lengths = sorted(read_lengths)
     median_read_length = read_lengths[len(read_lengths) // 2 - 1]
     max_kmer = round_to_nearest_odd(max_kmer_frac * median_read_length)
@@ -355,18 +420,19 @@ def get_read_lengths(reads_filename):
     """
     Returns a list of the read lengths for the given read file.
     """
+    if reads_filename is None:
+        return []
     if get_compression_type(reads_filename) == 'gz':
         open_func = gzip.open
     else:  # plain text
         open_func = open
-    reads = open_func(reads_filename, 'rb')
-    read_lengths = []
-    i = 0
-    for line in reads:
-        if i % 4 == 1:
-            read_lengths.append(len(line.strip()))
-        i += 1
-    reads.close()
+    with open_func(reads_filename, 'rb') as reads:
+        read_lengths = []
+        i = 0
+        for line in reads:
+            if i % 4 == 1:
+                read_lengths.append(len(line.strip()))
+            i += 1
     return read_lengths
 
 
