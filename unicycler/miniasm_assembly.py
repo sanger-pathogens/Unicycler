@@ -167,12 +167,14 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                                                                          read_nicknames)
             circular_count = unitig_graph.get_circular_segment_count()
             linear_count = unitig_graph.get_linear_segment_count()
+            unitig_graph_size = unitig_graph.get_total_segment_length()
             if circular_count > 0:
                 log.log('  ' + int_to_str(circular_count) + ' circular unitig' +
                         ('' if circular_count == 1 else 's'))
             if linear_count > 0:
                 log.log('  ' + int_to_str(linear_count) + ' linear unitig' +
                         ('' if linear_count == 1 else 's'))
+            log.log('  total size = ' + int_to_str(unitig_graph_size) + ' bp')
 
             if args.keep >= 3:
                 unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
@@ -181,16 +183,30 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'unitig_graph'),
                                          include_depth=False)
 
-            polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, args.racon_path,
-                                      args.threads, scoring_scheme, seg_nums_to_bridge)
-            if args.keep >= 3:
-                unitig_graph.save_to_gfa(racon_polished_filename)
+            # If the miniasm assembly looks too small, then we don't bother polishing it or using
+            # it for bridging.
+            if short_reads_available:
+                estimated_genome_size = graph.get_estimated_sequence_len()
+                target_size = estimated_genome_size * \
+                              settings.REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING
+                if unitig_graph_size < target_size:
+                    log.log('')
+                    log.log(red('miniasm assembly too small for bridging'))
+                    unitig_graph = None
 
-            if not short_reads_available and args.keep > 0:
-                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
+            if unitig_graph is not None:
+                polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
+                                          args.racon_path, args.threads, scoring_scheme,
+                                          seg_nums_to_bridge)
+                if args.keep >= 3:
+                    unitig_graph.save_to_gfa(racon_polished_filename)
 
-            if short_reads_available and args.keep > 0:
-                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'long_read_assembly'))
+                if not short_reads_available and args.keep > 0:
+                    unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
+
+                if short_reads_available and args.keep > 0:
+                    unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
+                                                      'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
         log.log('')

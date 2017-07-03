@@ -474,7 +474,7 @@ class StringGraph(object):
                 segment.forward_sequence = seq
                 segment.reverse_sequence = reverse_complement(seq)
 
-    def get_total_segment_length(self):\
+    def get_total_segment_length(self):
         return sum(s.get_length() for s in self.segments.values())
 
     def get_median_read_depth(self):

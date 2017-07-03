@@ -169,3 +169,8 @@ MINIASM_BRIDGE_SCALED_SCORE_TO_USE_GRAPH_PATH = 95.0
 MINIASM_BRIDGE_HALF_QUAL_LENGTH = 5000
 
 LONG_READ_BRIDGE_HALF_QUAL_LENGTH = 2000
+
+
+# If the miniasm assembly is too small, we won't even consider using for bridging in hybrid
+# assembly. This size is relative to the estimated genome size from the short read assembly.
+REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING = 0.5
