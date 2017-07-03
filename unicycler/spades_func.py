@@ -49,7 +49,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
                         'assembly graph for each k-mer using the number of contigs (fewer is '
                         'better) and the number of dead ends (fewer is much better). The score '
-                        'function is 1/(c*(d+1)^2), where c is the contig count and d is the '
+                        'function is 1/(c*(d+2)), where c is the contig count and d is the '
                         'dead end count.')
 
     # Conduct a SPAdes assembly for each k-mer and score them to choose
