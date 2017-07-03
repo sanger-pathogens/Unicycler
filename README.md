@@ -1,15 +1,12 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is an assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and/or long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
-
-While Unicycler can produce the best assemblies from hybrid read sets, it will assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
-
+Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a hybrid assembly.
 
 # Table of contents
 
 * [Introduction](#introduction)
 * [Requirements](#requirements)
-* [Installation](#installation)z
+* [Installation](#installation)
     * [Install from source](#install-from-source)
     * [Build and run without installation](#build-and-run-without-installation)
 * [Quick usage](#quick-usage)
@@ -63,11 +60,11 @@ As input, Unicycler takes one of the following:
 Reasons to use Unicycler:
    * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
    * It handles plasmid-rich genomes.
-   * When performing hybrid assembly, it can use long reads of any depth and quality. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
+   * It can use long reads of any depth and quality in hybrid assembly. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
    * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
    * It has very low misassembly rates.
    * It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
-   * It's easy to use, runs with just one command and usually doesn't require tinkering with parameters.
+   * It's easy to use: runs with just one command and usually doesn't require tinkering with parameters.
 
 Reasons to __not__ use Unicycler:
    * You're assembling a eukaryotic genome or a metagenome (Unicycler is designed exclusively for bacterial isolates).
@@ -83,7 +80,7 @@ Reasons to __not__ use Unicycler:
 * C++ compiler with C++14 support:
     * [GCC](https://gcc.gnu.org/) 4.9.1 or later
     * [Clang](http://clang.llvm.org/) 3.5 or later
-    * [ICC](https://software.intel.com/en-us/c-compilers) also works, though I haven't figured out the minimum required version number
+    * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I don't know the minimum required version number)
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
 * For short-read or hybrid assembly:
   * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 or later (`spades.py`)
@@ -515,6 +512,8 @@ Unicycler is thorough and accurate, but not particularly fast. The [direct long 
 Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads, you can make Unicycler run faster by subsampling for only the longest reads.
 
 Using a lot of threads (with the `--threads` option) can make Unicycler run faster too. It will only use up to 8 threads by default, but if you're running it on a big machine with lots of CPU and RAM, feel free to use more!
+
+Unicycler _may_ work with [PyPy](https://pypy.org/) which could significantly speed up parts of its pipeline. I haven't tested this much – if you try it, let me know how you go!
 
 
 ### Necessary read length
