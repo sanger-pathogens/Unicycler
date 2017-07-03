@@ -636,6 +636,7 @@ def print_intro_message(args, full_command, out_dir_message):
 
     log.log('Command: ' + bold(full_command))
     log.log('')
+    log.log('Unicycler version: v' + __version__)
     log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
     log.log('')
     log.log(out_dir_message)
