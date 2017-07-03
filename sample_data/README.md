@@ -1,8 +1,10 @@
 # Unicycler sample data
 
-I've put together a few small read sets so users can test that Unicycler works. All are available to download via [figshare](https://figshare.com/projects/Unicycler_sample_data/23065).
+I've put together a few small read sets so users can test that Unicycler works.
 
-The syntheti _Shigella_ plasmid reads are the smallest in size – download those if you're in a hurry. The other three are real read sets from small bacterial genomes from the [FDA-ARGOS project](https://www.ncbi.nlm.nih.gov/bioproject/231221). The _Helicobacter pylori_ and _Streptococcus pyogenes_ genomes are relatively simple and easy to assemble. The _Neisseria gonorrhoeae_ genome is complex and tougher. I subsampled each Illumina read set down to create smaller files. The PacBio read sets were subsampled based on quality (i.e. they are a high-quality subset of the original reads).
+The synthetic _Shigella_ plasmid reads are the smallest in size and included in the Unicycler repo – try these if you're in a hurry.
+
+The other three are real read sets from small bacterial genomes from the [FDA-ARGOS project](https://www.ncbi.nlm.nih.gov/bioproject/231221) and are available to download via [figshare](https://figshare.com/projects/Unicycler_sample_data/23065). The _Helicobacter pylori_ and _Streptococcus pyogenes_ genomes are relatively simple and easy to assemble. The _Neisseria gonorrhoeae_ genome is complex and tougher. I subsampled each Illumina read set down to create smaller files. The PacBio read sets were subsampled based on quality (i.e. they are a high-quality subset of the original reads).
 
 I'd recommend looking at the resulting assembly graphs in [Bandage](https://github.com/rrwick/Bandage) to get an idea of how well the assemblies completed – especially useful for comparing hybrid assemblies made with low-depth vs high-depth long reads.
 
@@ -11,10 +13,10 @@ I'd recommend looking at the resulting assembly graphs in [Bandage](https://gith
 
 These are synthetic reads from plasmids A, B and E from the [_Shigella sonnei_ 53G genome assembly](https://www.ncbi.nlm.nih.gov/genome/417?genome_assembly_id=166795):
 
-[short_reads_1.fastq.gz](https://ndownloader.figshare.com/files/8801839)<br>
-[short_reads_2.fastq.gz](https://ndownloader.figshare.com/files/8801842)<br>
-[long_reads_low_depth.fastq.gz](https://ndownloader.figshare.com/files/8801836)<br>
-[long_reads_high_depth.fastq.gz](https://ndownloader.figshare.com/files/8801833)
+[short_reads_1.fastq.gz](https://github.com/rrwick/Unicycler/blob/master/sample_data/short_reads_1.fastq.gz)<br>
+[short_reads_2.fastq.gz](https://github.com/rrwick/Unicycler/blob/master/sample_data/short_reads_2.fastq.gz)<br>
+[long_reads_low_depth.fastq.gz](https://github.com/rrwick/Unicycler/blob/master/sample_data/long_reads_low_depth.fastq.gz)<br>
+[long_reads_high_depth.fastq.gz](https://github.com/rrwick/Unicycler/blob/master/sample_data/long_reads_high_depth.fastq.gz)
 
 They are small but insertion sequences create many repeats. Only the smallest plasmid assembles completely with short reads alone. Hybrid assemblies with low-depth long reads manage to complete the medium-sized plasmid, and it takes high-depth long reads to complete all three.
 
