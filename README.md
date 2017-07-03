@@ -1,6 +1,6 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is a assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and/or long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
+Unicycler is an assembly pipeline for bacterial genomes. It uses [Illumina](http://www.illumina.com/) reads and/or long reads ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) to produce complete and accurate assemblies.
 
 While Unicycler can produce the best assemblies from hybrid read sets, it will assemble Illumina-only read sets (where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser) or long-read-only sets (where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline).
 
@@ -9,7 +9,7 @@ While Unicycler can produce the best assemblies from hybrid read sets, it will a
 
 * [Introduction](#introduction)
 * [Requirements](#requirements)
-* [Installation](#installation)
+* [Installation](#installation)z
     * [Install from source](#install-from-source)
     * [Build and run without installation](#build-and-run-without-installation)
 * [Quick usage](#quick-usage)
@@ -17,15 +17,20 @@ While Unicycler can produce the best assemblies from hybrid read sets, it will a
     * [Assembly graphs](#assembly-graphs)
     * [Limitations of short reads](#limitations-of-short-reads)
     * [SPAdes graphs](#spades-graphs)
-* [How it works](#how-it-works)
-    * [1. Read correction](#1-read-correction)
-    * [2. SPAdes assembly](#2-spades-assembly)
-    * [3. Multiplicity](#3-multiplicity)
-    * [4. Short read bridging](#4-short-read-bridging)
-    * [5. Long read bridging](#5-long-read-bridging)
-    * [6. Long read   contig assembly and bridging](#6-long-read--contig-assembly-and-bridging)
-    * [7. Bridge application](#7-bridge-application)
-    * [8. Finalisation](#8-finalisation)
+* [Method: Illumina-only assembly](#method-illumina-only-assembly)
+    * [Read correction](#read-correction)
+    * [SPAdes assembly](#spades-assembly)
+    * [Multiplicity](#multiplicity)
+    * [Overlap removal](#overlap-removal)
+    * [Bridging](#bridging)
+* [Method: long-read-only assembly](#method-long-read-only-assembly)
+    * [miniasm assembly](#miniasm-assembly)
+    * [Racon polishing](#racon-polishing)
+* [Method: hybrid assembly](#method-hybrid-assembly)
+    * [Long read plus contig assembly](#long-read-plus-contig-assembly)
+    * [Direct long read bridging](#direct-long-read-bridging)
+    * [Bridge application](#bridge-application)
+    * [Finalisation](#finalisation)
 * [Conservative, normal and bold](#conservative-normal-and-bold)
 * [Options and usage](#options-and-usage)
     * [Standard options](#standard-options)
@@ -134,8 +139,11 @@ Now instead of running `unicycler`, you instead use `path/to/unicycler-runner.py
 
 These commands use the reads you'll find in the [`sample_data`](sample_data/) directory. They are synthetic reads generated from plasmids in a [_Shigella sonnei reference_](https://www.ncbi.nlm.nih.gov/genome/417?genome_assembly_id=166795).
 
-__Short read-only assembly:__<br>
+__Illumina-only assembly:__<br>
 `unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -o output_dir`
+
+__Long-read-only assembly:__<br>
+`unicycler -l long_reads_high_depth.fastq.gz -o output_dir`
 
 __Hybrid assembly:__<br>
 `unicycler -1 short_reads_1.fastq.gz -2 short_reads_2.fastq.gz -l long_reads_high_depth.fastq.gz -o output_dir`
@@ -176,27 +184,30 @@ To complete a bacterial genome assembly (i.e. find the one correct sequence for 
 
 Assembly graphs come in many different varieties, but we are particularly interested in the kind produced by SPAdes, because that is what Unicycler uses.
 
-SPAdes graphs are made by performing a De Bruijn graph assembly with a range of different k-mer sizes, from small to large (see the [SPAdes paper](http://online.liebertpub.com/doi/abs/10.1089/cmb.2012.0021)). Each assembly builds on the previous one, which allows SPAdes to get the advantages of both small k-mer assemblies (a more connected graph) and large k-mer assemblies (ability to resolve repeats). As a consequence of how SPAdes combines k-mers, two contigs in a SPAdes graph that connect will overlap by their k-mer size (more info on the [Bandage wiki page](https://github.com/rrwick/Bandage/wiki/Assembler-differences)).
+SPAdes graphs are made by performing a De Bruijn graph assembly with a range of different k-mer sizes, from small to large (see the [SPAdes paper](http://online.liebertpub.com/doi/abs/10.1089/cmb.2012.0021)). Each assembly builds on the previous one, which allows SPAdes to get the advantages of both small k-mer assemblies (a more connected graph) and large k-mer assemblies (ability to resolve repeats). Two contigs in a SPAdes graph that connect will overlap by their k-mer size (more info on the [Bandage wiki page](https://github.com/rrwick/Bandage/wiki/Assembler-differences)).
 
 After producing the graph, SPAdes can perform further repeat resolution by using paired-end information. Since two reads in a pair are close to each other in the original DNA, SPAdes can use this to trace paths in the graph to form larger contigs (see [their paper on ExSPAnder](http://bioinformatics.oxfordjournals.org/content/30/12/i293.short)). However, the SPAdes contigs with repeat resolution do not come in graph form – they are only available in a FASTA file.
 
 
 
-# How it works
+# Method: Illumina-only assembly
 
-Unicycler uses SPAdes to get an assembly graph made from Illumina reads. Since Illumina reads are accurate, this graph has very few mistakes. But since Illumina reads are short, it will also contain unresolved repeats. Unicycler then uses the SPAdes repeat resolution and long-read alignments to build 'bridges' between non-repeat contigs, simplifying the graph into fewer, longer contigs.
+When assembling just Illumina reads, Unicycler functions mainly as a SPAdes optimiser. It offers a few benefits over using SPAdes alone:
+* Tries a wide range of k-mer sizes and automatically selects the best.
+* Filters out low-depth parts of the assembly to remove contamination.
+* Applies SPAdes repeat resolution to the graph (as opposed to disconnected contigs in a FASTA file).
+* Rejects low-confidence repeat resolution to reduce the rate of misassembly.
+* Trims off graph overlaps so sequences aren't repeated where contigs join.
 
-Essentially, Unicycler is a scaffolder which uses long reads to properly arrange Illumina contigs. But unlike a naive scaffolding tool which operates on assembled _contigs_, Unicycler works on an assembly _graph_. This gives it much more information to complete assemblies and a lower risk of mistakes.
-
-Here is the hybrid assembly process in a bit more detail:
+More information on the Illumina-only assembly process is described in the steps below.
 
 
-### 1. Read correction
+### Read correction
 
 Unicycler uses SPAdes' built-in read correction step before assembling the Illumina reads. This can be disabled with `--no_correct` if your Illumina reads are very high quality or you've already performed read QC.
 
 
-### 2. SPAdes assembly
+### SPAdes assembly
 
 <img align="right" src="misc/k-mer_plot.png" width="156" height="179">
 
@@ -205,48 +216,101 @@ Unicycler uses SPAdes to assemble the Illumina reads into an assembly graph. It 
 A raw SPAdes graph can also contain some 'junk' sequences due to sequencer artefacts or contamination, so Unicycler performs some graph cleaning to remove these. Therefore, small amounts of contamination in the Illumina reads should not be a problem.
 
 
-### 3. Multiplicity
+### Multiplicity
 
-In order to scaffold the graph, Unicycler must distinguish between single copy contigs and repeats. It does this with a greedy algorithm that uses both read depth and graph connectivity:
+To scaffold the graph, Unicycler must distinguish between single copy contigs and repeats. It does this with a greedy algorithm that uses both read depth and graph connectivity:
 
 <p align="center"><img src="misc/multiplicity.png" alt="Multiplicity assignment" width="700"></p>
 
-This process does _not_ assume that all single copy contigs have the same read depth, which allows it to identify single copy contigs from plasmids as well as the chromosome.
+This process does _not_ assume that all single copy contigs have the same read depth, which allows it to identify single copy contigs from plasmids as well as the chromosome. After it has determined multiplicity, Unicycler chooses a set of 'anchor' contigs. These are sufficiently-long single-copy contigs suitable for bridging in later steps.
 
 
-### 4. Short read bridging
+### Overlap removal
 
-At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single copy contigs using the information in the SPAdes `contigs.paths` file. These are applied to the graph to make the `short_read_bridges_applied.gfa` output – the most resolved graph Unicycler can make using only the Illumina reads.
+To reduce redundancy and allow for neatly circularised contigs, Unicycler removes all overlap in the graphs:
+<pre>
+Before:                                       After:
+                   <b>GACGCGT</b>TGACAAGGAAAT                           TGACAAGGAAAT
+                  /                                             /
+TTGACTACCCA<b>GACGCGT</b>                            TTGACTACCCAGACGCGT
+                  \                                             \
+                   <b>GACGCGT</b>CCTCTCATTCTA                           CCTCTCATTCTA
+</pre>
+
+
+### Bridging
+
+At this point, the assembly graph does not contain the SPAdes repeat resolution. To apply this to the graph, Unicycler builds bridges between single copy contigs using the information in the SPAdes `contigs.paths` file.
 
 <p align="center"><img src="misc/short_read_bridging.png" alt="Short read bridging" width="600"></p>
 
+Bridges are given a quality score, most importantly based on the length of the bridge compared to the length of the paired end insert size, so bridges which span a long repeat are given a low score. Since paired-end sequencing cannot resolve repeats longer than the insert size, bridges which attempt to span long repeats cannot be trusted. This selectivity helps to reduce the number of misassemblies.
 
-### 5. Long read bridging
 
-Long reads are the most useful source of information for resolving the assembly graph, so Unicycler semi-globally aligns them to the contigs (see [Unicycler align](#unicycler-align) for more information). For each pair of single copy contigs which are linked by read alignments, Unicycler uses the read consensus sequence to find a connecting path and creates a bridge.
+
+# Method: long-read-only assembly
+
+When assembling just long reads, Unicycler uses a miniasm+Racon pipeline. It offers a couple advantages over using other long-read-only assemblers:
+* Multiple rounds of Racon polishing give a good final sequence accuracy.
+* Circular replicons (like most bacterial chromosomes and plasmids) assemble into circular replicons with no start-end overlap.
+
+More information on the long-read-only assembly process is described in the steps below.
+
+
+### miniasm assembly
+
+Unicycler uses minimap and miniasm to assemble the long reads in essentially the same manner as described in the [miniasm README](https://github.com/lh3/miniasm). This produces an uncorrected assembly which is made directly of pieces of reads – the assembly error rate will be similar to the read error rate.
+
+The version of miniasm that comes with Unicycler is slightly modified in a couple of ways. The first modification is to help circular replicons assemble into circular string graphs. The other modification only applies to hybrid assembly, so I'll come back to that!
+
+
+### Racon polishing
+
+After miniasm assembly, Unicycler carries out multiple rounds of polishing with [Racon](https://github.com/isovic/racon) to improve the sequence accuracy. It will polish until the assembly stops improving, as measured by the agreement between the reads and the assembly. Circular replicons are 'rotated' (have their starting position shifted) between rounds of polishing to ensure that no part of the sequence is left unpolished.
+
+
+
+# Method: hybrid assembly
+
+Hybrid assembly (using both Illumina read and long reads) is where Unicycler really shines. Like with the Illumina-only pipeline described above, Unicycler will produce an Illumina assembly graph. It then uses long reads to build bridges, which often allows it to resolve all repeats in the genome, resulting in a complete genome assembly.
+
+In hybrid assembly, Unicycler carries out all the steps in the Illumina-only pipeline, plus the additional steps below:
+
+
+### Long read plus contig assembly
+
+This step uses miniasm and Racon, and is very much like the [long-read-only assembly method](#method-long-read-only-assembly) described above. Here however, the assembly is not just on long reads but a mixture of long reads and anchor contigs from the Illumina-only assembly. Since these anchor contigs can often be much longer than long reads (sometimes hundreds of kbp), they can significantly help the assembly. This takes advantage of the other modification to miniasm which was teased above. In Unicycler's miniasm, contigs and long reads are treated slightly differently in the string graph manipulations to better perform this step.
+
+After the assembly is finished, Unicycler finds anchor contigs in the assembled sequence and uses the intervening sequences to create bridges:
+```
+assembled sequence:                 TATGGTCTCGCATGTTAATTCTACTCCCGAACTTGGCCCATCCCCGGCTAGGCTGGGCACTAGACGGTGGAT
+anchor contigs:                         GTCTCGCATGTTAA    ACTCCCGAACTTGGCCCATCCCCGGC       GGCACTAGACGGTGG
+intervening sequences for bridges:                    TTCT                          TAGGCTG
+```
+
+
+### Direct long read bridging
+
+Unicycler also attempts to make long-read bridges directly by semi-globally aligning the long reads to the assembly graph. For each pair of single copy contigs which are linked by read alignments, Unicycler uses the read consensus sequence to find a connecting path and creates a bridge.
 
 <p align="center"><img src="misc/long_read_bridging.png" alt="Long read bridging"></p>
 
-
-### 6. Long read + contig assembly and bridging
-
-Unicycler performs a long-read assembly (using [miniasm](https://github.com/lh3/miniasm)) with the big contigs from the short-read assembly and the actual long reads. The resulting assembly is polished up using [Racon](https://github.com/isovic/racon). It then aligns short-read contigs to the new assembly, so it can find intervening sequence and build bridges.
-
-This step is somewhat redundant with the previous step, as both use long reads to build bridges between short-read contigs. They are both included because they have different strengths. The previous approach can tolerate low long-read depth but requires a good short-read assembly graph (i.e. few dead ends). This step requires decent long-read depth but can tolerate poor short-read assembly graphs. By using the two strategies together, Unicycler can successfully handle many types of input.
+This step and the previous step are somewhat redundant, as both use long reads to build bridges between short-read contigs. They are both included because they have different strengths. The previous approach can tolerate low long-read depth but requires a good short-read assembly graph (i.e. few dead ends). This step requires decent long-read depth but can tolerate poor short-read assembly graphs. By using the two strategies together, Unicycler can successfully handle many types of input.
 
 
-### 7. Bridge application
+### Bridge application
 
 At this point of the pipeline there can be many bridges, some of which may conflict. Unicycler therefore assigns a quality score to each based on all available evidence (e.g. read alignment quality, graph path match, read depth consistency). Bridges are then applied in order of decreasing quality so whenever there is a conflict, only the most supported bridge is used. A minimum quality threshold prevents the application of low evidence bridges (see [Conservative, normal and bold](#conservative-normal-and-bold) for more information).
 
 <p align="center"><img src="misc/bridge_application.png" alt="Application of bridges"></p>
 
 
-### 8. Finalisation
+### Finalisation
 
 If the above steps have resulted in any simple, circular sequences, then Unicycler will attempt to rotate/flip them to begin at a consistent starting gene. By default this is [dnaA](http://www.uniprot.org/uniprot/?query=gene_exact%3AdnaA&sort=score) or [repA](http://www.uniprot.org/uniprot/?query=gene_exact%3ArepA&sort=score), but users can specify their own with the `--start_genes` option.
 
 Finally, Unicycler does multiple rounds of short-read polishing using [Pilon](https://github.com/broadinstitute/pilon/wiki).
+
 
 
 # Conservative, normal and bold
@@ -338,7 +402,7 @@ Run `unicycler --help_all` to see a complete list of the program's options. Thes
 
 ```
 SPAdes assembly:
-  These options control the short read SPAdes assembly at the beginning of the Unicycler pipeline.
+  These options control the short-read SPAdes assembly at the beginning of the Unicycler pipeline.
 
   --spades_path SPADES_PATH           Path to the SPAdes executable (default: spades.py)
   --no_correct                        Skip SPAdes error correction step (default: conduct SPAdes error
@@ -446,7 +510,7 @@ __unicycler.log__              | Unicycler log file (same info as stdout)       
 
 ### Running time
 
-Unicycler is thorough and accurate, but not particularly fast. In particular, the [long read bridging](#5-long-read-bridging) step of the pipeline can take a while to complete. Two main factors influence the running time: the number of long reads (more reads take longer to align) and the genome size/complexity (finding bridge paths is more difficult in complex graphs).
+Unicycler is thorough and accurate, but not particularly fast. The [direct long read bridging](#direct-long-read-bridging) step of the pipeline can take a while to complete. Two main factors influence the running time: the number of long reads (more reads take longer to align) and the genome size/complexity (finding bridge paths is more difficult in complex graphs).
 
 Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads, you can make Unicycler run faster by subsampling for only the longest reads.
 

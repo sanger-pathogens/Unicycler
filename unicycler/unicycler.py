@@ -311,7 +311,7 @@ def get_arguments():
 
     # SPAdes assembly options
     spades_group = parser.add_argument_group('SPAdes assembly',
-                                             'These options control the short read SPAdes '
+                                             'These options control the short-read SPAdes '
                                              'assembly at the beginning of the Unicycler pipeline.'
                                              if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--spades_path', type=str, default='spades.py',
