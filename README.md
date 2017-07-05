@@ -53,23 +53,23 @@ Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumi
 # Introduction
 
 As input, Unicycler takes one of the following:
-   * Illumina reads from a bacterial isolate (ideally paired-end, but unpaired works too)
-   * A set of long reads (either PacBio or Nanopore) from a bacterial isolate
-   * Illumina reads and long reads from the same isolate (best case)
+* Illumina reads from a bacterial isolate (ideally paired-end, but unpaired works too)
+* A set of long reads (either PacBio or Nanopore) from a bacterial isolate (uncorrected long reads are fine, though corrected long reads should work too)
+* Illumina reads and long reads from the same isolate (best case)
 
 Reasons to use Unicycler:
-   * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
-   * It handles plasmid-rich genomes.
-   * It can use long reads of any depth and quality in hybrid assembly. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
-   * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
-   * It has very low misassembly rates.
-   * It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
-   * It's easy to use: runs with just one command and usually doesn't require tinkering with parameters.
+* It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
+* It handles plasmid-rich genomes.
+* It can use long reads of any depth and quality in hybrid assembly. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
+* It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
+* It has very low misassembly rates.
+* It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
+* It's easy to use: runs with just one command and usually doesn't require tinkering with parameters.
 
 Reasons to __not__ use Unicycler:
-   * You're assembling a eukaryotic genome or a metagenome (Unicycler is designed exclusively for bacterial isolates).
-   * Your Illumina reads and long reads are from different isolates (Unicycler struggles with sample heterogeneity).
-   * You're impatient (Unicycler is thorough but not especially fast).
+* You're assembling a eukaryotic genome or a metagenome (Unicycler is designed exclusively for bacterial isolates).
+* Your Illumina reads and long reads are from different isolates (Unicycler struggles with sample heterogeneity).
+* You're impatient (Unicycler is thorough but not especially fast).
 
 
 
