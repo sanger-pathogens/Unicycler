@@ -552,14 +552,36 @@ def get_anchor_segments(graph):
     anchor_seg_nums |= set([x.number for x in graph.get_no_copy_depth_segments()
                             if x.get_length() >= graph_n80])
 
-    # Finally we include any very long contigs, regardless of their copy depth.
+    # We also include any very long contigs, regardless of their copy depth.
     anchor_seg_nums |= set([x.number for x in graph.segments.values()
                             if x.get_length() >= graph_n50])
 
-    # TO DO: I could look on a per-connected component basis to possibly let in additional, smaller
-    # segments. This is particularly to deal with the case of where two very similar small plasmids
-    # are present in the genome. They may max out at 500 bp segments or something, but we should
-    # include those so we don't lose the plasmids in the final assembly.
+    # Look for connected components without dead ends which don't have any anchor segments. If
+    # there are any, then we should add some anchor segments for that component. This might happen
+    # if there are some very tangled small plasmids which don't meet the MIN_SINGLE_COPY_LENGTH
+    # threshold. Or if some weird graph connections confounded the multiplicity algorithm.
+    connected_components = graph.get_connected_components()
+    for component in connected_components:
+        dead_ends = sum(graph.dead_end_count(seg) for seg in component)
+        anchor_seg_count = sum((1 if seg in anchor_seg_nums else 0) for seg in component)
+        if dead_ends > 0 or anchor_seg_count > 0:
+            continue
+
+        # First try to get single-copy segments (potentially quite short).
+        new_anchor_segs = [seg for seg in component if graph.is_seg_num_single_copy(seg)]
+
+        # If that didn't work, then look for the longest segment in the component which has a
+        # single link on at least one end.
+        if not new_anchor_segs:
+            for seg in sorted(component, key=lambda x: graph.segments[x].get_length(),
+                              reverse=True):
+                if len(graph.forward_links[seg]) == 1 or len(graph.reverse_links[seg]) == 1:
+                    new_anchor_segs = [seg]
+                    break
+
+        # Hopefully we found something...
+        if new_anchor_segs:
+            anchor_seg_nums |= set(new_anchor_segs)
 
     anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums], reverse=True,
                               key=lambda x: x.get_length())

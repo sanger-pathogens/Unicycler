@@ -1043,13 +1043,16 @@ class AssemblyGraph(object):
         else:  # 4+
             return 'red'
 
+    def is_seg_num_single_copy(self, seg_num):
+        return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
+
     def get_single_copy_segments(self):
         """
         Returns a list of the graph segments with a copy number of 1.
         """
         single_copy_segments = []
         for num, segment in self.segments.items():
-            if num in self.copy_depths and len(self.copy_depths[num]) == 1:
+            if self.is_seg_num_single_copy(num):
                 single_copy_segments.append(segment)
         return single_copy_segments
 
