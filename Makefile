@@ -102,7 +102,7 @@ debug: $(TARGET)
 
 
 $(TARGET): $(OBJECTS)
-	$(CXX) $(FLAGS) $(CXXFLAGS) $(LDFLAGS) -Wl,$(SONAME),$(TARGET) -o $(TARGET) $(OBJECTS)
+	$(CXX) $(FLAGS) $(CXXFLAGS) -Wl,$(SONAME),$(TARGET) -o $(TARGET) $(OBJECTS) $(LDFLAGS)
 
 clean:
 	$(RM) $(OBJECTS)
