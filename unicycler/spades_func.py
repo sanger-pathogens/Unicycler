@@ -231,13 +231,24 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     if return_code != 0:
         quit_with_error('SPAdes crashed!')
 
-    # Read error correction should be done now, so copy the correct read files to a more permanent
-    # location.
+    # Read error correction should be done now, so copy the corrected read files to a more
+    # permanent location.
     if using_paired_reads:
         short1_no_extension = strip_read_extensions(short1)
         short2_no_extension = strip_read_extensions(short2)
+
+        # Try to deal with particularly strange names for paired reads.
+        if short1_no_extension in short2_no_extension or short2_no_extension in short1_no_extension:
+            for i in range(min(len(short1), len(short2))):
+                short1_no_extension = os.path.basename(short1)[:i]
+                short2_no_extension = os.path.basename(short2)[:i]
+                if short1_no_extension != short2_no_extension:
+                    break
+        if short1_no_extension in short2_no_extension or short2_no_extension in short1_no_extension:
+            quit_with_error('could not process read file names')
     else:
         short1_no_extension, short2_no_extension = '', ''
+
     corrected_dir = os.path.join(read_correction_dir, 'corrected')
     files = os.listdir(corrected_dir)
     for spades_file in files:

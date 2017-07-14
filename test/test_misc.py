@@ -209,11 +209,61 @@ class TestMiscFunctions(unittest.TestCase):
         self.assertAlmostEqual(unicycler.misc.score_function(100000000000000.0, 1.0), 1.0)
         self.assertAlmostEqual(unicycler.misc.score_function(100000000000000.0, 10.0), 1.0)
 
-    def test_strip_read_extensions(self):
+    def test_strip_read_extensions_fasta(self):
         self.assertEqual(unicycler.misc.strip_read_extensions('file.fasta'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('file.fasta.gz'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fasta'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fasta.gz'), 'file')
+
+    def test_strip_read_extensions_fna(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fna'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fna.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fna'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fna.gz'), 'file')
+
+    def test_strip_read_extensions_fa(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fa'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fa.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fa'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fa.gz'), 'file')
+
+    def test_strip_read_extensions_other_fasta(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fas'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fsa.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fas'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fsa.gz'), 'file')
+
+    def test_strip_read_extensions_fastq(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fastq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fastq.gz'), 'file')
+
+    def test_strip_read_extensions_fq(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fq.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fq.gz'), 'file')
+
+    def test_strip_read_extensions_capitals(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('FILE.FASTA'), 'FILE')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.FNA.GZ'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/FILE.fa.gz'), 'FILE')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/FiLe.FaStQ'), 'FiLe')
+
+    def test_strip_read_extensions_fastq_extra_dots(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R1.fastq'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R2.fastq'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R1.fasta.gz'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R2.fasta.gz'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R1.fasta'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R2.fasta'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R1.fasta.gz'),
+                         'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R2.fasta.gz'),
+                         'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.R1'), 'file.fastq.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.R2'), 'file.fastq.R2')
 
     def test_add_line_breaks_to_sequence(self):
         self.assertEqual(unicycler.misc.add_line_breaks_to_sequence('ATGCTGATGAAAATACC', 4),

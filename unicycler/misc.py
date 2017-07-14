@@ -437,9 +437,10 @@ def strip_read_extensions(read_file_name):
     """
     base_name = os.path.basename(read_file_name)
     name_parts = base_name.split('.')
-    for i in range(2):
-        if len(name_parts) > 1 and len(name_parts[-1]) <= 5:
-            name_parts = name_parts[:-1]
+
+    endings_to_trim = ['gz', 'fasta', 'fna', 'fa', 'fas', 'fsa', 'fastq', 'fq']
+    while name_parts[-1].lower() in endings_to_trim:
+        name_parts = name_parts[:-1]
     return '.'.join(name_parts)
 
 
