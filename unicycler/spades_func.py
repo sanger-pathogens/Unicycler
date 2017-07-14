@@ -36,6 +36,9 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     if not os.path.exists(spades_dir):
         os.makedirs(spades_dir)
 
+    # SPAdes can possibly crash if given too many threads, so limit it to 32.
+    threads = min(threads, 32)
+
     if no_spades_correct:
         reads = (short1, short2, short_unpaired)
     else:

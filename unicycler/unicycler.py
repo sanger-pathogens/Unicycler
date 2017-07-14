@@ -34,7 +34,7 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
     tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
     samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
-    racon_path_and_version, bcftools_path_and_version, gfa_path
+    racon_path_and_version, bcftools_path_and_version, gfa_path, red
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -661,6 +661,10 @@ def print_intro_message(args, full_command, out_dir_message):
     log.log('Unicycler version: v' + __version__)
     log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
     log.log('')
+    if args.threads > 2 * get_default_thread_count():
+        log.log(red('Warning: you have specified a lot more threads than this machine seems to '
+                    'have! Was this intentional?'))
+        log.log('')
     log.log(out_dir_message)
 
     if short_reads_available:
