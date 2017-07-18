@@ -1972,46 +1972,60 @@ class AssemblyGraph(object):
             if edge in group_1 or edge in group_2:
                 continue
 
+            new_group_1 = set()
+            new_group_2 = set()
+
             # Put an edge in the first group (arbitrary decision).
-            group_1.add(edge)
+            new_group_1.add(edge)
 
             while True:
-                new_group_1 = set()
-                new_group_2 = set()
+                group_1_size_before = len(new_group_1)
+                group_2_size_before = len(new_group_2)
 
-                for group_1_edge in group_1:
+                group_1_temp = set()
+                group_2_temp = set()
+
+                for group_1_edge in new_group_1:
                     for must_match_edge in must_match[group_1_edge]:
-                        if must_match_edge in group_2 or must_match_edge in new_group_2:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_1.add(must_match_edge)
+                        group_1_temp.add(must_match_edge)
                     for must_differ_edge in must_differ[group_1_edge]:
-                        if must_differ_edge in group_1 or must_differ_edge in new_group_1:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_2.add(must_differ_edge)
+                        group_2_temp.add(must_differ_edge)
 
-                for group_2_edge in group_2:
+                for group_2_edge in new_group_2:
                     for must_match_edge in must_match[group_2_edge]:
-                        if must_match_edge in group_1 or must_match_edge in new_group_1:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_2.add(must_match_edge)
+                        group_2_temp.add(must_match_edge)
                     for must_differ_edge in must_differ[group_2_edge]:
-                        if must_differ_edge in group_2 or must_differ_edge in new_group_2:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_1.add(must_differ_edge)
+                        group_1_temp.add(must_differ_edge)
+
+                new_group_1.update(group_1_temp)
+                new_group_2.update(group_2_temp)
 
                 # We continue to loop until the groups stop growing.
-                group_1_size_before = len(group_1)
-                group_2_size_before = len(group_2)
-                group_1.update(new_group_1)
-                group_2.update(new_group_2)
-                if len(group_1) == group_1_size_before and len(group_2) == group_2_size_before:
+                if len(new_group_1) == group_1_size_before and \
+                        len(new_group_2) == group_2_size_before:
                     break
+
+            group_1.update(new_group_1)
+            group_2.update(new_group_2)
+
         if extra_verbose:
             log.log_progress_line(num_edges, num_edges, end_newline=True)
+
+        # Make sure there are no conflicts.
+        for group_1_edge in group_1:
+            for must_match_edge in must_match[group_1_edge]:
+                if must_match_edge in group_2:
+                    raise CannotTrimOverlaps
+            for must_differ_edge in must_differ[group_1_edge]:
+                if must_differ_edge in group_1:
+                    raise CannotTrimOverlaps
+        for group_2_edge in group_2:
+            for must_match_edge in must_match[group_2_edge]:
+                if must_match_edge in group_1:
+                    raise CannotTrimOverlaps
+            for must_differ_edge in must_differ[group_2_edge]:
+                if must_differ_edge in group_2:
+                    raise CannotTrimOverlaps
 
         # If the code got here, that means that all edges have been grouped according to the
         # rules, so now we produce sets of what to do for each segment. Segments in the
