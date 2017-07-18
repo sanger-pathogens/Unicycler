@@ -1877,6 +1877,10 @@ class AssemblyGraph(object):
         This function removes all overlaps from the graph by shortening segments. It assumes that
         all overlaps in the graph are the same size.
         """
+        if self.overlap == 0:
+            log.log('Graph has no overlaps - overlap removal not needed')
+            return
+
         # First we create a set of all graph edges, in both directions.
         all_edges = set()
         for start, ends in self.forward_links.items():
@@ -1956,7 +1960,15 @@ class AssemblyGraph(object):
         ordered_edges = list(all_edges)
         group_1 = set()
         group_2 = set()
+        num_edges = len(ordered_edges)
+        extra_verbose = log.logger.stdout_verbosity_level > 2
+        if extra_verbose:
+            log.log('Grouping graph edges based on overlap removal')
+        edge_num = 0
         for edge in ordered_edges:
+            if extra_verbose:
+                log.log_progress_line(edge_num, num_edges)
+                edge_num += 1
             if edge in group_1 or edge in group_2:
                 continue
 
@@ -1998,6 +2010,8 @@ class AssemblyGraph(object):
                 group_2.update(new_group_2)
                 if len(group_1) == group_1_size_before and len(group_2) == group_2_size_before:
                     break
+        if extra_verbose:
+            log.log_progress_line(num_edges, num_edges, end_newline=True)
 
         # If the code got here, that means that all edges have been grouped according to the
         # rules, so now we produce sets of what to do for each segment. Segments in the
@@ -2021,7 +2035,7 @@ class AssemblyGraph(object):
                 large_trim_end.add(-end_seg)
 
         # Now we finally do the segment trimming!
-        log.log('Removing graph overlaps\n', 3)
+        log.log('\nRemoving graph overlaps\n', 3)
         log.log('             Bases     Bases', 3)
         log.log('           trimmed   trimmed', 3)
         log.log(' Segment      from      from', 3)
