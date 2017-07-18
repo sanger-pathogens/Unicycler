@@ -961,10 +961,11 @@ class AssemblyGraph(object):
                 starting_segs = list(starting_segs)
                 ending_segs = list(ending_segs)
                 bridge_seq = self.seq_from_signed_seg_num(ending_segs[0])[:self.overlap]
-                for start_seg in starting_segs:
-                    assert bridge_seq == self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
-                for end_seg in ending_segs:
-                    assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
+                if self.overlap > 0:
+                    for start_seg in starting_segs:
+                        assert bridge_seq == self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
+                    for end_seg in ending_segs:
+                        assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
 
                 # Create a new segment to bridge the starting and ending segments.
                 bridge_num = self.get_next_available_seg_number()
