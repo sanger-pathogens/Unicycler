@@ -973,8 +973,8 @@ class AssemblyGraph(object):
                         assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
 
                 log.log('Multi-way junction:', 3)
-                log.log('  ' + ', '.join([str(x) for x in starting_segs]))
-                log.log('  ' + ', '.join([str(x) for x in ending_segs]))
+                log.log('  ' + ', '.join([str(x) for x in starting_segs]), 3)
+                log.log('  ' + ', '.join([str(x) for x in ending_segs]), 3)
                 log.log('', 3)
 
                 # Create a new segment to bridge the starting and ending segments.
