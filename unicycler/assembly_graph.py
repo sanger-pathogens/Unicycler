@@ -957,6 +957,11 @@ class AssemblyGraph(object):
                 if ending_segs_2 != ending_segs:
                     continue
 
+                # Don't allow cases where the same segment is in both starting and ending sets.
+                intersection = starting_segs & ending_segs
+                if intersection:
+                    continue
+
                 # Double-check that all of the overlaps agree.
                 starting_segs = list(starting_segs)
                 ending_segs = list(ending_segs)
@@ -966,6 +971,11 @@ class AssemblyGraph(object):
                         assert bridge_seq == self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
                     for end_seg in ending_segs:
                         assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
+
+                log.log('Multi-way junction:', 3)
+                log.log('  ' + ', '.join([str(x) for x in starting_segs]))
+                log.log('  ' + ', '.join([str(x) for x in ending_segs]))
+                log.log('', 3)
 
                 # Create a new segment to bridge the starting and ending segments.
                 bridge_num = self.get_next_available_seg_number()
