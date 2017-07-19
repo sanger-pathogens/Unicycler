@@ -730,3 +730,107 @@ class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([-5, -4, -3, -2, -1]), 0)
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([12, 13, 14]), 2)
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([-14, -13, -12]), 2)
+
+
+class TestRepairMultiwayJunction(unittest.TestCase):
+    """
+    Tests the AssemblyGraph.repair_multi_way_junctions function
+    """
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_multiway_junction_repair.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def test_graph(self):
+        self.assertEqual(len(self.graph.segments), 32)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 74)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 74)
+
+    def test_repair_multi_way_junctions_1(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_1 = self.graph.get_downstream_seg_nums(1)
+        downstream_2 = self.graph.get_downstream_seg_nums(2)
+        upstream_3 = self.graph.get_upstream_seg_nums(-3)
+        upstream_4 = self.graph.get_upstream_seg_nums(-4)
+        new_seg_num = downstream_1[0]
+        self.assertEqual(downstream_1, [new_seg_num])
+        self.assertEqual(downstream_2, [new_seg_num])
+        self.assertEqual(upstream_3, [new_seg_num])
+        self.assertEqual(upstream_4, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-4, -3])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [1, 2])
+
+    def test_repair_multi_way_junctions_2(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_5 = self.graph.get_downstream_seg_nums(5)
+        downstream_6 = self.graph.get_downstream_seg_nums(6)
+        downstream_7 = self.graph.get_downstream_seg_nums(-7)
+        upstream_8 = self.graph.get_upstream_seg_nums(-8)
+        upstream_9 = self.graph.get_upstream_seg_nums(-9)
+        new_seg_num = downstream_5[0]
+        self.assertEqual(downstream_5, [new_seg_num])
+        self.assertEqual(downstream_6, [new_seg_num])
+        self.assertEqual(downstream_7, [new_seg_num])
+        self.assertEqual(upstream_8, [new_seg_num])
+        self.assertEqual(upstream_9, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-9, -8])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [-7, 5, 6])
+
+    def test_repair_multi_way_junctions_3(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_10 = self.graph.get_downstream_seg_nums(10)
+        downstream_11 = self.graph.get_downstream_seg_nums(11)
+        downstream_12 = self.graph.get_downstream_seg_nums(-12)
+        upstream_13 = self.graph.get_upstream_seg_nums(-13)
+        upstream_14 = self.graph.get_upstream_seg_nums(-14)
+        upstream_15 = self.graph.get_upstream_seg_nums(15)
+        new_seg_num = downstream_10[0]
+        self.assertEqual(downstream_10, [new_seg_num])
+        self.assertEqual(downstream_11, [new_seg_num])
+        self.assertEqual(downstream_12, [new_seg_num])
+        self.assertEqual(upstream_13, [new_seg_num])
+        self.assertEqual(upstream_14, [new_seg_num])
+        self.assertEqual(upstream_15, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-14, -13, 15])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [-12, 10, 11])
+
+    def test_repair_multi_way_junctions_4(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_16 = self.graph.get_downstream_seg_nums(16)
+        downstream_17 = self.graph.get_downstream_seg_nums(16)
+        downstream_18 = self.graph.get_downstream_seg_nums(-18)
+        upstream_19 = self.graph.get_upstream_seg_nums(-19)
+        upstream_20 = self.graph.get_upstream_seg_nums(-20)
+        new_seg_num = downstream_16[0]
+        self.assertEqual(downstream_16, [new_seg_num])
+        self.assertEqual(downstream_17, [new_seg_num])
+        self.assertEqual(downstream_18, [-20])
+        self.assertEqual(upstream_19, [new_seg_num])
+        self.assertEqual(sorted(upstream_20), sorted([-18, new_seg_num]))
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-20, -19])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [16, 17])
+
+    def test_repair_multi_way_junctions_5(self):
+        self.graph.repair_multi_way_junctions()
+        self.graph.save_to_gfa('/Users/Ryan/Desktop/temp.gfa')
+        downstream_21 = self.graph.get_downstream_seg_nums(21)
+        downstream_22 = self.graph.get_downstream_seg_nums(22)
+        downstream_23 = self.graph.get_downstream_seg_nums(-23)
+        upstream_24 = self.graph.get_upstream_seg_nums(-24)
+        upstream_25 = self.graph.get_upstream_seg_nums(-25)
+        upstream_26 = self.graph.get_upstream_seg_nums(26)
+        new_seg_num = downstream_21[0]
+        self.assertEqual(downstream_21, [new_seg_num])
+        self.assertEqual(sorted(downstream_22), sorted([26, new_seg_num]))
+        self.assertEqual(downstream_23, [-25])
+        self.assertEqual(upstream_24, [new_seg_num])
+        self.assertEqual(sorted(upstream_25), sorted([-23, new_seg_num]))
+        self.assertEqual(upstream_26, [22])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-25, -24])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [21, 22])

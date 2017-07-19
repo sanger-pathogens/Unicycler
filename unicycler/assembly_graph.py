@@ -395,12 +395,12 @@ class AssemblyGraph(object):
         """
         Returns a string of the link component of the GFA file for this graph.
         """
-        gfa_link_lines = ''
+        gfa_link_lines = []
         for start, ends in self.forward_links.items():
             for end in ends:
                 if is_link_positive(start, end):
-                    gfa_link_lines += self.gfa_link_line(start, end)
-        return gfa_link_lines
+                    gfa_link_lines.append(self.gfa_link_line(start, end))
+        return ''.join(gfa_link_lines)
 
     def filter_by_read_depth(self, relative_depth_cutoff):
         """
@@ -940,27 +940,30 @@ class AssemblyGraph(object):
                     continue
 
                 # Now for all of the downstream segments, get their upstream segments.
-                starting_segs = set()
+                upstream_segs = set()
                 for ending_seg in ending_segs:
                     if ending_seg in self.reverse_links and self.reverse_links[ending_seg]:
-                        starting_segs.update(self.reverse_links[ending_seg])
-                if len(starting_segs) < 2:
+                        upstream_segs.update(self.reverse_links[ending_seg])
+                if len(upstream_segs) < 2:
                     continue
 
-                # Now for all of the upstream (starting) segments, get their downstream segments.
-                # If this set is the same as the downstream segments of the first segment, then
-                # we have ourselves a multi-way junction!
-                ending_segs_2 = set()
-                for starting_seg in starting_segs:
-                    if starting_seg in self.forward_links and self.forward_links[starting_seg]:
-                        ending_segs_2.update(self.forward_links[starting_seg])
-                if ending_segs_2 != ending_segs:
+                # The starting segments are those upstream segments which lead to each of the
+                # ending segments.
+                starting_segs = set(x for x in upstream_segs if
+                                    ending_segs.issubset(set(self.get_downstream_seg_nums(x))))
+                if len(starting_segs) < 2:
                     continue
 
                 # Don't allow cases where the same segment is in both starting and ending sets.
                 intersection = starting_segs & ending_segs
                 if intersection:
                     continue
+
+                # Sanity check: all starting segments should lead to all ending segments.
+                for start_seg in starting_segs:
+                    for end_seg in ending_segs:
+                        assert end_seg in self.forward_links[start_seg]
+                        assert start_seg in self.reverse_links[end_seg]
 
                 # Double-check that all of the overlaps agree.
                 starting_segs = list(starting_segs)
@@ -973,9 +976,8 @@ class AssemblyGraph(object):
                         assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
 
                 log.log('Multi-way junction:', 3)
-                log.log('  ' + ', '.join([str(x) for x in starting_segs]), 3)
-                log.log('  ' + ', '.join([str(x) for x in ending_segs]), 3)
-                log.log('', 3)
+                log.log('  start segs: ' + ', '.join([str(x) for x in starting_segs]), 3)
+                log.log('  end segs:   ' + ', '.join([str(x) for x in ending_segs]), 3)
 
                 # Create a new segment to bridge the starting and ending segments.
                 bridge_num = self.get_next_available_seg_number()
@@ -985,18 +987,16 @@ class AssemblyGraph(object):
                 bridge_seg = Segment(bridge_num, bridge_depth, bridge_seq, True)
                 bridge_seg.build_other_sequence_if_necessary()
                 self.segments[bridge_num] = bridge_seg
+                log.log('   new seg:   ' + str(bridge_num), 3)
 
                 # Now rebuild the links around the junction.
                 for start_seg in starting_segs:
-                    self.forward_links[start_seg] = [bridge_num]
-                    self.reverse_links[-start_seg] = [-bridge_num]
+                    for end_seg in ending_segs:
+                        self.remove_link(start_seg, end_seg)
+                for start_seg in starting_segs:
+                    self.add_link(start_seg, bridge_num)
                 for end_seg in ending_segs:
-                    self.reverse_links[end_seg] = [bridge_num]
-                    self.forward_links[-end_seg] = [-bridge_num]
-                self.forward_links[bridge_num] = ending_segs
-                self.reverse_links[bridge_num] = starting_segs
-                self.reverse_links[-bridge_num] = [-x for x in ending_segs]
-                self.forward_links[-bridge_num] = [-x for x in starting_segs]
+                    self.add_link(bridge_num, end_seg)
 
                 # Finally, we need to check to see if there were any paths through the junction. If
                 # so, they need to be adjusted to contain the new segment.
@@ -1007,6 +1007,7 @@ class AssemblyGraph(object):
                                                                   end_num, bridge_num)
                             self.paths[name] = insert_num_in_list(self.paths[name], -end_num,
                                                                   -start_num, -bridge_num)
+                log.log('', 3)
                 break
             else:
                 break
