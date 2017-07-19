@@ -743,9 +743,9 @@ class TestRepairMultiwayJunction(unittest.TestCase):
         unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
 
     def test_graph(self):
-        self.assertEqual(len(self.graph.segments), 32)
-        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 74)
-        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 74)
+        self.assertEqual(len(self.graph.segments), 38)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 84)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 84)
 
     def test_repair_multi_way_junctions_1(self):
         self.graph.repair_multi_way_junctions()
@@ -837,7 +837,6 @@ class TestRepairMultiwayJunction(unittest.TestCase):
 
     def test_repair_multi_way_junctions_6(self):
         self.graph.repair_multi_way_junctions()
-        self.graph.save_to_gfa('/Users/Ryan/Desktop/temp.gfa')
         downstream_27 = self.graph.get_downstream_seg_nums(27)
         downstream_28 = self.graph.get_downstream_seg_nums(28)
         downstream_29 = self.graph.get_downstream_seg_nums(-29)

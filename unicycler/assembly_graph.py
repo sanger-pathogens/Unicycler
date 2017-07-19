@@ -16,6 +16,7 @@ not, see <http://www.gnu.org/licenses/>.
 import math
 import copy
 import os
+import itertools
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
 from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
@@ -685,13 +686,25 @@ class AssemblyGraph(object):
         complements too.
         """
         if start in self.forward_links:
-            self.forward_links[start].remove(end)
+            try:
+                self.forward_links[start].remove(end)
+            except ValueError:
+                pass
         if -end in self.forward_links:
-            self.forward_links[-end].remove(-start)
+            try:
+                self.forward_links[-end].remove(-start)
+            except ValueError:
+                pass
         if end in self.reverse_links:
-            self.reverse_links[end].remove(start)
+            try:
+                self.reverse_links[end].remove(start)
+            except ValueError:
+                pass
         if -start in self.reverse_links:
-            self.reverse_links[-start].remove(-end)
+            try:
+                self.reverse_links[-start].remove(-end)
+            except ValueError:
+                pass
 
     def seq_from_signed_seg_num(self, signed_num):
         """
@@ -928,53 +941,80 @@ class AssemblyGraph(object):
         overlap size) to bridge the connection.
         For example: A->B,C and D->B,C becomes A->E and D->E and E->B and E->C
         """
-        while True:
-            seg_nums = list(self.segments) + [-x for x in self.segments]
-            for seg_num in seg_nums:
+        seg_nums = list(self.segments) + [-x for x in self.segments]
+        already_examined = set()
+        for seg_num in seg_nums:
+            if seg_num in already_examined:
+                continue
 
-                # For the segment, get all of its downstream segments.
-                if seg_num not in self.forward_links:
-                    continue
-                ending_segs = set(self.forward_links[seg_num])
-                if len(ending_segs) < 2:
-                    continue
+            upstream_segs = {seg_num}
+            downstream_segs = set()
 
-                # Now for all of the downstream segments, get their upstream segments.
-                upstream_segs = set()
-                for ending_seg in ending_segs:
-                    if ending_seg in self.reverse_links and self.reverse_links[ending_seg]:
-                        upstream_segs.update(self.reverse_links[ending_seg])
-                if len(upstream_segs) < 2:
-                    continue
+            # Keep growing the upstream and downstream steps until they stop getting bigger.
+            while True:
+                upstream_size = len(upstream_segs)
+                downstream_size = len(downstream_segs)
+                for upstream_seg in upstream_segs:
+                    downstream_segs.update(self.get_downstream_seg_nums(upstream_seg))
+                for downstream_seg in downstream_segs:
+                    upstream_segs.update(self.get_upstream_seg_nums(downstream_seg))
+                if len(upstream_segs) == upstream_size and len(downstream_segs) == downstream_size:
+                    break
+            if len(upstream_segs) < 2 or len(downstream_segs) < 2:
+                continue
 
-                # The starting segments are those upstream segments which lead to each of the
-                # ending segments.
-                starting_segs = set(x for x in upstream_segs if
-                                    ending_segs.issubset(set(self.get_downstream_seg_nums(x))))
-                if len(starting_segs) < 2:
-                    continue
+            # We're looking at this group now so we can skip them in the future.
+            already_examined.update(upstream_segs)
+            already_examined.update([-s for s in downstream_segs])
 
-                # Don't allow cases where the same segment is in both starting and ending sets.
-                intersection = starting_segs & ending_segs
-                if intersection:
-                    continue
+            # Skip groups that are too large (otherwise checking each subset will take way too
+            # long).
+            if len(upstream_segs) > 8:
+                continue
 
-                # Sanity check: all starting segments should lead to all ending segments.
-                for start_seg in starting_segs:
-                    for end_seg in ending_segs:
-                        assert end_seg in self.forward_links[start_seg]
-                        assert start_seg in self.reverse_links[end_seg]
+            # Examine every subset in the upstream segments of size 2 or larger. This includes the
+            # full set.
+            starting_seg_groups = []
+            ending_seg_groups = []
+            used_upstream_subsets = []
+            for i in range(len(upstream_segs), 1, -1):
+                upstream_subsets = set(itertools.combinations(upstream_segs, i))
+                for upstream_subset in upstream_subsets:
 
-                # Double-check that all of the overlaps agree.
-                starting_segs = list(starting_segs)
-                ending_segs = list(ending_segs)
-                bridge_seq = self.seq_from_signed_seg_num(ending_segs[0])[:self.overlap]
-                if self.overlap > 0:
+                    # No need to examine this subset if we've already made use of a larger subset
+                    # which contains it.
+                    if any(set(upstream_subset).issubset(x) for x in used_upstream_subsets):
+                        continue
+
+                    # Now that we have some upstream segments to look at, see if there are more
+                    # than one downstream segments which lead back to all of them.
+                    downstream_subset = set()
+                    for upstream_seg in upstream_subset:
+                        downstream_subset.update(self.get_downstream_seg_nums(upstream_seg))
+                    downstream_subset = [x for x in downstream_subset
+                                         if all(y in self.get_upstream_seg_nums(x)
+                                                for y in upstream_subset)]
+                    if len(downstream_subset) < 2:
+                        continue
+
+                    # If we got here, then the combination of segments looks good!
+                    used_upstream_subsets.append(set(upstream_subset))
+                    starting_segs = sorted(list(upstream_subset))
+                    ending_segs = sorted(list(downstream_subset))
+
+                    # Sanity check: all upstream segments should lead to all downstream segments.
                     for start_seg in starting_segs:
-                        assert bridge_seq == self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
-                    for end_seg in ending_segs:
-                        assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
+                        for end_seg in ending_segs:
+                            assert end_seg in self.forward_links[start_seg]
+                            assert start_seg in self.reverse_links[end_seg]
 
+                    # We'll set it aside to make a small bridge segment to replace the links
+                    # between the start and end segments.
+                    starting_seg_groups.append(starting_segs)
+                    ending_seg_groups.append(ending_segs)
+
+            assert len(starting_seg_groups) == len(ending_seg_groups)
+            for starting_segs, ending_segs in zip(starting_seg_groups, ending_seg_groups):
                 log.log('Multi-way junction:', 3)
                 log.log('  start segs: ' + ', '.join([str(x) for x in starting_segs]), 3)
                 log.log('  end segs:   ' + ', '.join([str(x) for x in ending_segs]), 3)
@@ -984,6 +1024,7 @@ class AssemblyGraph(object):
                 start_seg_depth_sum = sum(self.segments[abs(x)].depth for x in starting_segs)
                 end_seg_depth_sum = sum(self.segments[abs(x)].depth for x in ending_segs)
                 bridge_depth = (start_seg_depth_sum + end_seg_depth_sum) / 2.0
+                bridge_seq = self.seq_from_signed_seg_num(ending_segs[0])[:self.overlap]
                 bridge_seg = Segment(bridge_num, bridge_depth, bridge_seq, True)
                 bridge_seg.build_other_sequence_if_necessary()
                 self.segments[bridge_num] = bridge_seg
@@ -998,8 +1039,8 @@ class AssemblyGraph(object):
                 for end_seg in ending_segs:
                     self.add_link(bridge_num, end_seg)
 
-                # Finally, we need to check to see if there were any paths through the junction. If
-                # so, they need to be adjusted to contain the new segment.
+                # Finally, we need to check to see if there were any paths through the junction.
+                # If so, they need to be adjusted to contain the new segment.
                 for name in self.paths:
                     for start_num in starting_segs:
                         for end_num in ending_segs:
@@ -1008,9 +1049,6 @@ class AssemblyGraph(object):
                             self.paths[name] = insert_num_in_list(self.paths[name], -end_num,
                                                                   -start_num, -bridge_num)
                 log.log('', 3)
-                break
-            else:
-                break
 
     def remove_unnecessary_links(self):
         """
