@@ -834,3 +834,27 @@ class TestRepairMultiwayJunction(unittest.TestCase):
         self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
         self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-25, -24])
         self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [21, 22])
+
+    def test_repair_multi_way_junctions_6(self):
+        self.graph.repair_multi_way_junctions()
+        self.graph.save_to_gfa('/Users/Ryan/Desktop/temp.gfa')
+        downstream_27 = self.graph.get_downstream_seg_nums(27)
+        downstream_28 = self.graph.get_downstream_seg_nums(28)
+        downstream_29 = self.graph.get_downstream_seg_nums(-29)
+        upstream_30 = self.graph.get_upstream_seg_nums(-30)
+        upstream_31 = self.graph.get_upstream_seg_nums(-31)
+        upstream_32 = self.graph.get_upstream_seg_nums(32)
+        new_seg_num_1 = downstream_27[0]
+        new_seg_num_2 = downstream_29[0]
+        self.assertEqual(downstream_27, [new_seg_num_1])
+        self.assertEqual(sorted(downstream_28), sorted([new_seg_num_1, new_seg_num_2]))
+        self.assertEqual(downstream_29, [new_seg_num_2])
+        self.assertEqual(upstream_30, [new_seg_num_1])
+        self.assertEqual(sorted(upstream_31), sorted([new_seg_num_1, new_seg_num_2]))
+        self.assertEqual(upstream_32, [new_seg_num_2])
+        self.assertEqual(self.graph.segments[abs(new_seg_num_1)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num_1)), [-31, -30])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num_1)), [27, 28])
+        self.assertEqual(self.graph.segments[abs(new_seg_num_2)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num_2)), [-31, 32])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num_2)), [-29, 28])
