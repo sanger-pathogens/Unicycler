@@ -817,7 +817,6 @@ class TestRepairMultiwayJunction(unittest.TestCase):
 
     def test_repair_multi_way_junctions_5(self):
         self.graph.repair_multi_way_junctions()
-        self.graph.save_to_gfa('/Users/Ryan/Desktop/temp.gfa')
         downstream_21 = self.graph.get_downstream_seg_nums(21)
         downstream_22 = self.graph.get_downstream_seg_nums(22)
         downstream_23 = self.graph.get_downstream_seg_nums(-23)
