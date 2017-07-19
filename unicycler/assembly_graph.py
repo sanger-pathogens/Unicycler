@@ -1011,6 +1011,25 @@ class AssemblyGraph(object):
             else:
                 break
 
+    def remove_unnecessary_links(self):
+        """
+        This function specifically looks for cases where two segments are directly linked and also
+        linked via a 0 bp segment. If so, the direct connection is redundant and is deleted.
+        """
+        assert self.overlap == 0
+        seg_nums = list(self.segments) + [-x for x in self.segments]
+        for seg_num in seg_nums:
+            down_segs = self.get_downstream_seg_nums(seg_num)
+            zero_bp_segs = [x for x in down_segs if self.segments[abs(x)].get_length() == 0]
+            for zero_bp_seg in zero_bp_segs:
+                down_segs_2 = self.get_downstream_seg_nums(zero_bp_seg)
+                common_down_segs = set(down_segs) & set(down_segs_2)
+                for common_down_seg in common_down_segs:
+                    try:
+                        self.remove_link(seg_num, common_down_seg)
+                    except ValueError:
+                        pass
+
     def get_next_available_seg_number(self):
         """
         This function finds the largest used segment number and returns the next number.
@@ -2127,8 +2146,9 @@ class AssemblyGraph(object):
                     self.add_link(upstream_seg, downstream_seg)
                 segs_to_remove.append(seg_num)
 
-        if segs_to_remove and not suppress_log:
+        if segs_to_remove:
             self.remove_segments(segs_to_remove)
+        if not suppress_log:
             log.log('')
             log.log('Removed zero-length segments:')
             log.log_number_list(segs_to_remove)
