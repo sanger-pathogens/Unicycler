@@ -2173,17 +2173,25 @@ class AssemblyGraph(object):
             else:
                 reverse_connections = 0
 
+            # Don't delete junction points.
+            if forward_connections > 1 and reverse_connections > 1:
+                continue
+            if forward_connections == 0 and reverse_connections > 1:
+                continue
+            if forward_connections > 1 and reverse_connections == 0:
+                continue
+
+            segs_to_remove.append(seg_num)
+
             if forward_connections == 1 and reverse_connections > 0:
                 downstream_seg = self.forward_links[seg_num][0]
                 for upstream_seg in self.reverse_links[seg_num]:
                     self.add_link(upstream_seg, downstream_seg)
-                segs_to_remove.append(seg_num)
 
             elif reverse_connections == 1 and forward_connections > 0:
                 upstream_seg = self.reverse_links[seg_num][0]
                 for downstream_seg in self.forward_links[seg_num]:
                     self.add_link(upstream_seg, downstream_seg)
-                segs_to_remove.append(seg_num)
 
         if segs_to_remove:
             self.remove_segments(segs_to_remove)

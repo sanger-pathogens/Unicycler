@@ -856,3 +856,126 @@ class TestRepairMultiwayJunction(unittest.TestCase):
         self.assertEqual(self.graph.segments[abs(new_seg_num_2)].get_length(), 0)
         self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num_2)), [-31, 32])
         self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num_2)), [-29, 28])
+
+
+class TestRemoveZeroLengthSegments(unittest.TestCase):
+    """
+    Tests the AssemblyGraph.remove_zero_length_segs function
+    """
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_remove_zero_length_segs.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def link_exists(self, start, end):
+        return (end in self.graph.forward_links[start] and
+                start in self.graph.reverse_links[end] and
+                -start in self.graph.forward_links[-end] and
+                -end in self.graph.reverse_links[-start])
+
+    def test_graph(self):
+        self.assertEqual(len(self.graph.segments), 44)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 114)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 114)
+
+    def test_remove_zero_length_segs_1(self):
+        """
+        Tests that segment 9638 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9638 not in self.graph.segments)
+        self.assertTrue(9469 in self.graph.segments)
+        self.assertTrue(self.link_exists(7719, 2695))
+
+    def test_remove_zero_length_segs_2(self):
+        """
+        Tests that segment 5849 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(5849 not in self.graph.segments)
+        self.assertTrue(self.link_exists(5381, -3894))
+
+    def test_remove_zero_length_segs_3(self):
+        """
+        Tests that segment 6513 has not been removed (it's a junction point).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(6513 in self.graph.segments)
+        self.assertTrue(self.link_exists(8853, 6513))
+        self.assertTrue(self.link_exists(2695, 6513))
+        self.assertTrue(self.link_exists(6513, 8824))
+        self.assertTrue(self.link_exists(6513, 9533))
+
+    def test_remove_zero_length_segs_4(self):
+        """
+        Tests that both segments 8851 and 8852 have been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8851 not in self.graph.segments)
+        self.assertTrue(8852 not in self.graph.segments)
+        self.assertTrue(1435 in self.graph.segments)
+        self.assertTrue(4731 in self.graph.segments)
+        self.assertTrue(self.link_exists(1435, -4731))
+
+    def test_remove_zero_length_segs_5(self):
+        """
+        Tests that segment 4907 has not been removed (it's a junction point and a dead end).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(4907 in self.graph.segments)
+        self.assertTrue(self.link_exists(4907, 8189))
+        self.assertTrue(self.link_exists(4907, -8223))
+
+    def test_remove_zero_length_segs_6(self):
+        """
+        Tests that segment 10029 has been removed (it's a dead end but not a junction).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(10029 not in self.graph.segments)
+        self.assertTrue(9867 in self.graph.segments)
+        self.assertTrue(self.link_exists(9867, 318))
+
+    def test_remove_zero_length_segs_7(self):
+        """
+        Tests that segment 9822 has been removed (it's on a simple path).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9822 not in self.graph.segments)
+        self.assertTrue(self.link_exists(-1435, 7719))
+
+    def test_remove_zero_length_segs_8(self):
+        """
+        Tests that segment 1 has been removed (it's isolated and unconnected).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(1 not in self.graph.segments)
+
+    def test_remove_zero_length_segs_9(self):
+        """
+        Tests that segment 8232 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8232 not in self.graph.segments)
+        self.assertTrue(self.link_exists(7453, 1272))
+        self.assertTrue(self.link_exists(-7450, 1272))
+
+    def test_remove_zero_length_segs_10(self):
+        """
+        Tests that segments 9125 and 9126 have been removed (results in a 3-way split).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9125 not in self.graph.segments)
+        self.assertTrue(9126 not in self.graph.segments)
+        self.assertTrue(self.link_exists(1272, 5430))
+        self.assertTrue(self.link_exists(1272, -3106))
+        self.assertTrue(self.link_exists(1272, 5458))
+
+    def test_remove_zero_length_segs_11(self):
+        """
+        Tests that segments 8854 and 8855 have been removed (in a simple path).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8854 not in self.graph.segments)
+        self.assertTrue(8855 not in self.graph.segments)
+        self.assertTrue(self.link_exists(2695, 6513))
