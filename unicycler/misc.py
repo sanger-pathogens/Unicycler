@@ -268,6 +268,8 @@ def weighted_average(num_1, num_2, weight_1, weight_2):
     A simple weighted mean of two numbers.
     """
     weight_sum = weight_1 + weight_2
+    if weight_sum == 0:
+        return (num_1 + num_2) / 2.0
     return num_1 * (weight_1 / weight_sum) + num_2 * (weight_2 / weight_sum)
 
 
@@ -275,11 +277,10 @@ def weighted_average_list(nums, weights):
     """
     A simple weighted mean of a list of numbers.
     """
-    w_sum = sum(weights)
-    if w_sum == 0.0:
-        return 0.0
-    else:
-        return sum(num * (weights[i] / w_sum) for i, num in enumerate(nums))
+    weight_sum = sum(weights)
+    if weight_sum == 0.0:
+        weights = [1.0] * len(nums)
+    return sum(num * (weights[i] / weight_sum) for i, num in enumerate(nums))
 
 
 def round_to_nearest_odd(num):
