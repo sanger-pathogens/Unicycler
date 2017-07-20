@@ -447,11 +447,11 @@ class AssemblyGraph(object):
 
     def remove_segments(self, nums_to_remove):
         """
-        Given a list of segment numbers to remove, this function rebuilds the graph's segments
-        and links, excluding those segments. It also deletes any paths which contain those
-        segments.
+        This function deletes all segments in the nums_to_remove list, along with their links. It
+        also deletes any paths which contain those segments.
         """
         for num_to_remove in nums_to_remove:
+            assert num_to_remove >= 0  # this function takes positive segment numbers only
             if num_to_remove in self.segments:
                 seg_to_remove = self.segments[num_to_remove]
 
@@ -472,9 +472,15 @@ class AssemblyGraph(object):
             if num in self.copy_depths:
                 del self.copy_depths[num]
 
-        # Rebuild the links for deleted segments.
-        self.forward_links = remove_nums_from_links(self.forward_links, nums_to_remove)
-        self.reverse_links = remove_nums_from_links(self.reverse_links, nums_to_remove)
+        # Remove links for the deleted segments.
+        links_to_remove = set()
+        for num_to_remove in nums_to_remove:
+            for down_seg in self.get_downstream_seg_nums(num_to_remove):
+                links_to_remove.add((num_to_remove, down_seg))
+            for up_seg in self.get_upstream_seg_nums(num_to_remove):
+                links_to_remove.add((up_seg, num_to_remove))
+        for link in links_to_remove:
+            self.remove_link(link[0], link[1])
 
         self.remove_segments_from_paths(nums_to_remove)
 
@@ -588,14 +594,15 @@ class AssemblyGraph(object):
         paths_copy = self.paths.copy()
         outgoing_links = []
         if end in self.forward_links:
-            outgoing_links = self.forward_links[end]
+            outgoing_links = list(self.forward_links[end])
         incoming_links = []
         if start in self.reverse_links:
-            incoming_links = self.reverse_links[start]
+            incoming_links = list(self.reverse_links[start])
         outgoing_links = find_replace_one_val_in_list(outgoing_links, start, new_seg_num)
         outgoing_links = find_replace_one_val_in_list(outgoing_links, -end, -new_seg_num)
         incoming_links = find_replace_one_val_in_list(incoming_links, end, new_seg_num)
         incoming_links = find_replace_one_val_in_list(incoming_links, -start, -new_seg_num)
+
         self.remove_segments([abs(x) for x in merge_path])
 
         # Add the new segment to the graph and give it the links from its source segments.
@@ -690,21 +697,29 @@ class AssemblyGraph(object):
                 self.forward_links[start].remove(end)
             except ValueError:
                 pass
+            if len(self.forward_links[start]) == 0:
+                del self.forward_links[start]
         if -end in self.forward_links:
             try:
                 self.forward_links[-end].remove(-start)
             except ValueError:
                 pass
+            if len(self.forward_links[-end]) == 0:
+                del self.forward_links[-end]
         if end in self.reverse_links:
             try:
                 self.reverse_links[end].remove(start)
             except ValueError:
                 pass
+            if len(self.reverse_links[end]) == 0:
+                del self.reverse_links[end]
         if -start in self.reverse_links:
             try:
                 self.reverse_links[-start].remove(-end)
             except ValueError:
                 pass
+            if len(self.reverse_links[-start]) == 0:
+                del self.reverse_links[-start]
 
     def seq_from_signed_seg_num(self, signed_num):
         """
@@ -753,12 +768,10 @@ class AssemblyGraph(object):
         connected_segments = set()
         if segment_num in self.forward_links:
             downstream_segments = self.forward_links[segment_num]
-            for segment in downstream_segments:
-                connected_segments.add(abs(segment))
+            connected_segments.update([abs(x) for x in downstream_segments])
         if segment_num in self.reverse_links:
             upstream_segments = self.reverse_links[segment_num]
-            for segment in upstream_segments:
-                connected_segments.add(abs(segment))
+            connected_segments.update([abs(x) for x in upstream_segments])
         return list(connected_segments)
 
     def all_segments_below_depth(self, segment_nums, cutoff):
@@ -1683,12 +1696,14 @@ class AssemblyGraph(object):
 
         new_forward_links = {}
         for seg_num, link_nums in self.forward_links.items():
-            new_forward_links[changes[seg_num]] = [changes[x] for x in link_nums]
+            if link_nums:
+                new_forward_links[changes[seg_num]] = [changes[x] for x in link_nums]
         self.forward_links = new_forward_links
 
         new_reverse_links = {}
         for seg_num, link_nums in self.reverse_links.items():
-            new_reverse_links[changes[seg_num]] = [changes[x] for x in link_nums]
+            if link_nums:
+                new_reverse_links[changes[seg_num]] = [changes[x] for x in link_nums]
         self.reverse_links = new_reverse_links
 
         self.copy_depths = {changes[x]: y for x, y in self.copy_depths.items()}
@@ -2496,20 +2511,6 @@ def build_reverse_links(links):
                 reverse_links[end] = []
             reverse_links[end].append(start)
     return reverse_links
-
-
-def remove_nums_from_links(links, nums_to_remove):
-    """
-    This function rebuilds a link dictionary excluding the given numbers.
-    nums_to_remove is expected to be a list of positive (unsigned) segment numbers.
-    """
-    new_links = {}
-    for n_1, n_2 in links.items():
-        if abs(n_1) not in nums_to_remove:
-            new_links[n_1] = [x for x in n_2 if abs(x) not in nums_to_remove]
-            if not new_links[n_1]:
-                del new_links[n_1]
-    return new_links
 
 
 def all_segments_are_one_base(segments):
