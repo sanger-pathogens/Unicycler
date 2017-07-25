@@ -21,6 +21,7 @@ import sys
 import shutil
 import random
 import itertools
+import multiprocessing
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read_simple import create_simple_long_read_bridges
@@ -661,7 +662,7 @@ def print_intro_message(args, full_command, out_dir_message):
     log.log('Unicycler version: v' + __version__)
     log.log('Using ' + str(args.threads) + ' thread' + ('' if args.threads == 1 else 's'))
     log.log('')
-    if args.threads > 2 * get_default_thread_count():
+    if args.threads > 2 * multiprocessing.cpu_count():
         log.log(red('Warning: you have specified a lot more threads than this machine seems to '
                     'have! Was this intentional?'))
         log.log('')
