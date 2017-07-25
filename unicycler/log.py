@@ -105,8 +105,7 @@ def log_progress_line(completed, total, base_pairs=None, end_newline=False):
     Logs a progress line using a carriage return to overwrite the previous progress line. Only the
     final progress line will be written to the log file.
     """
-    progress_str = ''
-    progress_str += int_to_str(completed) + ' / ' + int_to_str(total)
+    progress_str = int_to_str(completed) + ' / ' + int_to_str(total)
     if total > 0:
         percent = 100.0 * completed / total
     else:
