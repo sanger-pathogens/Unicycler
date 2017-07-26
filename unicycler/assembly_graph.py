@@ -2210,7 +2210,7 @@ class AssemblyGraph(object):
 
         if segs_to_remove:
             self.remove_segments(segs_to_remove)
-        if not suppress_log:
+        if not suppress_log and segs_to_remove:
             log.log('')
             log.log('Removed zero-length segments:')
             log.log_number_list(segs_to_remove)
