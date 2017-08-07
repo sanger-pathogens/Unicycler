@@ -232,7 +232,7 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     if spades_error:
         quit_with_error('SPAdes encountered an error: ' + spades_error)
     if return_code != 0:
-        quit_with_error('SPAdes crashed!')
+        quit_with_error('SPAdes crashed! Please view spades.log for more information.')
 
     # Read error correction should be done now, so copy the corrected read files to a more
     # permanent location.
