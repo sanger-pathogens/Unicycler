@@ -36,13 +36,6 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
     graphs have the same dead-end count (e.g. zero!) then the highest kmer is used.
     """
-    log.log_section_header('SPAdes assemblies')
-    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
-                        'assembly graph for each k-mer using the number of contigs (fewer is '
-                        'better) and the number of dead ends (fewer is better). The score '
-                        'function is 1/(c*(d+2)), where c is the contig count and d is the '
-                        'dead end count.')
-
     spades_dir = os.path.join(out_dir, 'spades_assembly')
     if not os.path.exists(spades_dir):
         os.makedirs(spades_dir)
@@ -79,6 +72,13 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count, min_k_frac,
                                 max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
+
+    log.log_section_header('SPAdes assemblies')
+    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
+                        'assembly graph for each k-mer using the number of contigs (fewer is '
+                        'better) and the number of dead ends (fewer is better). The score '
+                        'function is 1/(c*(d+2)), where c is the contig count and d is the '
+                        'dead end count.')
 
     # Conduct a SPAdes assembly for each k-mer and score them to choose the best.
     if verbosity > 1:
