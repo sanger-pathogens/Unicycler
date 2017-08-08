@@ -24,6 +24,10 @@ from .assembly_graph import AssemblyGraph
 from . import log
 
 
+class BadFastq(Exception):
+    pass
+
+
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac,
                           no_spades_correct, expected_linear_seqs):
@@ -32,12 +36,40 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
     graphs have the same dead-end count (e.g. zero!) then the highest kmer is used.
     """
+    log.log_section_header('SPAdes assemblies')
+    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
+                        'assembly graph for each k-mer using the number of contigs (fewer is '
+                        'better) and the number of dead ends (fewer is better). The score '
+                        'function is 1/(c*(d+2)), where c is the contig count and d is the '
+                        'dead end count.')
+
     spades_dir = os.path.join(out_dir, 'spades_assembly')
     if not os.path.exists(spades_dir):
         os.makedirs(spades_dir)
 
     # SPAdes can possibly crash if given too many threads, so limit it to 32.
     threads = min(threads, 32)
+
+    # Make sure that the FASTQ files look good.
+    using_paired_reads = bool(short1) and bool(short2)
+    using_unpaired_reads = bool(short_unpaired)
+    if using_paired_reads:
+        count_1, count_2 = 0, 0
+        try:
+            count_1 = get_read_count(short1)
+        except BadFastq:
+            quit_with_error('this read file is not a properly formatted FASTQ: ' + short1)
+        try:
+            count_2 = get_read_count(short2)
+        except BadFastq:
+            quit_with_error('this read file is not a properly formatted FASTQ: ' + short2)
+        if count_1 != count_2:
+            quit_with_error('the paired read input files have an unequal number of reads')
+    if using_unpaired_reads:
+        try:
+            get_read_count(short_unpaired)
+        except BadFastq:
+            quit_with_error('this read file is not properly formatted as FASTQ: ' + short_unpaired)
 
     if no_spades_correct:
         reads = (short1, short2, short_unpaired)
@@ -48,15 +80,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
                                 max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
 
-    log.log_section_header('SPAdes assemblies')
-    log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
-                        'assembly graph for each k-mer using the number of contigs (fewer is '
-                        'better) and the number of dead ends (fewer is better). The score '
-                        'function is 1/(c*(d+2)), where c is the contig count and d is the '
-                        'dead end count.')
-
-    # Conduct a SPAdes assembly for each k-mer and score them to choose
-    # the best.
+    # Conduct a SPAdes assembly for each k-mer and score them to choose the best.
     if verbosity > 1:
         spades_results_table = [['K-mer', 'Contigs', 'Links', 'Total length', 'N50',
                                  'Longest contig', 'Dead ends', 'Score']]
@@ -70,6 +94,9 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         spades_assembly(reads, assem_dir, kmer_range, threads, spades_path)
 
     existing_graph_files = [x for x in graph_files if x is not None]
+    if not existing_graph_files:
+        quit_with_error('SPAdes failed to produce assemblies. '
+                        'See spades_assembly/assembly/spades.log for more info.')
     median_segment_count = statistics.median(count_segments_in_spades_fastg(x)
                                              for x in existing_graph_files)
 
@@ -205,6 +232,10 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
             log.log('  ' + corrected_2)
         if using_unpaired_reads:
             log.log('  ' + corrected_u)
+        if not using_paired_reads:
+            corrected_1, corrected_2 = None, None
+        if not using_unpaired_reads:
+            corrected_u = None
         return corrected_1, corrected_2, corrected_u
 
     # If the corrected reads don't exist, then we run SPAdes in error correction only mode.
@@ -262,16 +293,21 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
             shutil.move(file_path, corrected_2)
         elif using_unpaired_reads and '_unpaired' in spades_file:
             shutil.move(file_path, corrected_u)
-    shutil.rmtree(read_correction_dir, ignore_errors=True)
+        elif using_unpaired_reads and not using_paired_reads and \
+                spades_file.endswith('.cor.fastq.gz'):
+            shutil.move(file_path, corrected_u)
 
     corrected_1_exists = os.path.isfile(corrected_1)
     corrected_2_exists = os.path.isfile(corrected_2)
     corrected_u_exists = os.path.isfile(corrected_u)
 
     if using_paired_reads and (not corrected_1_exists or not corrected_2_exists):
-        quit_with_error('SPAdes read error correction failed')
+        quit_with_error('SPAdes read error correction failed. '
+                        'See spades_assembly/read_correction/spades.log for more info.')
     if using_unpaired_reads and not corrected_u_exists:
-        quit_with_error('SPAdes read error correction failed')
+        quit_with_error('SPAdes read error correction failed. '
+                        'See spades_assembly/read_correction/spades.log for more info.')
+    shutil.rmtree(read_correction_dir, ignore_errors=True)
 
     if not using_paired_reads:
         corrected_1 = None
@@ -448,6 +484,30 @@ def get_read_lengths(reads_filename):
                 read_lengths.append(len(line.strip()))
             i += 1
     return read_lengths
+
+
+def get_read_count(reads_filename):
+    """
+    Returns the number of reads in the given file.
+    """
+    if reads_filename is None:
+        return 0
+    if get_compression_type(reads_filename) == 'gz':
+        open_func = gzip.open
+    else:  # plain text
+        open_func = open
+    with open_func(reads_filename, 'rb') as reads:
+        read_count = 0
+        i = 0
+        for line in reads:
+            if i % 4 == 0:
+                try:
+                    assert line.startswith(b'@')
+                except AssertionError:
+                    raise BadFastq
+                read_count += 1
+            i += 1
+    return read_count
 
 
 def count_segments_in_spades_fastg(fastg_file):
