@@ -13,7 +13,7 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
-from .misc import float_to_str, print_table, get_right_arrow
+from .misc import print_table, get_right_arrow
 from . import settings
 from . import log
 
@@ -40,13 +40,19 @@ def determine_copy_depth(graph):
     single_copy_depth = graph.get_single_copy_depth()
 
     # Assign single copy status to segments within the tolerance of the single copy depth.
+    # Also, if the graph has manually set multiplicity values (using the ML tag), we also use them
+    # to assign single copy status.
     max_depth = single_copy_depth + settings.INITIAL_SINGLE_COPY_TOLERANCE
     initial_single_copy_segments = []
     for segment in sorted([x for x in graph.segments.values()],
                           key=lambda x: x.get_length(), reverse=True):
-        if segment.depth <= max_depth and okay_for_initial_single_copy(graph, segment):
+        num = segment.number
+        depth = segment.depth
+        if (depth <= max_depth and okay_for_initial_single_copy(graph, segment)) or \
+                (num in graph.manual_multiplicity and graph.manual_multiplicity[num] == 1):
             graph.copy_depths[segment.number] = [segment.depth]
             initial_single_copy_segments.append(segment.number)
+
     if initial_single_copy_segments:
         log.log('\nInitial single copy segments:', 2)
         log.log_number_list(initial_single_copy_segments, 2)
@@ -109,6 +115,9 @@ def assign_single_copy_depth(graph, min_single_copy_length, copy_depth_table):
     for segment in segments:
         if segment.get_length() < min_single_copy_length:
             continue
+        num = segment.number
+        if num in graph.manual_multiplicity and graph.manual_multiplicity[num] != 1:
+            continue
         if exactly_one_link_per_end(graph, segment):
             name_depth_before = get_seg_name_depth_str(graph, segment.number)
             graph.copy_depths[segment.number] = [segment.depth]
@@ -144,14 +153,18 @@ def merge_copy_depths(graph, error_margin, copy_depth_table):
         out_depth_possible = exclusive_outputs and all_have_copy_depths(graph, exclusive_outputs)
         if in_depth_possible:
             depths, error = scale_copy_depths_from_source_segments(graph, num, exclusive_inputs)
-            if error < lowest_error:
+            conflict = (num in graph.manual_multiplicity and
+                        graph.manual_multiplicity[num] != len(depths))
+            if error < lowest_error and not conflict:
                 lowest_error = error
                 best_segment_num = num
                 best_source_nums = exclusive_inputs
                 best_new_depths = depths
         if out_depth_possible:
             depths, error = scale_copy_depths_from_source_segments(graph, num, exclusive_outputs)
-            if error < lowest_error:
+            conflict = (num in graph.manual_multiplicity and
+                        graph.manual_multiplicity[num] != len(depths))
+            if error < lowest_error and not conflict:
                 lowest_error = error
                 best_segment_num = num
                 best_source_nums = exclusive_outputs
@@ -225,7 +238,6 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
         arrangement_count = len(bins) ** len(copy_depths)
         if arrangement_count > settings.MAX_COPY_DEPTH_DISTRIBUTION_ARRANGEMENTS:
             continue
-
         arrangements = shuffle_into_bins(copy_depths, bins, targets)
         if not arrangements:
             continue
@@ -237,7 +249,17 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
             if i == 0 or error < lowest_error:
                 lowest_error = error
                 best_arrangement = arrangement
-        if lowest_error < error_margin:
+
+        # Make sure this redistribution of copy depths does not conflict with any manually assigned
+        # multiplicities.
+        conflict = False
+        if best_arrangement is not None:
+            for connection_num, connection_depths in zip(connections, best_arrangement):
+                if (connection_num in graph.manual_multiplicity and
+                    graph.manual_multiplicity[connection_num] != len(connection_depths)):
+                    conflict = True
+
+        if lowest_error < error_margin and not conflict:
             if assign_copy_depths_where_needed(graph, connections, best_arrangement, error_margin):
                 add_to_copy_depth_table(get_seg_name_depth_str(graph, num),
                                         ' + '.join(get_seg_name_depth_str(graph, x)

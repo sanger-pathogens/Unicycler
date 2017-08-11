@@ -86,7 +86,7 @@ def main():
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.no_correct, args.linear_seqs)
         determine_copy_depth(graph)
-        if args.keep > 0:
+        if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
                               include_insert_size=True)
 

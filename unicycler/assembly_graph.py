@@ -51,6 +51,7 @@ class AssemblyGraph(object):
         self.forward_links = {}  # Dict of signed segment number -> list of signed segment numbers
         self.reverse_links = {}  # Dict of signed segment number <- list of signed segment numbers
         self.copy_depths = {}  # Dict of unsigned segment number -> list of copy depths
+        self.manual_multiplicity = {}  # Dict of unsigned segment number -> multiplicity
         self.paths = {}  # Dict of path name -> list of signed segment numbers
         self.overlap = overlap
         self.insert_size_mean = insert_size_mean
@@ -115,8 +116,10 @@ class AssemblyGraph(object):
                     num = int(line_parts[1])
                     depth = 1.0
                     for part in line_parts:
-                        if part.startswith('DP:') or part.startswith('dp:'):
+                        if part.lower().startswith('dp:'):
                             depth = float(part[5:])
+                        if part.lower().startswith('ml:'):
+                            self.manual_multiplicity[num] = int(part[5:])
                     sequence = line_parts[2]
                     self.segments[num] = Segment(num, depth, sequence, True)
                     self.segments[num].build_other_sequence_if_necessary()
