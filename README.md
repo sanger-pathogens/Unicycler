@@ -43,6 +43,7 @@ Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumi
     * [Very short contigs](#very-short-contigs)
     * [Chromosomes and plasmid depth](#chromosomes-and-plasmid-depth)
     * [Known contamination](#known-contamination)
+    * [Manual multiplicity](#manual-multiplicity)
 * [Other included tools](#other-included-tools)
 * [Paper](#paper)
 * [Acknowledgements](#acknowledgements)
@@ -589,6 +590,20 @@ If your long reads have known contamination, you can use the `--contamination` o
 For example, if you've sequenced two isolates in succession on the same Nanopore flow cell, there may be residual reads from the first sample in the second run. In this case, you can supply a reference/assembly of the first sample to Unicycler when assembling the second sample.
 
 Some Oxford Nanopore protocols include a lambda phage spike-in as a control. Since this is a common contaminant, you can simply use `--contamination lambda` to filter these out (no need to supply a FASTA file).
+
+
+### Manual multiplicity
+
+If Unicycler makes a serious mistake during its multiplicity determination, this can have detrimental effects on the rest of the assembly. I've seen this happen mainly in two scenarios:
+* when the Illumina graph is terrible (multiplcity determination has few graph connections to work with)
+* there are multiple very similar plasmids in the genome (shared sequences between plasmids can be huge, 10s of kbp)
+
+If you believe this has happened in your assembly, you can manually assign multiplicities and try the assembly again. Here's the process:
+* View the short read assembly (`001_best_spades_graph.gfa`) in Bandage and view the region in question. Note that Unicycler's graph colour scheme uses green for single-copy segments and yellow/orange/red for multi-copy segments.
+* For any segments where you disagree with Unicycler's multiplicity, add a `ML` tag to the GFA segment line in `001_best_spades_graph.gfa`. Examples:
+  * If Unicycler called segment 50 single-copy but you think it's actually a 2-copy repeat, add `ML:i:2` to the end of the GFA line starting with `S    50`.
+  * If Unicycler called segment 107 multi-copy but you think it's actually single-copy, add `ML:i:1` to the end of the GFA line starting with `S    107`.
+* Run Unicycler again, pointing to the same output directory. It will take your manually assigned multiplicities into account and hopefully do better!
 
 
 
