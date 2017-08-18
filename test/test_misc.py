@@ -338,3 +338,29 @@ class TestMiscFunctions(unittest.TestCase):
                                       'GAGTTCTGCTGTGATAACGGAGAGAGACTGCGTGTCACGTTCGCGCTGGACTGCTGTGA'
                                       'TCGTGAG')
         os.remove(test_fasta)
+
+    def test_java_version_parsing_1(self):
+        java_version_output = 'java version "1.8.0_77"\n' \
+                              'Java(TM) SE Runtime Environment (build 1.8.0_77-b03)\n' \
+                              'Java HotSpot(TM) 64-Bit Server VM (build 25.77-b03, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.8.0_77')
+
+    def test_java_version_parsing_2(self):
+        java_version_output = 'java version "1.7.0_80"\n' \
+                              'Java(TM) SE Runtime Environment (build 1.7.0_80-b15)\n' \
+                              'Java HotSpot(TM) 64-Bit Server VM (build 24.80-b11, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.7.0_80')
+
+    def test_java_version_parsing_3(self):
+        java_version_output = 'openjdk version "1.8.0_131"\n' \
+                              'OpenJDK Runtime Environment (build 1.8.0_131-8u131-b11-2-b11)\n' \
+                              'OpenJDK 64-Bit Server VM (build 25.131-b11, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.8.0_131')
+
+    def test_java_version_parsing_4(self):
+        java_version_output = 'this is rubbish output'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '')

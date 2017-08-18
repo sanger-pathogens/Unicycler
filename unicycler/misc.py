@@ -945,7 +945,6 @@ def samtools_path_and_version(samtools_path):
             status = 'good'
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-
     return found_samtools_path, version, status
 
 
@@ -957,11 +956,7 @@ def java_path_and_version(java_path):
     command = [found_java_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
-    out = out.decode()
-    if 'openjdk' in out:
-        version = out.split('openjdk version ')[-1].split()[0].replace('"', '')
-    else:
-        version = out.split('java version ')[-1].split()[0].replace('"', '')
+    version = java_version_from_java_output(out.decode())
 
     # Make sure Java is 1.7+
     try:
@@ -976,8 +971,17 @@ def java_path_and_version(java_path):
                 status = 'good'
     except (ValueError, IndexError):
         version, status = '?', 'too old'
-
     return found_java_path, version, status
+
+
+def java_version_from_java_output(java_output):
+    """
+    Parses the Java version from the output of java -version
+    Thanks to @cerebis for this code.
+    """
+    version = re.match(r'^.* version[ \'"]+([^ \'"]+).*$', java_output, re.MULTILINE)
+    version = version.group(1) if version else ''
+    return version
 
 
 def pilon_path_and_version(pilon_path, java_path, args):
