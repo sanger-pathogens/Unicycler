@@ -364,3 +364,27 @@ class TestMiscFunctions(unittest.TestCase):
         java_version_output = 'this is rubbish output'
         version = unicycler.misc.java_version_from_java_output(java_version_output)
         self.assertEqual(version, '')
+
+    def test_spades_version_parsing_1(self):
+        spades_version_output = 'SPAdes v3.10.1'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.10.1')
+
+    def test_spades_version_parsing_2(self):
+        spades_version_output = 'SPAdes v3.8.2'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.8.2')
+
+    def test_spades_version_parsing_3(self):
+        spades_version_output = 'option -v not recognized\nSPAdes genome assembler v.3.5.0\n\n' \
+                                'Usage: SPAdes-3.5.0-Darwin/bin/spades.py [options] ' \
+                                '-o <output_dir>\n\nBasic options:'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.5.0')
+
+    def test_spades_version_parsing_4(self):
+        spades_version_output = 'option -v not recognized\nSPAdes genome assembler v.2.4.0\n\n' \
+                                'Usage: SPAdes-2.4.0-Darwin/bin/spades.py [options] ' \
+                                '-o <output_dir>\n\nBasic options:'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '2.4.0')

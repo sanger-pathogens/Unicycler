@@ -809,11 +809,7 @@ def spades_path_and_version(spades_path):
 
     if not out or 'Verification of expression' in out:
         return found_spades_path, '', 'bad'
-
-    if '-v not recognized' in out:
-        version = out.split('SPAdes genome assembler v.')[-1].split()[0]
-    else:
-        version = out.split('v')[-1]
+    version = spades_version_from_spades_output(out)
 
     # Make sure SPAdes is 3.6.2+
     try:
@@ -836,6 +832,25 @@ def spades_path_and_version(spades_path):
         version, status = '?', 'too old'
 
     return found_spades_path, version, status
+
+
+def spades_version_from_spades_output(spades_output):
+    """
+    Parses the SPAdes version from the output of spades.py -v
+    """
+    try:
+        return re.search(r'v(\d+\.\d+\.\d+)', spades_output).group(1)
+    except (AttributeError, IndexError):
+        pass
+    try:
+        return re.search(r'v\.(\d+\.\d+\.\d+)', spades_output).group(1)
+    except (AttributeError, IndexError):
+        pass
+    try:
+        return re.search(r'\d+\.\d+\.\d+', spades_output).group()
+    except (AttributeError, IndexError):
+        pass
+    return ''
 
 
 def racon_path_and_version(racon_path):
