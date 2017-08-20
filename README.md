@@ -595,7 +595,7 @@ Some Oxford Nanopore protocols include a lambda phage spike-in as a control. Sin
 ### Manual multiplicity
 
 If Unicycler makes a serious mistake during its multiplicity determination, this can have detrimental effects on the rest of the assembly. I've seen this happen mainly in two scenarios:
-* when the Illumina graph is terrible (multiplcity determination has few graph connections to work with)
+* when the Illumina graph is badly fragmented (multiplcity determination has few graph connections to work with)
 * there are multiple very similar plasmids in the genome (shared sequences between plasmids can be huge, 10s of kbp)
 
 If you believe this has happened in your assembly, you can manually assign multiplicities and try the assembly again. Here's the process:
@@ -603,7 +603,7 @@ If you believe this has happened in your assembly, you can manually assign multi
 * For any segments where you disagree with Unicycler's multiplicity, add a `ML` tag to the GFA segment line in `001_best_spades_graph.gfa`. Examples:
   * If Unicycler called segment 50 single-copy but you think it's actually a 2-copy repeat, add `ML:i:2` to the end of the GFA line starting with `S    50`.
   * If Unicycler called segment 107 multi-copy but you think it's actually single-copy, add `ML:i:1` to the end of the GFA line starting with `S    107`.
-* Run Unicycler again, pointing to the same output directory. It will take your manually assigned multiplicities into account and hopefully do better!
+* Run Unicycler again, pointing to the same output directory (with your modified `001_best_spades_graph.gfa` file). It will take your manually assigned multiplicities into account and hopefully do better!
 
 
 
