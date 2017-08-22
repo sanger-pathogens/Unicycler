@@ -414,7 +414,10 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     if strand == 'F':
         s, e, m, r = start, end, middle, repeat
     else:  # strand == 'R'
-        s, e, m, r = -end, -start, -middle, -repeat
+        if middle is None:
+            s, e, m, r = -end, -start, None, -repeat
+        else:
+            s, e, m, r = -end, -start, -middle, -repeat
     alignments = minimap_alignments[read]
 
     last_index_of_start = -1
