@@ -491,7 +491,6 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
             if best_score is None or test_seq_score > best_score:
                 best_score = test_seq_score
                 best_count = loop_count
-        loop_count += 1
 
         # Break when we've hit the max loop count. But if the max isn't our best, then we keep
         # trying higher.
@@ -501,6 +500,8 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
         # Just in case to prevent an infinite loop.
         if loop_count > max_tested_loop_count * 10:
             break
+
+        loop_count += 1
 
     # This read now casts its vote for the best repeat count!
     if best_count is not None:
