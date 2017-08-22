@@ -1637,6 +1637,30 @@ class AssemblyGraph(object):
                 continue
 
             simple_loops.append((start, end, middle, repeat))
+
+        # Simple loops may just have the repeat node loop back to itself (i.e. no separate middle
+        # segment). Look for these structures.
+        for repeat in self.segments:
+            if len(self.forward_links[repeat]) != 2 or len(self.reverse_links[repeat]) != 2:
+                continue
+
+            # Make sure that the repeat loops back to itself.
+            if repeat not in self.forward_links[repeat] or repeat not in self.reverse_links[repeat]:
+                continue
+
+            start_segs = list(self.reverse_links[repeat])
+            start_segs.remove(repeat)
+            end_segs = list(self.forward_links[repeat])
+            end_segs.remove(repeat)
+            if len(start_segs) != 1 or len(end_segs) != 1:
+                continue
+            start = start_segs[0]
+            end = end_segs[0]
+            if abs(start) == abs(repeat) or abs(end) == abs(repeat):
+                continue
+
+            simple_loops.append((start, end, None, repeat))
+
         return simple_loops
 
     def max_path_segment_count(self, seg_num, start_end_depth):
