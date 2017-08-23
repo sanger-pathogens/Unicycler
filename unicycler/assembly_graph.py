@@ -1641,7 +1641,8 @@ class AssemblyGraph(object):
         # Simple loops may just have the repeat node loop back to itself (i.e. no separate middle
         # segment). Look for these structures.
         for repeat in self.segments:
-            if len(self.forward_links[repeat]) != 2 or len(self.reverse_links[repeat]) != 2:
+            if repeat not in self.forward_links or repeat not in self.reverse_links or \
+                    len(self.forward_links[repeat]) != 2 or len(self.reverse_links[repeat]) != 2:
                 continue
 
             # Make sure that the repeat loops back to itself.
