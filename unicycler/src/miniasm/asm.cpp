@@ -8,6 +8,7 @@
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
+#include <limits>
 #include <miniasm/sdict.h>
 
 #include "miniasm/miniasm.h"
@@ -178,7 +179,7 @@ void save_unitig_graph(const ma_ug_t *ug, const sdict_t *d, const ma_sub_t *sub,
     for (i = 0; i < ug->u.n; ++i) { // summary of unitigs
         uint32_t cnt[2];
         ma_utg_t *u = &ug->u.a[i];
-        if (u->start == UINT32_MAX) {
+        if (u->start == std::numeric_limits<uint32_t>::max()) {
             fprintf(fp, "x\tutg%.6dc\t%d\t%d\n", i + 1, u->len, u->n);
         } else {
             for (j = 0; j < 2; ++j) cnt[j] = asg_arc_n(ug->g, i<<1|j);
@@ -233,7 +234,7 @@ ma_ug_t *make_unitig_graph(asg_t *g)
             kdq_push(uint64_t, q, (uint64_t)(end^1)<<32 | l);
             len += l;
         } else { // circular unitig
-            start = end = UINT32_MAX;
+            start = end = std::numeric_limits<uint32_t>::max();
             goto add_unitig; // then it is not necessary to do the backward
         }
         // backward
@@ -249,9 +250,9 @@ ma_ug_t *make_unitig_graph(asg_t *g)
             x = w;
         }
 add_unitig:
-        if (start != UINT32_MAX) mark[start] = mark[end] = 1;
+        if (start != std::numeric_limits<uint32_t>::max()) mark[start] = mark[end] = 1;
         kv_pushp(ma_utg_t, ug->u, &p);
-        p->s = 0, p->start = start, p->end = end, p->len = len, p->n = kdq_size(q), p->circ = (start == UINT32_MAX);
+        p->s = 0, p->start = start, p->end = end, p->len = len, p->n = kdq_size(q), p->circ = (start == std::numeric_limits<uint32_t>::max());
         p->m = p->n;
         kv_roundup32(p->m);
         p->a = (uint64_t*)malloc(8 * p->m);
