@@ -979,3 +979,68 @@ class TestRemoveZeroLengthSegments(unittest.TestCase):
         self.assertTrue(8854 not in self.graph.segments)
         self.assertTrue(8855 not in self.graph.segments)
         self.assertTrue(self.link_exists(2695, 6513))
+
+
+class TestExpandRepeats(unittest.TestCase):
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_expand_repeats.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def test_expand_repeats_1(self):
+        """
+        Tests that the common sequence in segments 3 and 4 (just a C) is moved onto segment 2.
+        """
+        self.assertTrue(self.graph.segments[2].forward_sequence.endswith('AGCGACTGC'))
+        self.assertTrue(self.graph.segments[3].forward_sequence.startswith, 'CAGCGACTAG')
+        self.assertTrue(self.graph.segments[4].forward_sequence.startswith, 'CTGACGAGCA')
+        self.graph.expand_repeats()
+        self.assertTrue(self.graph.segments[2].forward_sequence.endswith('AGCGACTGCC'))
+        self.assertTrue(self.graph.segments[3].forward_sequence.startswith, 'AGCGACTAG')
+        self.assertTrue(self.graph.segments[4].forward_sequence.startswith, 'TGACGAGCA')
+
+    def test_expand_repeats_2(self):
+        """
+        Tests that the common sequence in segments 7 and 8 (GATTAGCG) is moved onto segment 6.
+        """
+        self.assertTrue(self.graph.segments[6].forward_sequence.endswith('TACGATTAGC'))
+        self.assertTrue(self.graph.segments[7].forward_sequence.startswith, 'GATTAGCGGC')
+        self.assertTrue(self.graph.segments[8].forward_sequence.startswith, 'GATTAGCGCA')
+        self.graph.expand_repeats()
+        self.assertTrue(self.graph.segments[6].forward_sequence.endswith('GCGATTAGCG'))
+        self.assertTrue(self.graph.segments[7].forward_sequence.startswith, 'GCTTATCTT')
+        self.assertTrue(self.graph.segments[8].forward_sequence.startswith, 'CACGACATG')
+
+    def test_expand_repeats_3(self):
+        """
+        Tests that the common sequence on both strands of segment 1 is moved onto segment 2.
+        """
+        self.assertEqual(self.graph.segments[1].forward_sequence, 'ATGGGGGGAT')
+        self.assertTrue(self.graph.segments[2].forward_sequence.startswith('CGCTCAGGCG'))
+        self.graph.expand_repeats()
+        self.assertEqual(self.graph.segments[1].forward_sequence, 'GGGGGG')
+        self.assertTrue(self.graph.segments[2].forward_sequence.startswith('ATCGCTCAGGCG'))
+
+    def test_expand_repeats_4(self):
+        """
+        Tests that segment 5 isn't changed, because moving its common sequence (from each strand)
+        onto segment 6 would involve more trimming than the segment could handle.
+        """
+        self.assertEqual(self.graph.segments[5].forward_sequence, 'ATATATATAT')
+        self.assertTrue(self.graph.segments[6].forward_sequence.startswith('CGCTCAGGCG'))
+        self.graph.expand_repeats()
+        self.assertEqual(self.graph.segments[5].forward_sequence, 'ATATATATAT')
+        self.assertTrue(self.graph.segments[6].forward_sequence.startswith('CGCTCAGGCG'))
+
+    def test_expand_repeats_5(self):
+        """
+        Tests that paths through the graph are unchanged by the repeat expansion.
+        """
+        path_1_sequence_before = self.graph.get_path_sequence([-3, -2, 1, 2, 4])
+        path_2_sequence_before = self.graph.get_path_sequence([-7, -6, -5, 6, 8])
+        self.graph.expand_repeats()
+        path_1_sequence_after = self.graph.get_path_sequence([-3, -2, 1, 2, 4])
+        path_2_sequence_after = self.graph.get_path_sequence([-7, -6, -5, 6, 8])
+        self.assertEqual(path_1_sequence_before, path_1_sequence_after)
+        self.assertEqual(path_2_sequence_before, path_2_sequence_after)
