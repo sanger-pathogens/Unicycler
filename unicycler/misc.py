@@ -811,6 +811,9 @@ def spades_path_and_version(spades_path):
         return found_spades_path, '', 'bad'
     version = spades_version_from_spades_output(out)
 
+    if 'python version' in out and 'is not supported' in out:
+        return found_spades_path, '', 'Python problem'
+
     # Make sure SPAdes is 3.6.2+
     try:
         major_version = int(version.split('.')[0])
