@@ -300,9 +300,6 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
                         'are rotated between rounds such that all parts (including the ends) are '
                         'polished well.')
 
-    # Hard-code the aligner used for Racon here: minimap, GraphMap or Unicycler
-    racon_aligner = 'minimap'
-
     polish_dir = os.path.join(miniasm_dir, 'racon_polish')
     if not os.path.isdir(polish_dir):
         os.makedirs(polish_dir)
@@ -330,21 +327,21 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
     current_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_unpolished_unitigs.fasta')
     unitig_graph.save_to_fasta(current_fasta)
 
-    for polish_round_count in range(settings.RACON_POLISH_LOOP_COUNT):
+    if graph is None:  # Long-read-only assembly
+        racon_loop_count = settings.RACON_POLISH_LOOP_COUNT_LONG_ONLY
+    else:  # Hybrid assembly
+        racon_loop_count = settings.RACON_POLISH_LOOP_COUNT_HYBRID
 
-        mappings_filename = os.path.join(polish_dir, ('%03d' % next(counter)) + '_alignments')
-        if racon_aligner == 'minimap':
-            mappings_filename += '.paf'
-        else:
-            mappings_filename += '.sam'
+    for polish_round_count in range(racon_loop_count):
+
+        mappings_filename = os.path.join(polish_dir, ('%03d' % next(counter)) + '_alignments.paf')
         racon_log = os.path.join(polish_dir, ('%03d' % next(counter)) + '_racon.log')
         polished_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_polished.fasta')
         fixed_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_fixed.fasta')
         rotated_fasta = os.path.join(polish_dir, ('%03d' % next(counter)) + '_rotated.fasta')
 
         mapping_quality, unitig_depths = \
-            make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads,
-                                         scoring_scheme, aligner=racon_aligner)
+            make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads)
 
         racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
                            int_to_str(unitig_graph.get_total_segment_length()),
@@ -717,51 +714,22 @@ def find_contig_starts_and_ends(miniasm_dir, assembly_graph, unitig_graph, threa
     return contig_positions, not_found_contig_numbers
 
 
-def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads,
-                                 scoring_scheme, aligner='minimap'):
+def make_racon_polish_alignments(current_fasta, mappings_filename, polish_reads, threads):
     mapping_quality = 0
     unitig_depths = collections.defaultdict(float)
 
-    if aligner == 'minimap':
-        minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, threads, 3,
-                                                     preset_name='find contigs')
-        alignments_by_read = load_minimap_alignments(minimap_alignments_str,
-                                                     filter_overlaps=True, allowed_overlap=10,
-                                                     filter_by_minimisers=True)
-        with open(mappings_filename, 'wt') as mappings:
-            for read_name in sorted(alignments_by_read.keys()):
-                for a in alignments_by_read[read_name]:
-                    mappings.write(a.paf_line)
-                    mappings.write('\n')
-                    mapping_quality += a.matching_bases
-                    unitig_depths[a.ref_name] += a.fraction_ref_aligned()
-
-    elif aligner == 'GraphMap':
-        command = ['graphmap', 'align', '-a', 'anchor', '--rebuild-index',
-                   '-B', '0', '-b', '3', '-r', current_fasta, '-d', polish_reads,
-                   '-o', mappings_filename, '--extcigar', '-t', str(threads)]
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        _, _ = process.communicate()
-        with open(mappings_filename, 'rt') as sam:
-            for sam_line in sam:
-                if 'AS:i:' in sam_line:
-                    mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
-
-    elif aligner == 'Unicycler':
-        references = load_references(current_fasta, section_header=None, show_progress=False)
-        read_dict, read_names, read_filename = load_long_reads(polish_reads, silent=True)
-        min_alignment_len = 1000
-        semi_global_align_long_reads(references, current_fasta, read_dict, read_names,
-                                     read_filename, threads, scoring_scheme, [None], False,
-                                     min_alignment_len, mappings_filename, None, 10, 0, None,
-                                     verbosity=0)
-        with open(mappings_filename, 'rt') as sam:
-            for sam_line in sam:
-                if 'AS:i:' in sam_line:
-                    mapping_quality += int(sam_line.split('AS:i:')[1].split()[0])
-
-    else:
-        assert False
+    minimap_alignments_str = minimap_align_reads(current_fasta, polish_reads, threads, 3,
+                                                 preset_name='find contigs')
+    alignments_by_read = load_minimap_alignments(minimap_alignments_str,
+                                                 filter_overlaps=True, allowed_overlap=10,
+                                                 filter_by_minimisers=True)
+    with open(mappings_filename, 'wt') as mappings:
+        for read_name in sorted(alignments_by_read.keys()):
+            for a in alignments_by_read[read_name]:
+                mappings.write(a.paf_line)
+                mappings.write('\n')
+                mapping_quality += a.matching_bases / a.num_bases
+                unitig_depths[a.ref_name] += a.fraction_ref_aligned()
 
     return mapping_quality, unitig_depths
 
