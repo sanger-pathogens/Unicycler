@@ -20,7 +20,8 @@ import subprocess
 import sys
 import itertools
 import collections
-from .misc import green, red, line_iterator, print_table, int_to_str, reverse_complement, gfa_path
+from .misc import green, red, line_iterator, print_table, int_to_str, float_to_str, \
+    reverse_complement, gfa_path
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments
 from .string_graph import StringGraph, StringGraphSegment, \
@@ -93,15 +94,6 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
 
         # TO DO: identify chimeric reads and throw them out. This was part of miniasm, but it was
         # removed due to 'not working as intended', so I pulled it out of my miniasm as well.
-        #
-        # Idea for chimera detection: Look for regions in reads where some alignments end and then
-        # another alignments start shortly after. If the alignments have a lot of overhang in the
-        # other sequence, that's concerning. If a number of these pop in the same spot, then we're
-        # probably looking at a chimera.
-
-        # TO DO: if there are quite a lot of long reads, I should filter them here by quality.
-        #        Specifically, throw out reads where their minimum average qscore over a window
-        #        gets too low (i.e. reads with bad parts).
 
         save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph,
                                     seg_nums_to_bridge)
@@ -159,8 +151,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                                 gfa_path(args.out, next(counter), 'string_graph'))
 
             string_graph.remove_branching_paths()
-            if args.keep >= 3:
-                string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
+            string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
             log.log('Merging segments into unitigs:')
             unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph,
@@ -176,9 +167,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                         ('' if linear_count == 1 else 's'))
             log.log('  total size = ' + int_to_str(unitig_graph_size) + ' bp')
 
-            if args.keep >= 3:
-                unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
-
+            unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
             if not short_reads_available and args.keep > 0:
                 unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'unitig_graph'),
                                          include_depth=False)
@@ -198,12 +187,9 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                 polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
                                           args.racon_path, args.threads, scoring_scheme,
                                           seg_nums_to_bridge)
-                if args.keep >= 3:
-                    unitig_graph.save_to_gfa(racon_polished_filename)
-
+                unitig_graph.save_to_gfa(racon_polished_filename)
                 if not short_reads_available and args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
-
                 if short_reads_available and args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
                                                       'long_read_assembly'))
@@ -213,8 +199,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
         trim_dead_ends_based_on_miniasm_trimming(graph, miniasm_read_list)
         unitig_graph = place_contigs(miniasm_dir, graph, unitig_graph, args.threads,
                                      scoring_scheme, seg_nums_to_bridge)
-        if args.keep >= 3:
-            unitig_graph.save_to_gfa(contigs_placed_filename, include_depth=False)
+        unitig_graph.save_to_gfa(contigs_placed_filename, include_depth=False)
 
     if args.keep < 3:
         shutil.rmtree(miniasm_dir, ignore_errors=True)
@@ -345,7 +330,7 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
 
         racon_table_row = ['begin' if polish_round_count == 0 else str(polish_round_count),
                            int_to_str(unitig_graph.get_total_segment_length()),
-                           int_to_str(mapping_quality)]
+                           float_to_str(mapping_quality, 2)]
         print_table([racon_table_row], fixed_col_widths=col_widths, left_align_header=False,
                     alignments='LRR', indent=0, header_format='normal', bottom_align_header=False)
 
