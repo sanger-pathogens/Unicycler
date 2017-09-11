@@ -171,6 +171,8 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         copied_paths_file = os.path.join(spades_dir,
                                          'k' + ('%03d' % best_kmer) + '_contigs.paths')
         shutil.copyfile(paths_file, copied_paths_file)
+    else:
+        paths_file = None
 
     # Now we can load and clean the graph again, this time giving it the SPAdes contig paths.
     assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
