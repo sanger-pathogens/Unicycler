@@ -44,6 +44,7 @@ Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumi
     * [Chromosomes and plasmid depth](#chromosomes-and-plasmid-depth)
     * [Known contamination](#known-contamination)
     * [Manual multiplicity](#manual-multiplicity)
+    * [Manual completion](#manual-completion)
 * [Other included tools](#other-included-tools)
 * [Paper](#paper)
 * [Acknowledgements](#acknowledgements)
@@ -604,6 +605,11 @@ If you believe this has happened in your assembly, you can manually assign multi
   * If Unicycler called segment 50 single-copy but you think it's actually a 2-copy repeat, add `ML:i:2` to the end of the GFA line starting with `S    50`.
   * If Unicycler called segment 107 multi-copy but you think it's actually single-copy, add `ML:i:1` to the end of the GFA line starting with `S    107`.
 * Run Unicycler again, pointing to the same output directory (with your modified `001_best_spades_graph.gfa` file). It will take your manually assigned multiplicities into account and hopefully do better!
+
+
+### Manual completion
+
+If Unicycler doesn't complete your bacterial genome assembly on its own, you may be able to complete it manually with a bit of bioinformatics detective work. There's no single, straight-forward procedure for doing so, but I've put together [a few examples on the Unicycler wiki](https://github.com/rrwick/Unicycler/wiki/Tips-for-finishing-genomes) which may be helpful.
 
 
 

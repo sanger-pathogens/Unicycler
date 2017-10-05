@@ -509,7 +509,10 @@ def make_output_directory(out_dir, verbosity):
     Creates the output directory, if it doesn't already exist.
     """
     if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+        try:
+            os.makedirs(out_dir)
+        except OSError:
+            quit_with_error('Unicycler was unable to make the output directory')
         message = 'Making output directory:'
     elif os.listdir(out_dir):
         message = 'The output directory already exists and files may be reused or overwritten:'
@@ -785,7 +788,7 @@ def check_dependencies(args, short_reads_available, long_reads_available):
     for i, row in enumerate(program_table):
         if 'not used' in row:
             row_colours[i] = 'dim'
-        elif 'too old' in row or 'not found' in row or 'bad' in row:
+        elif 'too old' in row or 'not found' in row or 'bad' in row or 'Python problem' in row:
             row_colours[i] = 'red'
 
     print_table(program_table, alignments='LLLL', row_colour=row_colours, max_col_width=60,
@@ -809,6 +812,8 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
         quit_with_error('could not find SPAdes at ' + args.spades_path)
     if spades_status == 'too old':
         quit_with_error('Unicycler requires SPAdes v3.6.2 or higher')
+    if spades_status == 'Python problem':
+        quit_with_error('SPAdes cannot run due to an incompatible Python version')
     if spades_status == 'bad':
         quit_with_error('SPAdes was found but does not produce output (make sure to use '
                         '"spades.py" location, not "spades")')
@@ -829,6 +834,9 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
                         '--samtools_path or use --no_pilon to remove Samtools dependency')
     if java_status == 'not found':
         quit_with_error('could not find java - either specify its location using --java_path or '
+                        'use --no_pilon to remove Java dependency')
+    if java_status == 'bad':
+        quit_with_error('Java did not run correctly - either specify its location using --java_path or '
                         'use --no_pilon to remove Java dependency')
     if pilon_status == 'not found':
         quit_with_error('could not find pilon or pilon*.jar - either specify its location '

@@ -304,7 +304,10 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
                 alignments='RRRRRLRR', indent=0)
 
     for start, end, middle, repeat in loops:
-        loop_table_row = [start, repeat, middle, end]
+        if middle is None:
+            loop_table_row = [start, repeat, '', end]
+        else:
+            loop_table_row = [start, repeat, middle, end]
 
         forward_strand_reads = end_overlap_reads[start] & start_overlap_reads[end]
         reverse_strand_reads = end_overlap_reads[-end] & start_overlap_reads[-start]
@@ -322,7 +325,12 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
         # repeat count, which guides how high we should test.
         mean_start_end_depth = (graph.segments[abs(start)].depth +
                                 graph.segments[abs(end)].depth) / 2
-        best_repeat_guess = int(round(graph.segments[abs(middle)].depth / mean_start_end_depth))
+        if middle is None:
+            repeat_depth = graph.segments[abs(repeat)].depth
+            best_repeat_guess = int(round(repeat_depth / mean_start_end_depth)) - 1
+        else:
+            middle_depth = graph.segments[abs(middle)].depth
+            best_repeat_guess = int(round(middle_depth / mean_start_end_depth))
         best_repeat_guess = max(1, best_repeat_guess)
         max_tested_loop_count = (best_repeat_guess + 1) * 2
 
@@ -380,7 +388,9 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
 
                 bridge_path = [repeat]
                 for _ in range(winning_loop_count):
-                    bridge_path += [middle, repeat]
+                    if middle is not None:
+                        bridge_path.append(middle)
+                    bridge_path.append(repeat)
 
                 bridges.append(SimpleLongReadBridge(graph, start, end, bridge_path, winning_votes,
                                                     votes_against))
@@ -404,7 +414,10 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     if strand == 'F':
         s, e, m, r = start, end, middle, repeat
     else:  # strand == 'R'
-        s, e, m, r = -end, -start, -middle, -repeat
+        if middle is None:
+            s, e, m, r = -end, -start, None, -repeat
+        else:
+            s, e, m, r = -end, -start, -middle, -repeat
     alignments = minimap_alignments[read]
 
     last_index_of_start = -1
@@ -427,8 +440,12 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     bad_middle = False
     for i in range(last_index_of_start + 1, first_index_of_end):
         ref_name = alignments[i].get_signed_ref_name()
-        if ref_name != str(m) and ref_name != str(r):
-            bad_middle = True
+        if m is None:
+            if ref_name != str(r):
+                bad_middle = True
+        else:
+            if ref_name != str(m) and ref_name != str(r):
+                bad_middle = True
     if bad_middle:
         return -1  # vote for bad read
 
@@ -451,12 +468,17 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     start_seg_seq = graph.seq_from_signed_seg_num(s)[start_seg_start_pos:]
     end_seg_seq = graph.seq_from_signed_seg_num(e)[:end_seg_end_pos]
 
-    middle_seq = graph.seq_from_signed_seg_num(m)
+    if m is None:
+        middle_seq = ''
+    else:
+        middle_seq = graph.seq_from_signed_seg_num(m)
     repeat_seq = graph.seq_from_signed_seg_num(r)
 
     best_score = None
     best_count = None
-    for loop_count in range(0, max_tested_loop_count + 1):
+
+    loop_count = 0
+    while True:
         test_seq = start_seg_seq + repeat_seq
         for _ in range(loop_count):
             test_seq += middle_seq + repeat_seq
@@ -469,6 +491,17 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
             if best_score is None or test_seq_score > best_score:
                 best_score = test_seq_score
                 best_count = loop_count
+
+        # Break when we've hit the max loop count. But if the max isn't our best, then we keep
+        # trying higher.
+        if loop_count >= max_tested_loop_count and loop_count != best_count:
+            break
+
+        # Just in case to prevent an infinite loop.
+        if loop_count > max_tested_loop_count * 10:
+            break
+
+        loop_count += 1
 
     # This read now casts its vote for the best repeat count!
     if best_count is not None:

@@ -140,6 +140,7 @@ def create_loop_unrolling_bridges(graph, anchor_segments):
 
     bridges = []
     simple_loops = graph.find_all_simple_loops()
+    simple_loops = [x for x in simple_loops if x[2] is not None]
     seg_nums_to_bridge = set(x.number for x in anchor_segments)
 
     # A simple loop can either be caused by a repeat in one sequence (probably more typical) or by

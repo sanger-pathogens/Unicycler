@@ -202,7 +202,6 @@ class StringGraph(object):
         else:
             log.log('No links needed removal', verbosity=2)
 
-
     def segment_leads_directly_to_contig_in_both_directions(self, seg_name):
         if self.segments[seg_name].contig:
             return True

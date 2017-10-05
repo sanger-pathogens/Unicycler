@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <iostream>
+#include <limits>
+
 #include "minimap/bseq.h"
 #include "minimap/kvec.h"
 #include "minimap/minimap.h"
@@ -111,7 +113,7 @@ static void proc_intv(mm_tbuf_t *b, int which, int k, int min_cnt, int max_gap)
 	// prepare the input array _a_ for LIS
 	b->n = 0;
 	for (i = start; i < end; ++i)
-		if (b->coef.a[i].x != UINT64_MAX)
+		if (b->coef.a[i].x != std::numeric_limits<uint64_t>::max())
 			b->a[b->n++] = b->coef.a[i].y, rid = b->coef.a[i].x << 1 >> 33, rev = b->coef.a[i].x >> 63;
 	if (b->n < min_cnt) return;
 	radix_sort_64(b->a, b->a + b->n);

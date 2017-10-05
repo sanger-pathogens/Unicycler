@@ -68,7 +68,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         reads = (short1, short2, short_unpaired)
     else:
         reads = spades_read_correction(short1, short2, short_unpaired, spades_dir, threads,
-                                       spades_path)
+                                       spades_path, keep)
     kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count, min_k_frac,
                                 max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
@@ -171,6 +171,8 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         copied_paths_file = os.path.join(spades_dir,
                                          'k' + ('%03d' % best_kmer) + '_contigs.paths')
         shutil.copyfile(paths_file, copied_paths_file)
+    else:
+        paths_file = None
 
     # Now we can load and clean the graph again, this time giving it the SPAdes contig paths.
     assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
@@ -198,7 +200,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     return assembly_graph
 
 
-def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path):
+def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path, keep):
     """
     This runs SPAdes with the --only-error-correction option.
     """
@@ -307,7 +309,8 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     if using_unpaired_reads and not corrected_u_exists:
         quit_with_error('SPAdes read error correction failed. '
                         'See spades_assembly/read_correction/spades.log for more info.')
-    shutil.rmtree(read_correction_dir, ignore_errors=True)
+    if keep < 3:
+        shutil.rmtree(read_correction_dir, ignore_errors=True)
 
     if not using_paired_reads:
         corrected_1 = None

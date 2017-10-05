@@ -811,6 +811,9 @@ def spades_path_and_version(spades_path):
         return found_spades_path, '', 'bad'
     version = spades_version_from_spades_output(out)
 
+    if 'python version' in out and 'is not supported' in out:
+        return found_spades_path, '', 'Python problem'
+
     # Make sure SPAdes is 3.6.2+
     try:
         major_version = int(version.split('.')[0])
@@ -971,7 +974,11 @@ def java_path_and_version(java_path):
     command = [found_java_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
-    version = java_version_from_java_output(out.decode())
+    out = out.decode()
+    if 'no java runtime present' in out.lower():
+        return found_java_path, '?', 'bad'
+
+    version = java_version_from_java_output(out)
 
     # Make sure Java is 1.7+
     try:
@@ -994,7 +1001,7 @@ def java_version_from_java_output(java_output):
     Parses the Java version from the output of java -version
     Thanks to @cerebis for this code.
     """
-    version = re.match(r'^.* version[ \'"]+([^ \'"]+).*$', java_output, re.MULTILINE)
+    version = re.search(r'^.* version[ \'"]+([^ \'"]+).*$', java_output, re.MULTILINE)
     version = version.group(1) if version else ''
     return version
 

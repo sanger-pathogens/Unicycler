@@ -112,7 +112,7 @@ def get_insert_size_range(graph, args, polish_dir):
 
     # Perform the alignment with Bowtie2.
     bowtie2_command = [args.bowtie2_path, '-1', args.short1, '-2', args.short2,
-                       '-x', fasta_filename, '--local', '--fast-local',
+                       '-x', fasta_filename, '--fast',
                        '--threads', str(args.threads), '-I', '0', '-X', '5000', '-S', sam_filename]
     log.log(dim('  ' + ' '.join(bowtie2_command)), 2)
     try:

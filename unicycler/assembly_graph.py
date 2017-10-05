@@ -1637,6 +1637,31 @@ class AssemblyGraph(object):
                 continue
 
             simple_loops.append((start, end, middle, repeat))
+
+        # Simple loops may just have the repeat node loop back to itself (i.e. no separate middle
+        # segment). Look for these structures.
+        for repeat in self.segments:
+            if repeat not in self.forward_links or repeat not in self.reverse_links or \
+                    len(self.forward_links[repeat]) != 2 or len(self.reverse_links[repeat]) != 2:
+                continue
+
+            # Make sure that the repeat loops back to itself.
+            if repeat not in self.forward_links[repeat] or repeat not in self.reverse_links[repeat]:
+                continue
+
+            start_segs = list(self.reverse_links[repeat])
+            start_segs.remove(repeat)
+            end_segs = list(self.forward_links[repeat])
+            end_segs.remove(repeat)
+            if len(start_segs) != 1 or len(end_segs) != 1:
+                continue
+            start = start_segs[0]
+            end = end_segs[0]
+            if abs(start) == abs(repeat) or abs(end) == abs(repeat):
+                continue
+
+            simple_loops.append((start, end, None, repeat))
+
         return simple_loops
 
     def max_path_segment_count(self, seg_num, start_end_depth):
@@ -2276,32 +2301,43 @@ class AssemblyGraph(object):
         This function moves sequence into repeat segments, wherever possible.
         """
         for seg_num in sorted(self.segments):  # sort for consistency between runs
+
+            def trim_amount_okay(seg_nums, trim_length):
+                for num in seg_nums:
+                    pos_seg_num = abs(num)
+                    seg_count = [abs(x) for x in seg_nums].count(pos_seg_num)  # should be 1 or 2
+                    if seg_count * trim_length > self.segments[pos_seg_num].get_length():
+                        return False
+                return True
+
             segment = self.segments[seg_num]
             inputs = sorted(self.get_upstream_seg_nums(seg_num))
             exclusive_inputs = sorted(self.get_exclusive_inputs_signed(seg_num))
             if len(inputs) > 1 and inputs == exclusive_inputs:
                 common_end = os.path.commonprefix([self.seq_from_signed_seg_num(x)[::-1]
                                                    for x in inputs])[::-1]
-                if len(common_end) > 0:
+                common_end_len = len(common_end)
+                if common_end_len > 0 and trim_amount_okay(inputs, common_end_len):
                     segment.prepend_to_forward_sequence(common_end)
                     for in_seg in inputs:
                         if in_seg > 0:
-                            self.segments[in_seg].trim_from_end(len(common_end))
+                            self.segments[in_seg].trim_from_end(common_end_len)
                         else:
-                            self.segments[-in_seg].trim_from_start(len(common_end))
+                            self.segments[-in_seg].trim_from_start(common_end_len)
 
             outputs = sorted(self.get_downstream_seg_nums(seg_num))
             exclusive_outputs = sorted(self.get_exclusive_outputs_signed(seg_num))
             if len(outputs) > 1 and outputs == exclusive_outputs:
                 common_start = os.path.commonprefix([self.seq_from_signed_seg_num(x)
                                                      for x in outputs])
-                if len(common_start) > 0:
+                common_start_len = len(common_start)
+                if common_start_len > 0 and trim_amount_okay(outputs, common_start_len):
                     segment.append_to_forward_sequence(common_start)
                     for out_seg in outputs:
                         if out_seg > 0:
-                            self.segments[out_seg].trim_from_start(len(common_start))
+                            self.segments[out_seg].trim_from_start(common_start_len)
                         else:
-                            self.segments[-out_seg].trim_from_end(len(common_start))
+                            self.segments[-out_seg].trim_from_end(common_start_len)
 
     def starts_with_dead_end(self, signed_seg_num):
         """
