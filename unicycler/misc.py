@@ -974,6 +974,10 @@ def java_path_and_version(java_path):
     command = [found_java_path, '-version']
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
+    out = out.decode()
+    if 'no java runtime present' in out.lower():
+        return found_java_path, '?', 'bad'
+
     version = java_version_from_java_output(out.decode())
 
     # Make sure Java is 1.7+

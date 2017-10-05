@@ -835,6 +835,9 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     if java_status == 'not found':
         quit_with_error('could not find java - either specify its location using --java_path or '
                         'use --no_pilon to remove Java dependency')
+    if java_status == 'bad':
+        quit_with_error('Java did not run correctly - either specify its location using --java_path or '
+                        'use --no_pilon to remove Java dependency')
     if pilon_status == 'not found':
         quit_with_error('could not find pilon or pilon*.jar - either specify its location '
                             'using --pilon_path or use --no_pilon to remove Pilon dependency')
