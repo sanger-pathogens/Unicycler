@@ -978,7 +978,7 @@ def java_path_and_version(java_path):
     if 'no java runtime present' in out.lower():
         return found_java_path, '?', 'bad'
 
-    version = java_version_from_java_output(out.decode())
+    version = java_version_from_java_output(out)
 
     # Make sure Java is 1.7+
     try:
