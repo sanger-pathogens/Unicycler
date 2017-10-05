@@ -509,7 +509,10 @@ def make_output_directory(out_dir, verbosity):
     Creates the output directory, if it doesn't already exist.
     """
     if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+        try:
+            os.makedirs(out_dir)
+        except OSError:
+            quit_with_error('Unicycler was unable to make the output directory')
         message = 'Making output directory:'
     elif os.listdir(out_dir):
         message = 'The output directory already exists and files may be reused or overwritten:'
