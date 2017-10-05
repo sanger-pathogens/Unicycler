@@ -1001,7 +1001,7 @@ def java_version_from_java_output(java_output):
     Parses the Java version from the output of java -version
     Thanks to @cerebis for this code.
     """
-    version = re.match(r'^.* version[ \'"]+([^ \'"]+).*$', java_output, re.MULTILINE)
+    version = re.search(r'^.* version[ \'"]+([^ \'"]+).*$', java_output, re.MULTILINE)
     version = version.group(1) if version else ''
     return version
 
