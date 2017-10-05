@@ -236,7 +236,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
         pilon_command = [args.java_path, '-jar', args.pilon_path]
     else:
         pilon_command = [args.pilon_path]
-    pilon_command += ['--genome', input_filename, '--frags', bam_filename, '--changes',
+    pilon_command += ['--genome', input_filename, '--bam', bam_filename, '--changes',
                       '--output', output_prefix, '--outdir', polish_dir, '--fix', fix_type]
     log.log(dim('  ' + ' '.join(pilon_command)), 2)
     try:
