@@ -196,10 +196,9 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
 
     using_paired_reads = bool(args.short1) and bool(args.short2)
     using_unpaired_reads = bool(args.unpaired)
+    assert using_paired_reads or using_unpaired_reads
 
     input_filename = str(round_num) + '_polish_input.fasta'
-    # sam_filename = str(round_num) + '_alignments.sam'
-    # bam_filename = str(round_num) + '_alignments.bam'
     output_prefix = str(round_num) + '_pilon'
     pilon_fasta_filename = str(round_num) + '_pilon.fasta'
     pilon_changes_filename = str(round_num) + '_pilon.changes'
@@ -231,16 +230,20 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
                        '--threads', str(args.threads), '-I', str(insert_size_1st),
                        '-X', str(insert_size_99th), '-x', input_filename]
     if using_paired_reads:
-        pair_sam_filename = str(round_num) + '_pair_alignments.sam'
-        pair_bam_filename = str(round_num) + '_pair_alignments.bam'
-        this_bowtie2_command = bowtie2_command + ['-S', pair_sam_filename, '-1', args.short1, '-2', args.short2]
-        run_bowtie_samtools_commands(args, this_bowtie2_command, pair_sam_filename, pair_bam_filename)
+        paired_sam_filename = str(round_num) + '_paired_alignments.sam'
+        paired_bam_filename = str(round_num) + '_paired_alignments.bam'
+        this_bowtie2_command = bowtie2_command + ['-S', paired_sam_filename, '-1', args.short1, '-2', args.short2]
+        run_bowtie_samtools_commands(args, this_bowtie2_command, paired_sam_filename, paired_bam_filename)
+    else:
+        paired_bam_filename = ''
 
     if using_unpaired_reads:
-        unpr_sam_filename = str(round_num) + '_unpr_alignments.sam'
-        unpr_bam_filename = str(round_num) + '_unpr_alignments.bam'
-        this_bowtie2_command = bowtie2_command + ['-S', unpr_sam_filename, '-U', args.unpaired]
-        run_bowtie_samtools_commands(args, this_bowtie2_command, unpr_sam_filename, unpr_bam_filename)
+        unpaired_sam_filename = str(round_num) + '_unpaired_alignments.sam'
+        unpaired_bam_filename = str(round_num) + '_unpaired_alignments.bam'
+        this_bowtie2_command = bowtie2_command + ['-S', unpaired_sam_filename, '-U', args.unpaired]
+        run_bowtie_samtools_commands(args, this_bowtie2_command, unpaired_sam_filename, unpaired_bam_filename)
+    else:
+        unpaired_bam_filename = ''
 
     # Polish with Pilon.
     if args.pilon_path.endswith('.jar'):
@@ -250,9 +253,9 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     pilon_command += ['--genome', input_filename, '--changes',
                       '--output', output_prefix, '--outdir', polish_dir, '--fix', fix_type]
     if using_paired_reads:
-        pilon_command += ['--frags', pair_bam_filename]
-    if using_paired_reads:
-        pilon_command += ['--unpaired', unpr_bam_filename]
+        pilon_command += ['--frags', paired_bam_filename]
+    if using_unpaired_reads:
+        pilon_command += ['--unpaired', unpaired_bam_filename]
 
     log.log(dim('  ' + ' '.join(pilon_command)), 2)
     try:
@@ -324,12 +327,9 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
         list_of_files = [input_filename, pilon_fasta_filename, pilon_changes_filename,
                          input_filename + '.1.bt2', input_filename + '.2.bt2', input_filename + '.3.bt2',
                          input_filename + '.4.bt2', input_filename + '.rev.1.bt2',
-                         input_filename + '.rev.2.bt2', pilon_output_filename]
-        if using_paired_reads:
-            list_of_files += [pair_bam_filename, pair_bam_filename + '.bai']
-        if using_paired_reads:
-            list_of_files += [unpr_bam_filename, unpr_bam_filename + '.bai']
-
+                         input_filename + '.rev.2.bt2', pilon_output_filename,
+                         paired_bam_filename, paired_bam_filename + '.bai',
+                         unpaired_bam_filename, unpaired_bam_filename + '.bai']
         for f in list_of_files:
             try:
                 os.remove(f)
