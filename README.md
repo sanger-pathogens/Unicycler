@@ -515,7 +515,7 @@ Unicycler may only take an hour or so to assemble a small, simple genome with lo
 
 Using a lot of threads (with the `--threads` option) can make Unicycler run faster too. It will only use up to 8 threads by default, but if you're running it on a big machine with lots of CPU and RAM, feel free to use more!
 
-Unicycler _may_ work with [PyPy](https://pypy.org/) which could significantly speed up parts of its pipeline. I haven't tested this much – if you try it, let me know how you go!
+Unicycler also works with [PyPy](https://pypy.org/) which can speed up parts of its pipeline. However, some of Unicycler's slowest steps are when it calls other tools (like SPAdes) or uses C++ code, so PyPy may not help much. I haven't tested this thoroughly – if you try it, let me know how you go!
 
 
 ### Necessary read length
