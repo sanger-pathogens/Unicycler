@@ -2,6 +2,14 @@
 
 Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a hybrid assembly.
 
+Read more about Unicycler here:
+> [__Wick RR, Judd LM, Gorrie CL, Holt KE.__ Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. _PLoS Comput Biol_ 2017.](http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005595)
+
+And read about how we use it to complete bacterial genomes here:
+> [__Wick RR, Judd LM, Gorrie CL, Holt KE.__ Completing bacterial genome assemblies with multiplex MinION sequencing. _Microb Genom_ 2017.](http://mgen.microbiologyresearch.org/content/journal/mgen/10.1099/mgen.0.000132)
+
+
+
 # Table of contents
 
 * [Introduction](#introduction)
