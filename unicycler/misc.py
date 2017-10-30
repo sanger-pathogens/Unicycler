@@ -985,7 +985,9 @@ def java_path_and_version(java_path):
         major_version = int(version.split('.')[0])
         if major_version < 1:
             status = 'too old'
-        else:
+        elif major_version > 1:
+            status = 'good'
+        else:  # major_version == 1
             minor_version = int(version.split('.')[1])
             if minor_version < 7:
                 status = 'too old'
