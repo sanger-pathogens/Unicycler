@@ -19,7 +19,7 @@ import random
 def make_fake_qual_string(length):
     qual_string = ''
     for i in range(length):
-        qual_string += chr(random.randint(70, 75))
+        qual_string += chr(random.randint(50, 65))
     return qual_string
 
 
