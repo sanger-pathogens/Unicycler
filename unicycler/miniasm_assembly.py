@@ -48,7 +48,7 @@ class MiniasmFailure(Exception):
 
 
 def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_scheme, read_nicknames,
-                              counter, args, anchor_segments):
+                              counter, args, anchor_segments, existing_long_read_assembly):
     log.log_section_header('Assembling contigs and long reads with miniasm')
     if graph is not None:
         log.log_explanation('Unicycler uses miniasm to construct a string graph assembly using '
@@ -63,6 +63,12 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                             'from the short-read assembly and actual long reads which '
                             'overlap two or more of these contigs. It then assembles them with '
                             'miniasm.')
+        if existing_long_read_assembly:
+            log.log_explanation('Since you directly provided a long read assembly (using the '
+                                '--existing_long_read_assembly option), Unicycler will use that '
+                                'instead of performing its own miniasm/Racon assembly. However, '
+                                'Unicycler still runs miniasm as this can provide useful contig '
+                                'trimming information.')
 
     miniasm_dir = os.path.join(args.out, 'miniasm_assembly')
     if not os.path.exists(miniasm_dir):
@@ -184,12 +190,21 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                     unitig_graph = None
 
             if unitig_graph is not None:
-                polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
-                                          args.racon_path, args.threads, scoring_scheme,
-                                          seg_nums_to_bridge)
-                unitig_graph.save_to_gfa(racon_polished_filename)
-                if not short_reads_available and args.keep > 0:
-                    unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
+                # If the user supplied a long read assembly, then we use that instead of doing a
+                # Racon polish.
+                if existing_long_read_assembly:
+                    log.log('')
+                    log.log('Using provided long read assembly instead of running Racon: ' +
+                            existing_long_read_assembly)
+                    log.log('')
+                    unitig_graph = StringGraph(existing_long_read_assembly)
+                else:
+                    polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
+                                              args.racon_path, args.threads, scoring_scheme,
+                                              seg_nums_to_bridge)
+                    unitig_graph.save_to_gfa(racon_polished_filename)
+                    if not short_reads_available and args.keep > 0:
+                        unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
                 if short_reads_available and args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
                                                       'long_read_assembly'))

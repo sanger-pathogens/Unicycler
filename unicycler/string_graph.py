@@ -17,7 +17,8 @@ not, see <http://www.gnu.org/licenses/>.
 import sys
 import re
 from collections import deque, defaultdict
-from .misc import reverse_complement, add_line_breaks_to_sequence, get_right_arrow, bold, load_fasta
+from .misc import reverse_complement, add_line_breaks_to_sequence, get_right_arrow, bold, \
+    load_fasta, load_fasta_with_full_header, get_first_character_of_file
 from .assembly_graph import build_reverse_links
 from . import settings
 from . import log
@@ -40,6 +41,12 @@ class StringGraph(object):
         # If no filename was given, we just make an empty string graph.
         if not filename:
             return
+        if get_first_character_of_file(filename) == '>':
+            self.load_from_fasta(filename)
+        else:
+            self.load_from_gfa(filename)
+
+    def load_from_gfa(self, filename):
 
         # Load in the segments.
         with open(filename, 'rt') as gfa_file:
@@ -72,6 +79,19 @@ class StringGraph(object):
                         self.links[rev_link_tuple] = StringGraphLink(rev_name_2, rev_name_1)
                     self.links[rev_link_tuple].seg_2_overlap = seg_1_to_seg_2_overlap
             self.reverse_links = build_reverse_links(self.forward_links)
+
+    def load_from_fasta(self, filename):
+        """
+        Loads the graph from fasta file. The only links which can be loaded this way are those
+        which circularise a sequence.
+        """
+        fasta_records = load_fasta_with_full_header(filename)
+        for name, header, sequence in fasta_records:
+            self.segments[name] = StringGraphSegment(name, sequence)
+            if 'circular=true' in header.lower():
+                signed_name = name + '+'
+                self.forward_links[signed_name].append(signed_name)
+        self.reverse_links = build_reverse_links(self.forward_links)
 
     def save_to_gfa(self, filename, verbosity=1, newline=False, include_depth=True):
         """

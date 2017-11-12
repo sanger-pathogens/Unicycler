@@ -145,7 +145,7 @@ def main():
     if long_reads_available and not args.no_miniasm:
         string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
                                                  scoring_scheme, read_nicknames, counter, args,
-                                                 anchor_segments)
+                                                 anchor_segments, args.existing_long_read_assembly)
     else:
         string_graph = None
 
@@ -350,6 +350,12 @@ def get_arguments():
     miniasm_group.add_argument('--racon_path', type=str, default='racon',
                                help='Path to the Racon executable'
                                     if show_all_args else argparse.SUPPRESS)
+    miniasm_group.add_argument('--existing_long_read_assembly', type=str, default=None,
+                               help='A pre-prepared long read assembly for the sample in GFA '
+                                    'format. If this option is used, Unicycler will skip the '
+                                    'miniasm/Racon steps and instead use the given assembly '
+                                    '(default: perform long read assembly using miniasm/Racon)'
+                                    if show_all_args else argparse.SUPPRESS)
 
     # Rotation options
     rotation_group = parser.add_argument_group('Assembly rotation',
@@ -459,6 +465,11 @@ def get_arguments():
 
     if not args.short1 and not args.short2 and not args.unpaired and not args.long:
         quit_with_error('no input reads provided (--short1, --short2, --unpaired, --long)')
+
+    if not (args.long and (args.short1 or args.unpaired)):  # if not a hybrid assembly
+        if args.existing_long_read_assembly:
+            quit_with_error('--existing_long_read_assembly can only be used with hybrid '
+                            'assemblies')
 
     if args.keep < 0 or args.keep > 3:
         quit_with_error('--keep must be between 0 and 3 (inclusive)')
@@ -715,7 +726,7 @@ def check_dependencies(args, short_reads_available, long_reads_available):
     program_table.append(spades_row)
 
     # Miniasm/Racon dependencies
-    if args.no_miniasm or not long_reads_available:
+    if args.no_miniasm or args.existing_long_read_assembly or not long_reads_available:
         racon_path, racon_version, racon_status = '', '', 'not used'
     else:
         racon_path, racon_version, racon_status = racon_path_and_version(args.racon_path)

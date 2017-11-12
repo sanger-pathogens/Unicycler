@@ -89,6 +89,8 @@ def check_input_files(args):
         check_file_exists(args.unpaired)
     if args.long:
         check_file_exists(args.long)
+    if args.existing_long_read_assembly:
+        check_file_exists(args.existing_long_read_assembly)
     if args.short1 and args.short2 and args.short1 == args.short2:
         quit_with_error('first and second read pair files cannot be the same file')
 
@@ -296,10 +298,8 @@ def get_compression_type(filename):
                   'bz2': (b'\x42', b'\x5a', b'\x68'),
                   'zip': (b'\x50', b'\x4b', b'\x03', b'\x04')}
     max_len = max(len(x) for x in magic_dict)
-
-    unknown_file = open(filename, 'rb')
-    file_start = unknown_file.read(max_len)
-    unknown_file.close()
+    with open(filename, 'rb') as unknown_file:
+        file_start = unknown_file.read(max_len)
     compression_type = 'plain'
     for file_type, magic_bytes in magic_dict.items():
         if file_start.startswith(magic_bytes):
@@ -311,17 +311,24 @@ def get_compression_type(filename):
     return compression_type
 
 
+def get_open_function(filename):
+    """
+    Returns either open or gzip.open, as appropriate for the file.
+    """
+    if get_compression_type(filename) == 'gz':
+        return gzip.open
+    else:  # plain text
+        return open
+
+
 def get_sequence_file_type(filename):
     """
     Determines whether a file is FASTA or FASTQ.
     """
     if not os.path.isfile(filename):
         quit_with_error('could not find ' + filename)
-    if get_compression_type(filename) == 'gz':
-        open_func = gzip.open
-    else:  # plain text
-        open_func = open
 
+    open_func = get_open_function(filename)
     with open_func(filename, 'rt') as seq_file:
         try:
             first_char = seq_file.read(1)
@@ -377,23 +384,23 @@ def load_fasta(filename):
     Returns a list of tuples (name, seq) for each record in the fasta file.
     """
     fasta_seqs = []
-    fasta_file = open(filename, 'rt')
-    name = ''
-    sequence = ''
-    for line in fasta_file:
-        line = line.strip()
-        if not line:
-            continue
-        if line[0] == '>':  # Header line = start of new contig
-            if name:
-                fasta_seqs.append((name.split()[0], sequence))
-                sequence = ''
-            name = line[1:]
-        else:
-            sequence += line
-    if name:
-        fasta_seqs.append((name.split()[0], sequence))
-    fasta_file.close()
+    open_func = get_open_function(filename)
+    with open_func(filename, 'rt') as fasta_file:
+        name = ''
+        sequence = ''
+        for line in fasta_file:
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '>':  # Header line = start of new contig
+                if name:
+                    fasta_seqs.append((name.split()[0], sequence))
+                    sequence = ''
+                name = line[1:]
+            else:
+                sequence += line
+        if name:
+            fasta_seqs.append((name.split()[0], sequence))
     return fasta_seqs
 
 
@@ -402,23 +409,23 @@ def load_fasta_with_full_header(filename):
     Returns a list of tuples (name, header, seq) for each record in the fasta file.
     """
     fasta_seqs = []
-    fasta_file = open(filename, 'rt')
-    name = ''
-    sequence = ''
-    for line in fasta_file:
-        line = line.strip()
-        if not line:
-            continue
-        if line[0] == '>':  # Header line = start of new contig
-            if name:
-                fasta_seqs.append((name.split()[0], name, sequence))
-                sequence = ''
-            name = line[1:]
-        else:
-            sequence += line
-    if name:
-        fasta_seqs.append((name.split()[0], name, sequence))
-    fasta_file.close()
+    open_func = get_open_function(filename)
+    with open_func(filename, 'rt') as fasta_file:
+        name = ''
+        sequence = ''
+        for line in fasta_file:
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '>':  # Header line = start of new contig
+                if name:
+                    fasta_seqs.append((name.split()[0], name, sequence))
+                    sequence = ''
+                name = line[1:]
+            else:
+                sequence += line
+        if name:
+            fasta_seqs.append((name.split()[0], name, sequence))
     return fasta_seqs
 
 
@@ -726,10 +733,7 @@ def get_all_files_in_current_dir():
 
 
 def convert_fastq_to_fasta(fastq, fasta):
-    if get_compression_type(fastq) == 'gz':
-        open_func = gzip.open
-    else:  # plain text
-        open_func = open
+    open_func = get_open_function(fastq)
     with open_func(fastq, 'rt') as fastq:
         with open(fasta, 'wt') as fasta:
             for line in fastq:
@@ -1103,3 +1107,13 @@ def remove_dupes_preserve_order(lst):
 
 def gfa_path(out_dir, file_num, name):
     return os.path.join(out_dir, str(file_num).zfill(3) + '_' + name + '.gfa')
+
+
+def get_first_character_of_file(filename):
+    open_func = get_open_function(filename)
+    with open_func(filename, 'r') as f:
+        first_line = f.readline()
+        try:
+            return first_line[0]
+        except IndexError:
+            return ''
