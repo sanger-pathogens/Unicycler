@@ -145,6 +145,8 @@ def get_arguments():
                              help='path to samtools executable')
     tools_group.add_argument('--bowtie2', type=str, default='bowtie2',
                              help='path to bowtie2 executable')
+    tools_group.add_argument('--minimap2', type=str, default='minimap2',
+                             help='path to minimap2 executable')
     tools_group.add_argument('--freebayes', type=str, default='freebayes',
                              help='path to freebayes executable')
     tools_group.add_argument('--pitchfork', type=str, default='',
@@ -293,6 +295,10 @@ def get_tool_paths(args, short, pacbio, long_reads):
             sys.exit('Error: could not find arrow')
 
     if long_reads:
+        args.minimap2 = shutil.which(args.minimap2)
+        if not args.minimap2:
+            sys.exit('Error: could not find minimap2')
+
         args.freebayes = shutil.which(args.freebayes)
         if not args.freebayes:
             sys.exit('Error: could not find freebayes')
@@ -509,14 +515,12 @@ def arrow_small_changes(fasta, round_num, args, short, all_ale_scores):
 
 
 def arrow_large_changes(fasta, round_num, args, all_ale_scores, large_changes):
-
     current, round_num, applied_variant = ale_assessed_changes(fasta, round_num, args, False, True,
                                                                all_ale_scores, '',
                                                                'Arrow polish, large variants, '
                                                                'ALE assessed',
                                                                variants=large_changes)
     return current, round_num, applied_variant
-
 
 
 def long_read_polish_small_changes_loop(current, round_num, args, short, all_ale_scores):
@@ -642,12 +646,12 @@ def merge_variants(variants, fasta, args):
             if v.start_pos == variants_to_merge[-1].start_pos + 1:
                 variants_to_merge.append(v)
             else:
-                merged_variants.append(Variant(reference, args.large, variants_to_merge=variants_to_merge))
+                merged_variants.append(Variant(reference, args.large,
+                                               variants_to_merge=variants_to_merge))
                 variants_to_merge = [v]
     if variants_to_merge:
         merged_variants.append(Variant(reference, args.large, variants_to_merge=variants_to_merge))
     return merged_variants
-
 
 
 def long_read_polish_small_changes_pilon(fasta, round_num, args, all_ale_scores,
@@ -690,29 +694,29 @@ def long_read_polish_small_changes_pilon(fasta, round_num, args, all_ale_scores,
     return current, round_num, filtered_variants
 
 
-
 def align_long_reads(fasta, args, bam):
-
-    run_command(['unicycler_align', '--ref', fasta, '--reads', args.long_reads,
-                 '--threads', str(args.threads), '--sam', 'long_read_alignments.sam',
-                 '--sensitivity', '0'], args, nice=True)
-
-    samtools_view_command = [args.samtools, 'view', '-hu', 'long_read_alignments.sam']
+    minimap2_command = [args.minimap2, '-a',
+                        '-x', 'map-ont',
+                        fasta, args.long_reads,
+                        '-t', str(args.threads)]
+    samtools_view_command = [args.samtools, 'view', '-hu', '-']
     samtools_sort_command = [args.samtools, 'sort', '-@', str(args.threads), '-o', bam, '-']
-    print_command(samtools_view_command + ['|'] + samtools_sort_command, args.verbosity)
+    print_command(minimap2_command + ['|'] + samtools_view_command + ['|'] + samtools_sort_command,
+                  args.verbosity)
 
-    samtools_view = subprocess.Popen(samtools_view_command, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE)
+    minimap2 = subprocess.Popen(minimap2_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    samtools_view = subprocess.Popen(samtools_view_command, stdin=minimap2.stdout,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    minimap2.stdout.close()
     samtools_sort = subprocess.Popen(samtools_sort_command, stdin=samtools_view.stdout,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     samtools_view.stdout.close()
     out, err = samtools_sort.communicate()
     if args.verbosity > 2:
-        out = samtools_view.stderr.read() + out + err
+        out = minimap2.stderr.read() + samtools_view.stderr.read() + out + err
         print(dim(out.decode()))
 
     run_command([args.samtools, 'index', bam], args)
-
 
 
 def assign_freebayes_qual_pool(info):
@@ -1306,8 +1310,8 @@ def homopolymer_size(seq, pos):
 
 
 class Variant(object):
-    def __init__(self, reference, large_var_size, gff_line=None, changes_line=None, show_snps_line=None,
-                 variants_to_merge=None):
+    def __init__(self, reference, large_var_size, gff_line=None, changes_line=None,
+                 show_snps_line=None, variants_to_merge=None):
         self.original_gff_line = gff_line
         self.original_changes_line = changes_line
 
@@ -1562,7 +1566,8 @@ def print_variant_table(variants, best_ale_score, initial_ale_score, all_variant
         table.append([v.source, v.ref_name, str(v.start_pos), ref_seq, variant_seq, ale_score_str])
     if all_variants_ale_score is not None:
         text_colour = 'green' if all_variants_ale_score == best_ale_score else 'red'
-        table.append(['All variants', '', '', '', '', colour('%.6f' % all_variants_ale_score, text_colour)])
+        table.append(['All variants', '', '', '', '', colour('%.6f' % all_variants_ale_score,
+                                                             text_colour)])
     print_table(table, alignments='LLRLLR')
 
 
