@@ -1594,17 +1594,17 @@ def analyse_insert_sizes(args):
     if not insert_sizes:
         sys.exit('Error: no insert sizes found! Are you using a current (> 1.0) version of '
                  'Samtools?')
-    min_insert = math.floor(get_percentile_sorted(insert_sizes, 2.5))
+    min_insert = math.floor(get_percentile_sorted(insert_sizes, 1.0))
     mean_insert = statistics.mean(insert_sizes)
-    max_insert = math.ceil(get_percentile_sorted(insert_sizes, 97.5))
+    max_insert = math.ceil(get_percentile_sorted(insert_sizes, 99.0))
     return min_insert, mean_insert, max_insert
 
 
 def print_insert_sizes(min_insert, mean_insert, max_insert):
     print('')
-    print(' 2.5th percentile:', min_insert)
-    print(' mean insert size:', '\033[1m' + '%.1f' % mean_insert + '\033[0m')
-    print('97.5th percentile:', max_insert, flush=True)
+    print('  1st percentile:', min_insert)
+    print('mean insert size:', '\033[1m' + '%.1f' % mean_insert + '\033[0m')
+    print(' 99th percentile:', max_insert, flush=True)
 
 
 def get_starting_round_number():
