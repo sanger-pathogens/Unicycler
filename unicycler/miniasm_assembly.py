@@ -781,7 +781,8 @@ def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_read_list):
                                  int_to_str(contig_start_trim) if contig_start_trim else '-',
                                  int_to_str(contig_end_trim) if contig_end_trim else '-',
                                  int_to_str(ending_length)]
-                    dead_end_trim_table.append(table_row)
+                    if contig_start_trim or contig_end_trim:
+                        dead_end_trim_table.append(table_row)
 
     if len(dead_end_trim_table) > 1:
         print_table(dead_end_trim_table, fixed_col_widths=[7, 10, 7, 7, 10], alignments='LRRRR',
