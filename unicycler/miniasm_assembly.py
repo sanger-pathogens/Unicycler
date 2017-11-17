@@ -757,14 +757,22 @@ def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_read_list):
                     starting_length = contig.get_length()
                     contig_range = line.split(':')[1]
                     contig_start_pos, contig_end_pos = [int(x) for x in contig_range.split('-')]
+
                     contig_start_trim = contig_start_pos - 1  # 1-based range to Python 0-base range
                     contig_end_trim = contig.get_length() - contig_end_pos
 
-                    if contig_start_trim and start_dead_end and \
-                            contig_start_trim <= settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
+                    if not start_dead_end:
+                        contig_start_trim = 0
+                    if not end_dead_end:
+                        contig_end_trim = 0
+                    if contig_start_trim > settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
+                        contig_start_trim = 0
+                    if contig_end_trim > settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
+                        contig_end_trim = 0
+
+                    if contig_start_trim and start_dead_end:
                         contig.trim_from_start(contig_start_trim)
-                    if contig_end_trim and end_dead_end and \
-                            contig_end_trim <= settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
+                    if contig_end_trim and end_dead_end:
                         contig.trim_from_end(contig_end_trim)
 
                     ending_length = contig.get_length()
