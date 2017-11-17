@@ -108,7 +108,8 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
         # alignments are excluded (because single-copy contigs, by definition, should not
         # significantly overlap each other).
         log.log('Finding overlaps with minimap... ', end='')
-        minimap_alignments_str = minimap_align_reads(assembly_reads_filename, assembly_reads_filename,
+        minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
+                                                     assembly_reads_filename,
                                                      args.threads, 0, 'read vs read')
         overlap_count = 0
         with open(mappings_filename, 'wt') as mappings:
@@ -183,7 +184,7 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
             if short_reads_available:
                 estimated_genome_size = graph.get_estimated_sequence_len()
                 target_size = estimated_genome_size * \
-                              settings.REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING
+                    settings.REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING
                 if unitig_graph_size < target_size:
                     log.log('')
                     log.log(red('miniasm assembly too small for bridging'))
@@ -204,7 +205,8 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
                                               seg_nums_to_bridge)
                     unitig_graph.save_to_gfa(racon_polished_filename)
                     if not short_reads_available and args.keep > 0:
-                        unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'racon_polished'))
+                        unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
+                                                          'racon_polished'))
                 if short_reads_available and args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
                                                       'long_read_assembly'))
@@ -757,10 +759,14 @@ def trim_dead_ends_based_on_miniasm_trimming(assembly_graph, miniasm_read_list):
                     contig_start_pos, contig_end_pos = [int(x) for x in contig_range.split('-')]
                     contig_start_trim = contig_start_pos - 1  # 1-based range to Python 0-base range
                     contig_end_trim = contig.get_length() - contig_end_pos
-                    if contig_start_trim:
+
+                    if contig_start_trim and start_dead_end and \
+                            contig_start_trim <= settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
                         contig.trim_from_start(contig_start_trim)
-                    if contig_end_trim:
+                    if contig_end_trim and end_dead_end and \
+                            contig_end_trim <= settings.MAX_MINIASM_DEAD_END_TRIM_SIZE:
                         contig.trim_from_end(contig_end_trim)
+
                     ending_length = contig.get_length()
                     table_row = [int_to_str(contig_number),
                                  int_to_str(starting_length),
