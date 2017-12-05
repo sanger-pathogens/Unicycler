@@ -357,7 +357,7 @@ def full_pilon_loop(current, round_num, args, all_ale_scores):
     """
     Repeatedly apply both small and large variants using Pilon.
     """
-    while True:
+    for _ in range(8):
         current, round_num = pilon_small_changes_loop(current, round_num, args, all_ale_scores)
         current, round_num, variants = pilon_large_changes(current, round_num, args, all_ale_scores)
         if not variants:
