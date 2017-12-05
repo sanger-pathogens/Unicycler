@@ -176,3 +176,8 @@ LONG_READ_BRIDGE_HALF_QUAL_LENGTH = 2000
 # If the miniasm assembly is too small, we won't even consider using for bridging in hybrid
 # assembly. This size is relative to the estimated genome size from the short read assembly.
 REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING = 0.5
+
+# Unicycler trims short read contigs which end in dead ends based on miniasm trimming. This setting
+# limits the amount of trimming it's willing to do. I.e. if miniasm trimmed more than this from a
+# contig, Unicycler won't.
+MAX_MINIASM_DEAD_END_TRIM_SIZE = 100
