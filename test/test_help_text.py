@@ -42,7 +42,7 @@ class TestBasicHelpText(unittest.TestCase):
         self.assertEqual(len(self.stderr), 0)
 
     def test_title(self):
-        self.assertTrue('Unicycler: a hybrid assembly pipeline for bacterial genomes'
+        self.assertTrue('Unicycler: an assembly pipeline for bacterial genomes'
                         in self.stdout)
 
     def test_basic_options(self):
@@ -99,7 +99,7 @@ class TestExtendedHelpText(unittest.TestCase):
         self.assertEqual(len(self.stderr), 0)
 
     def test_title(self):
-        self.assertTrue('Unicycler: a hybrid assembly pipeline for bacterial genomes'
+        self.assertTrue('Unicycler: an assembly pipeline for bacterial genomes'
                         in self.stdout)
 
     def test_basic_options(self):
@@ -156,5 +156,8 @@ class TestEmptyCommand(unittest.TestCase):
         self.assertTrue(len(self.stderr) > 0)
 
     def test_error_message(self):
-        self.assertTrue('usage' in self.stderr)
-        self.assertTrue('error' in self.stderr)
+        # When run without any arguments, Unicycler should print its basic help.
+        self.assertTrue('Unicycler:' in self.stderr)
+        self.assertTrue('Help:' in self.stderr)
+        self.assertTrue('Input:' in self.stderr)
+        self.assertTrue('Output:' in self.stderr)

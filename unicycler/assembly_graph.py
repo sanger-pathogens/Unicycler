@@ -14,11 +14,16 @@ not, see <http://www.gnu.org/licenses/>.
 """
 
 import math
+import copy
+import os
+import itertools
 from collections import deque, defaultdict
 from .assembly_graph_segment import Segment
-from .misc import int_to_str, float_to_str, weighted_average_list, score_function,\
-    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow
+from .misc import int_to_str, float_to_str, weighted_average_list, score_function, \
+    add_line_breaks_to_sequence, print_table, get_dim_timestamp, get_right_arrow, \
+    remove_dupes_preserve_order
 from .bridge_long_read import LongReadBridge
+from .bridge_miniasm import MiniasmBridge
 from . import settings
 from . import log
 
@@ -46,6 +51,7 @@ class AssemblyGraph(object):
         self.forward_links = {}  # Dict of signed segment number -> list of signed segment numbers
         self.reverse_links = {}  # Dict of signed segment number <- list of signed segment numbers
         self.copy_depths = {}  # Dict of unsigned segment number -> list of copy depths
+        self.manual_multiplicity = {}  # Dict of unsigned segment number -> multiplicity
         self.paths = {}  # Dict of path name -> list of signed segment numbers
         self.overlap = overlap
         self.insert_size_mean = insert_size_mean
@@ -110,8 +116,10 @@ class AssemblyGraph(object):
                     num = int(line_parts[1])
                     depth = 1.0
                     for part in line_parts:
-                        if part.startswith('DP:') or part.startswith('dp:'):
+                        if part.lower().startswith('dp:'):
                             depth = float(part[5:])
+                        if part.lower().startswith('ml:'):
+                            self.manual_multiplicity[num] = int(part[5:])
                     sequence = line_parts[2]
                     self.segments[num] = Segment(num, depth, sequence, True)
                     self.segments[num].build_other_sequence_if_necessary()
@@ -217,29 +225,12 @@ class AssemblyGraph(object):
 
     def get_single_copy_depth(self):
         """
-        Determines the single copy read depth for the graph. In haploid and some diploid cases,
-        this will be the median depth. But in some diploid cases, the single copy depth may be at
-        about half the median (because the median depth holds the sequences shared between sister
-        chromosomes). To catch these cases, we look to see whether the graph peaks more strongly
-        at half the median or double the median. In the former case, we move the single copy
-        depth down to half the median.
+        Determines the single copy read depth for the graph (i.e. the median depth by base).
         """
         median_depth = self.get_median_read_depth()
         log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2)
-        bases_near_half_median = self.get_base_count_in_depth_range(median_depth * 0.4,
-                                                                    median_depth * 0.6)
-        bases_near_double_median = self.get_base_count_in_depth_range(median_depth * 1.6,
-                                                                      median_depth * 2.4)
-        total_graph_bases = self.get_total_length()
-        half_median_frac = bases_near_half_median / total_graph_bases
-        double_median_frac = bases_near_double_median / total_graph_bases
-        if half_median_frac > double_median_frac and \
-                half_median_frac >= settings.MIN_HALF_MEDIAN_FOR_DIPLOID:
-            single_copy_depth = median_depth / 2.0
-        else:
-            single_copy_depth = median_depth
-        log.log('Single copy depth:  ' + float_to_str(median_depth, 2), 2)
-        return single_copy_depth
+        log.log('', 2)
+        return median_depth
 
     def get_base_count_in_depth_range(self, min_depth, max_depth):
         """
@@ -299,8 +290,10 @@ class AssemblyGraph(object):
         than 1.
         """
         median_depth = self.get_median_read_depth()
+        if median_depth == 0.0:
+            return
         for segment in self.segments.values():
-            segment.divide_depth(median_depth)
+            segment.depth /= median_depth
 
     def get_total_length(self):
         """
@@ -335,25 +328,27 @@ class AssemblyGraph(object):
             dead_ends += 1
         return dead_ends
 
-    def save_to_fasta(self, filename, newline=False, min_length=1):
+    def save_to_fasta(self, filename, newline=False, min_length=1, verbosity=1, silent=False):
         """
         Saves whole graph (only forward sequences) to a FASTA file.
         """
-        log.log(('\n' if newline else '') + 'Saving ' + filename)
+        if not silent:
+            log.log(('\n' if newline else '') + 'Saving ' + filename, verbosity)
         circular_seg_nums = self.completed_circular_replicons()
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(self.segments.values(), key=lambda x: x.number)
             for segment in sorted_segments:
-                if len(segment.forward_sequence) >= min_length:
+                if segment.get_length() >= min_length:
                     fasta.write(segment.get_fasta_name_and_description_line(circular_seg_nums))
                     fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     @staticmethod
-    def save_specific_segments_to_fasta(filename, segments):
+    def save_specific_segments_to_fasta(filename, segments, silent=False):
         """
         Saves single copy segments (only forward sequences) to a FASTA file.
         """
-        log.log('Saving ' + filename)
+        if not silent:
+            log.log('Saving ' + filename)
         with open(filename, 'w') as fasta:
             sorted_segments = sorted(segments, key=lambda x: x.number)
             for segment in sorted_segments:
@@ -361,7 +356,7 @@ class AssemblyGraph(object):
                 fasta.write(add_line_breaks_to_sequence(segment.forward_sequence))
 
     def save_to_gfa(self, filename, verbosity=1, save_copy_depth_info=False,
-                    save_seg_type_info=False, newline=False):
+                    save_seg_type_info=False, newline=False, include_insert_size=False):
         """
         Saves whole graph to a GFA file.
         """
@@ -392,7 +387,8 @@ class AssemblyGraph(object):
                 gfa.write('\t')
                 gfa.write(','.join([overlap_cigar] * (len(segment_list) - 1)))
                 gfa.write('\n')
-            if self.insert_size_mean is not None and self.insert_size_deviation is not None:
+            if include_insert_size and self.insert_size_mean is not None and \
+                    self.insert_size_deviation is not None:
                 gfa.write('i\t')
                 gfa.write(str(self.insert_size_mean))
                 gfa.write('\t')
@@ -403,12 +399,12 @@ class AssemblyGraph(object):
         """
         Returns a string of the link component of the GFA file for this graph.
         """
-        gfa_link_lines = ''
+        gfa_link_lines = []
         for start, ends in self.forward_links.items():
             for end in ends:
                 if is_link_positive(start, end):
-                    gfa_link_lines += self.gfa_link_line(start, end)
-        return gfa_link_lines
+                    gfa_link_lines.append(self.gfa_link_line(start, end))
+        return ''.join(gfa_link_lines)
 
     def filter_by_read_depth(self, relative_depth_cutoff):
         """
@@ -448,14 +444,17 @@ class AssemblyGraph(object):
             if all_segments_are_one_base(component_segments):
                 segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
+        if segment_nums_to_remove:
+            log.log('\nRemoved homopolymer_loops:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_segments(self, nums_to_remove):
         """
-        Given a list of segment numbers to remove, this function rebuilds the graph's segments
-        and links, excluding those segments. It also deletes any paths which contain those
-        segments.
+        This function deletes all segments in the nums_to_remove list, along with their links. It
+        also deletes any paths which contain those segments.
         """
         for num_to_remove in nums_to_remove:
+            assert num_to_remove >= 0  # this function takes positive segment numbers only
             if num_to_remove in self.segments:
                 seg_to_remove = self.segments[num_to_remove]
 
@@ -476,20 +475,40 @@ class AssemblyGraph(object):
             if num in self.copy_depths:
                 del self.copy_depths[num]
 
-        # Rebuild the links for deleted segments.
-        self.forward_links = remove_nums_from_links(self.forward_links, nums_to_remove)
-        self.reverse_links = remove_nums_from_links(self.reverse_links, nums_to_remove)
+        # Remove links for the deleted segments.
+        links_to_remove = set()
+        for num_to_remove in nums_to_remove:
+            for down_seg in self.get_downstream_seg_nums(num_to_remove):
+                links_to_remove.add((num_to_remove, down_seg))
+            for up_seg in self.get_upstream_seg_nums(num_to_remove):
+                links_to_remove.add((up_seg, num_to_remove))
+        for link in links_to_remove:
+            self.remove_link(link[0], link[1])
 
-        # Rebuild paths which might contain deleted segments.
-        paths_to_delete = set()
-        neg_nums_to_remove = [-x for x in nums_to_remove]
-        for path_name, path_nums in self.paths.items():
-            if len(list(set(nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-            if len(list(set(neg_nums_to_remove) & set(path_nums))) > 0:
-                paths_to_delete.add(path_name)
-        for path_to_delete in paths_to_delete:
-            del self.paths[path_to_delete]
+        self.remove_segments_from_paths(nums_to_remove)
+
+    def remove_segments_from_paths(self, seg_nums):
+        """
+        Deletes the given segment numbers (regardless of sign) from the paths. If this results in
+        an invalid path, then the whole path is deleted.
+        """
+        fixed_paths = {}
+        for path_name, path in self.paths.items():
+            fixed_path = [x for x in path if x not in seg_nums and -x not in seg_nums]
+            if len(fixed_path) > 1 and self.is_path_valid(fixed_path):
+                fixed_paths[path_name] = fixed_path
+        self.paths = fixed_paths
+
+    def is_path_valid(self, path):
+        """
+        Returns True/False based on whether or not the given path is in the graph.
+        """
+        for i, seg_2 in enumerate(path):
+            if i > 0:
+                seg_1 = path[i - 1]
+                if seg_1 not in self.forward_links or seg_2 not in self.forward_links[seg_1]:
+                    return False
+        return True
 
     def remove_small_components(self, min_component_size):
         """
@@ -509,8 +528,8 @@ class AssemblyGraph(object):
             segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
         if segment_nums_to_remove:
-            log.log('Removed small components:\n' +
-                    ', '.join(str(x) for x in segment_nums_to_remove) + '\n', 2)
+            log.log('\nRemoved small components:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
 
     def remove_small_dead_ends(self, min_dead_end_size):
         """
@@ -529,21 +548,22 @@ class AssemblyGraph(object):
             else:
                 break
         if removed_segments:
-            log.log('\nRemoved small dead ends:  ' + ', '.join(str(x) for x in removed_segments), 2)
+            log.log('\nRemoved small dead ends:', 2)
+            log.log_number_list(removed_segments, 2)
 
-    def merge_all_possible(self, single_copy_segments, bridging_mode):
+    def merge_all_possible(self, anchor_segments, bridging_mode):
         """
         This function merges segments which are in a simple, unbranching path.
         """
-        if single_copy_segments is not None:
-            single_copy_seg_nums = set(x.number for x in single_copy_segments)
+        if anchor_segments is not None:
+            anchor_seg_nums = set(x.number for x in anchor_segments)
         else:
-            single_copy_seg_nums = None
+            anchor_seg_nums = None
         while True:
             # Sort the segment numbers first so we apply the merging in a consistent order.
             seg_nums = sorted(list(self.segments.keys()))
             for num in seg_nums:
-                path = self.get_simple_path(num, single_copy_seg_nums, bridging_mode)
+                path = self.get_simple_path(num, anchor_seg_nums, bridging_mode)
                 assert len(path) > 0
                 if len(path) > 1:
                     self.merge_simple_path(path)
@@ -577,14 +597,15 @@ class AssemblyGraph(object):
         paths_copy = self.paths.copy()
         outgoing_links = []
         if end in self.forward_links:
-            outgoing_links = self.forward_links[end]
+            outgoing_links = list(self.forward_links[end])
         incoming_links = []
         if start in self.reverse_links:
-            incoming_links = self.reverse_links[start]
+            incoming_links = list(self.reverse_links[start])
         outgoing_links = find_replace_one_val_in_list(outgoing_links, start, new_seg_num)
         outgoing_links = find_replace_one_val_in_list(outgoing_links, -end, -new_seg_num)
         incoming_links = find_replace_one_val_in_list(incoming_links, end, new_seg_num)
         incoming_links = find_replace_one_val_in_list(incoming_links, -start, -new_seg_num)
+
         self.remove_segments([abs(x) for x in merge_path])
 
         # Add the new segment to the graph and give it the links from its source segments.
@@ -675,13 +696,33 @@ class AssemblyGraph(object):
         complements too.
         """
         if start in self.forward_links:
-            self.forward_links[start].remove(end)
+            try:
+                self.forward_links[start].remove(end)
+            except ValueError:
+                pass
+            if len(self.forward_links[start]) == 0:
+                del self.forward_links[start]
         if -end in self.forward_links:
-            self.forward_links[-end].remove(-start)
+            try:
+                self.forward_links[-end].remove(-start)
+            except ValueError:
+                pass
+            if len(self.forward_links[-end]) == 0:
+                del self.forward_links[-end]
         if end in self.reverse_links:
-            self.reverse_links[end].remove(start)
+            try:
+                self.reverse_links[end].remove(start)
+            except ValueError:
+                pass
+            if len(self.reverse_links[end]) == 0:
+                del self.reverse_links[end]
         if -start in self.reverse_links:
-            self.reverse_links[-start].remove(-end)
+            try:
+                self.reverse_links[-start].remove(-end)
+            except ValueError:
+                pass
+            if len(self.reverse_links[-start]) == 0:
+                del self.reverse_links[-start]
 
     def seq_from_signed_seg_num(self, signed_num):
         """
@@ -730,12 +771,10 @@ class AssemblyGraph(object):
         connected_segments = set()
         if segment_num in self.forward_links:
             downstream_segments = self.forward_links[segment_num]
-            for segment in downstream_segments:
-                connected_segments.add(abs(segment))
+            connected_segments.update([abs(x) for x in downstream_segments])
         if segment_num in self.reverse_links:
             upstream_segments = self.reverse_links[segment_num]
-            for segment in upstream_segments:
-                connected_segments.add(abs(segment))
+            connected_segments.update([abs(x) for x in upstream_segments])
         return list(connected_segments)
 
     def all_segments_below_depth(self, segment_nums, cutoff):
@@ -793,6 +832,26 @@ class AssemblyGraph(object):
         if segment_number not in self.forward_links:
             return []
         return [abs(x) for x in self.forward_links[segment_number] if
+                self.lead_exclusively_from(x, segment_number)]
+
+    def get_exclusive_inputs_signed(self, segment_number):
+        """
+        This function finds all segments which lead into the given segment.  If those segments
+        do not lead into any other segments, then this function returns them in a list.
+        Specifically, this function returns a list of signed numbers.
+        """
+        if segment_number not in self.reverse_links:
+            return []
+        return [x for x in self.reverse_links[segment_number] if
+                self.lead_exclusively_to(x, segment_number)]
+
+    def get_exclusive_outputs_signed(self, segment_number):
+        """
+        Does the same thing as get_exclusive_inputs_signed, but in the other direction.
+        """
+        if segment_number not in self.forward_links:
+            return []
+        return [x for x in self.forward_links[segment_number] if
                 self.lead_exclusively_from(x, segment_number)]
 
     def lead_exclusively_to(self, segment_num_1, segment_num_2):
@@ -882,13 +941,7 @@ class AssemblyGraph(object):
         """
         This function cleans up the final assembled graph, in preparation for saving.
         """
-        log.log_section_header('Finalising graph')
-        if self.overlap:
-            try:
-                self.remove_all_overlaps()
-                log.log('Successfully removed all graph overlaps')
-            except CannotTrimOverlaps:
-                log.log('Unable to remove graph overlaps')
+        assert self.overlap == 0
         self.remove_zero_length_segs()
         self.merge_small_segments(5)
         self.reassign_read_depths()
@@ -904,67 +957,106 @@ class AssemblyGraph(object):
         overlap size) to bridge the connection.
         For example: A->B,C and D->B,C becomes A->E and D->E and E->B and E->C
         """
-        while True:
-            seg_nums = list(self.segments) + [-x for x in self.segments]
-            for seg_num in seg_nums:
+        seg_nums = list(self.segments) + [-x for x in self.segments]
+        already_examined = set()
+        for seg_num in seg_nums:
+            if seg_num in already_examined:
+                continue
 
-                # For the segment, get all of its downstream segments.
-                if seg_num not in self.forward_links:
-                    continue
-                ending_segs = set(self.forward_links[seg_num])
-                if len(ending_segs) < 2:
-                    continue
+            upstream_segs = {seg_num}
+            downstream_segs = set()
 
-                # Now for all of the downstream segments, get their upstream segments.
-                starting_segs = set()
-                for ending_seg in ending_segs:
-                    if ending_seg in self.reverse_links and self.reverse_links[ending_seg]:
-                        starting_segs.update(self.reverse_links[ending_seg])
-                if len(starting_segs) < 2:
-                    continue
+            # Keep growing the upstream and downstream steps until they stop getting bigger.
+            while True:
+                upstream_size = len(upstream_segs)
+                downstream_size = len(downstream_segs)
+                for upstream_seg in upstream_segs:
+                    downstream_segs.update(self.get_downstream_seg_nums(upstream_seg))
+                for downstream_seg in downstream_segs:
+                    upstream_segs.update(self.get_upstream_seg_nums(downstream_seg))
+                if len(upstream_segs) == upstream_size and len(downstream_segs) == downstream_size:
+                    break
+            if len(upstream_segs) < 2 or len(downstream_segs) < 2:
+                continue
 
-                # Now for all of the upstream (starting) segments, get their downstream segments.
-                # If this set is the same as the downstream segments of the first segment, then
-                # we have ourselves a multi-way junction!
-                ending_segs_2 = set()
-                for starting_seg in starting_segs:
-                    if starting_seg in self.forward_links and self.forward_links[starting_seg]:
-                        ending_segs_2.update(self.forward_links[starting_seg])
-                if ending_segs_2 != ending_segs:
-                    continue
+            # We're looking at this group now so we can skip them in the future.
+            already_examined.update(upstream_segs)
+            already_examined.update([-s for s in downstream_segs])
 
-                # Double-check that all of the overlaps agree.
-                starting_segs = list(starting_segs)
-                ending_segs = list(ending_segs)
-                bridge_seq = self.seq_from_signed_seg_num(ending_segs[0])[:self.overlap]
-                for start_seg in starting_segs:
-                    assert bridge_seq == self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
-                for end_seg in ending_segs:
-                    assert bridge_seq == self.seq_from_signed_seg_num(end_seg)[:self.overlap]
+            # Skip groups that are too large (otherwise checking each subset will take way too
+            # long).
+            if len(upstream_segs) > 8:
+                continue
+
+            # Examine every subset in the upstream segments of size 2 or larger. This includes the
+            # full set.
+            starting_seg_groups = []
+            ending_seg_groups = []
+            used_upstream_subsets = []
+            for i in range(len(upstream_segs), 1, -1):
+                upstream_subsets = set(itertools.combinations(upstream_segs, i))
+                for upstream_subset in upstream_subsets:
+
+                    # No need to examine this subset if we've already made use of a larger subset
+                    # which contains it.
+                    if any(set(upstream_subset).issubset(x) for x in used_upstream_subsets):
+                        continue
+
+                    # Now that we have some upstream segments to look at, see if there are more
+                    # than one downstream segments which lead back to all of them.
+                    downstream_subset = set()
+                    for upstream_seg in upstream_subset:
+                        downstream_subset.update(self.get_downstream_seg_nums(upstream_seg))
+                    downstream_subset = [x for x in downstream_subset
+                                         if all(y in self.get_upstream_seg_nums(x)
+                                                for y in upstream_subset)]
+                    if len(downstream_subset) < 2:
+                        continue
+
+                    # If we got here, then the combination of segments looks good!
+                    used_upstream_subsets.append(set(upstream_subset))
+                    starting_segs = sorted(list(upstream_subset))
+                    ending_segs = sorted(list(downstream_subset))
+
+                    # Sanity check: all upstream segments should lead to all downstream segments.
+                    for start_seg in starting_segs:
+                        for end_seg in ending_segs:
+                            assert end_seg in self.forward_links[start_seg]
+                            assert start_seg in self.reverse_links[end_seg]
+
+                    # We'll set it aside to make a small bridge segment to replace the links
+                    # between the start and end segments.
+                    starting_seg_groups.append(starting_segs)
+                    ending_seg_groups.append(ending_segs)
+
+            assert len(starting_seg_groups) == len(ending_seg_groups)
+            for starting_segs, ending_segs in zip(starting_seg_groups, ending_seg_groups):
+                log.log('Multi-way junction:', 3)
+                log.log('  start segs: ' + ', '.join([str(x) for x in starting_segs]), 3)
+                log.log('  end segs:   ' + ', '.join([str(x) for x in ending_segs]), 3)
 
                 # Create a new segment to bridge the starting and ending segments.
                 bridge_num = self.get_next_available_seg_number()
                 start_seg_depth_sum = sum(self.segments[abs(x)].depth for x in starting_segs)
                 end_seg_depth_sum = sum(self.segments[abs(x)].depth for x in ending_segs)
                 bridge_depth = (start_seg_depth_sum + end_seg_depth_sum) / 2.0
+                bridge_seq = self.seq_from_signed_seg_num(ending_segs[0])[:self.overlap]
                 bridge_seg = Segment(bridge_num, bridge_depth, bridge_seq, True)
                 bridge_seg.build_other_sequence_if_necessary()
                 self.segments[bridge_num] = bridge_seg
+                log.log('   new seg:   ' + str(bridge_num), 3)
 
                 # Now rebuild the links around the junction.
                 for start_seg in starting_segs:
-                    self.forward_links[start_seg] = [bridge_num]
-                    self.reverse_links[-start_seg] = [-bridge_num]
+                    for end_seg in ending_segs:
+                        self.remove_link(start_seg, end_seg)
+                for start_seg in starting_segs:
+                    self.add_link(start_seg, bridge_num)
                 for end_seg in ending_segs:
-                    self.reverse_links[end_seg] = [bridge_num]
-                    self.forward_links[-end_seg] = [-bridge_num]
-                self.forward_links[bridge_num] = ending_segs
-                self.reverse_links[bridge_num] = starting_segs
-                self.reverse_links[-bridge_num] = [-x for x in ending_segs]
-                self.forward_links[-bridge_num] = [-x for x in starting_segs]
+                    self.add_link(bridge_num, end_seg)
 
-                # Finally, we need to check to see if there were any paths through the junction. If
-                # so, they need to be adjusted to contain the new segment.
+                # Finally, we need to check to see if there were any paths through the junction.
+                # If so, they need to be adjusted to contain the new segment.
                 for name in self.paths:
                     for start_num in starting_segs:
                         for end_num in ending_segs:
@@ -972,9 +1064,26 @@ class AssemblyGraph(object):
                                                                   end_num, bridge_num)
                             self.paths[name] = insert_num_in_list(self.paths[name], -end_num,
                                                                   -start_num, -bridge_num)
-                break
-            else:
-                break
+                log.log('', 3)
+
+    def remove_unnecessary_links(self):
+        """
+        This function specifically looks for cases where two segments are directly linked and also
+        linked via a 0 bp segment. If so, the direct connection is redundant and is deleted.
+        """
+        assert self.overlap == 0
+        seg_nums = list(self.segments) + [-x for x in self.segments]
+        for seg_num in seg_nums:
+            down_segs = self.get_downstream_seg_nums(seg_num)
+            zero_bp_segs = [x for x in down_segs if self.segments[abs(x)].get_length() == 0]
+            for zero_bp_seg in zero_bp_segs:
+                down_segs_2 = self.get_downstream_seg_nums(zero_bp_seg)
+                common_down_segs = set(down_segs) & set(down_segs_2)
+                for common_down_seg in common_down_segs:
+                    try:
+                        self.remove_link(seg_num, common_down_seg)
+                    except ValueError:
+                        pass
 
     def get_next_available_seg_number(self):
         """
@@ -991,13 +1100,23 @@ class AssemblyGraph(object):
             return ''
         return '\n'.join(['%.3f' % x for x in self.copy_depths[segment.number]])
 
+    def get_copy_number(self, segment):
+        """
+        Returns the segment's copy number (0 if copy number determination did not occur for this
+        segment).
+        """
+        if segment.number not in self.copy_depths:
+            return 0
+        return len(self.copy_depths[segment.number])
+
+    def get_copy_number_from_segment_number(self, seg_num):
+        return self.get_copy_number(self.segments[abs(seg_num)])
+
     def get_copy_number_colour(self, segment):
         """
         Given a particular segment, this function returns a colour string based on the copy number.
         """
-        if segment.number not in self.copy_depths:
-            return 'grey'
-        copy_number = len(self.copy_depths[segment.number])
+        copy_number = self.get_copy_number(segment)
         if copy_number == 0:
             return 'grey'
         elif copy_number == 1:
@@ -1009,15 +1128,28 @@ class AssemblyGraph(object):
         else:  # 4+
             return 'red'
 
+    def is_seg_num_single_copy(self, seg_num):
+        return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
+
     def get_single_copy_segments(self):
         """
         Returns a list of the graph segments with a copy number of 1.
         """
         single_copy_segments = []
         for num, segment in self.segments.items():
-            if num in self.copy_depths and len(self.copy_depths[num]) == 1:
+            if self.is_seg_num_single_copy(num):
                 single_copy_segments.append(segment)
         return single_copy_segments
+
+    def get_no_copy_depth_segments(self):
+        """
+        Returns a list of the graph segments which failed to have a copy depth assigned.
+        """
+        no_copy_depth_segments = []
+        for num, segment in self.segments.items():
+            if num not in self.copy_depths or len(self.copy_depths[num]) == 0:
+                no_copy_depth_segments.append(segment)
+        return no_copy_depth_segments
 
     def get_path_sequence(self, path_segments):
         """
@@ -1045,22 +1177,17 @@ class AssemblyGraph(object):
             prev_segment_number = seg_num
         return path_sequence
 
-    def get_bridge_path_sequence(self, path_segments, start_seg):
-        """
-        This function behaves like get_path_sequence but also handles the case where there are no
-        segments in the path (i.e. the bridge is a direct connection between two segments. In that
-        case we don't want to return an empty sequence, but rather the overlap between the two
-        segments.
-        """
-        if path_segments:
-            return self.get_path_sequence(path_segments)
-        else:
-            return self.seq_from_signed_seg_num(start_seg)[-self.overlap:]
-
-    def apply_bridges(self, bridges, verbosity, min_bridge_qual, unbridged_graph):
+    def apply_bridges(self, bridges, verbosity, min_bridge_qual):
         """
         Uses the supplied bridges to simplify the graph.
         """
+        log.log_section_header('Applying bridges')
+        log.log_explanation('Unicycler now applies to the graph in decreasing order of quality. '
+                            'This ensures that when multiple, contradictory bridges exist, the '
+                            'most supported option is used.')
+
+        unbridged_graph = copy.deepcopy(self)
+
         # Each segment can have only one bridge per side, so we will track which segments have had
         # a bridge applied off one side or the other.
         right_bridged = set()
@@ -1099,7 +1226,7 @@ class AssemblyGraph(object):
                 # path of a different bridge. That alone isn't necessarily a problem, and since
                 # single copy determination can make mistakes we want to allow for this sort of
                 # thing. But it is a problem if the start or end segment has been used in a
-                # bridge that happens starts or ends in this bridge. That arrangement (two bridges,
+                # bridge that happens to start or end in this bridge. That arrangement (two bridges,
                 # each of which end inside the other's path) can break up the graph if they are
                 # both applied, so don't apply this bridge if such a case exists.
                 bridges_using_this_segment = []
@@ -1155,11 +1282,25 @@ class AssemblyGraph(object):
         start = bridge.start_segment
         end = bridge.end_segment
         if start in self.forward_links:
-            for link in self.forward_links[start]:
+            for link in [x for x in self.forward_links[start]]:
                 self.remove_link(start, link)
         if end in self.reverse_links:
-            for link in self.reverse_links[end]:
+            for link in [x for x in self.reverse_links[end]]:
                 self.remove_link(link, end)
+
+        # If the new bridge is a miniasm bridge, then we might need to trim a bit from the segments
+        # being bridged.
+        if isinstance(bridge, MiniasmBridge):
+            start_seg = self.segments[abs(start)]
+            if start > 0:
+                start_seg.trim_from_end(bridge.start_overlap)
+            else:
+                start_seg.trim_from_start(bridge.start_overlap)
+            end_seg = self.segments[abs(end)]
+            if end > 0:
+                end_seg.trim_from_start(bridge.end_overlap)
+            else:
+                end_seg.trim_from_end(bridge.end_overlap)
 
         # Create a new bridge segment.
         new_seg_num = self.get_next_available_seg_number()
@@ -1244,7 +1385,7 @@ class AssemblyGraph(object):
             return False
         return True
 
-    def clean_up_after_bridging_1(self, single_copy_segments, seg_nums_used_in_bridges):
+    def clean_up_after_bridging_1(self, anchor_segments, seg_nums_used_in_bridges):
         """
         This function is run after bridge application to clean up necessary segments. This is the
         first of two such functions, and this one takes care of the simpler aspects of cleaning.
@@ -1257,16 +1398,16 @@ class AssemblyGraph(object):
             if seg.bridge is not None:
                 seg_nums_used_in_bridges.add(seg_num)
 
-        log.log('Segments eligible for deletion:\n' +
-                ', '.join(str(x) for x in sorted(list(seg_nums_used_in_bridges))) + '\n', 2)
+        log.log('Segments eligible for deletion:', 2)
+        log.log_number_list(sorted(list(seg_nums_used_in_bridges)), 2)
 
-        single_copy_seg_nums = set(x.number for x in single_copy_segments)
-        self.remove_unbridging_segments(single_copy_seg_nums)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        anchor_seg_nums = set(x.number for x in anchor_segments)
+        self.remove_unbridging_segments(anchor_seg_nums)
+        self.remove_components_without_anchor_segments(anchor_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
 
     def clean_up_after_bridging_2(self, seg_nums_used_in_bridges, min_component_size,
-                                  min_dead_end_size, unbridged_graph, single_copy_segments):
+                                  min_dead_end_size, unbridged_graph, anchor_segments):
         """
         This is the second of two post-bridging cleaning functions, and it takes care of the more
         complex aspects of cleaning: deleting segments that were used in bridges but are still
@@ -1369,35 +1510,35 @@ class AssemblyGraph(object):
 
         if removed_segments:
             removed_segments = sorted(list(set(removed_segments)))
-            log.log('Removed segments used in bridges:\n' +
-                    ', '.join(str(x) for x in removed_segments), 2)
+            log.log('Removed segments used in bridges:', 2)
+            log.log_number_list(removed_segments, 2)
 
         # Now that clean up is finished, we no longer want to allow depths below zero.
         for segment in self.segments.values():
             segment.depth = max(0.0, segment.depth)
 
-        single_copy_seg_nums = set(x.number for x in single_copy_segments)
-        self.remove_components_without_single_copy_segments(single_copy_seg_nums)
+        anchor_seg_nums = set(x.number for x in anchor_segments)
+        self.remove_components_without_anchor_segments(anchor_seg_nums)
         self.remove_components_entirely_used_in_bridges(seg_nums_used_in_bridges)
-        self.remove_unbridging_segments(single_copy_seg_nums)
+        self.remove_unbridging_segments(anchor_seg_nums)
         self.remove_small_components(min_component_size)
         self.remove_small_dead_ends(min_dead_end_size)
 
-    def remove_components_without_single_copy_segments(self, single_copy_seg_nums):
+    def remove_components_without_anchor_segments(self, anchor_seg_nums):
         """
-        Deletes all graph components that contain no single copy segments.
+        Deletes all graph components that contain no anchor segments.
         """
         segment_nums_to_remove = []
         connected_components = self.get_connected_components()
         for component_nums in connected_components:
             for seg_num in component_nums:
-                if abs(seg_num) in single_copy_seg_nums:
+                if abs(seg_num) in anchor_seg_nums:
                     break
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components with no single copy segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components with no single copy segments:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
     def remove_components_entirely_used_in_bridges(self, seg_nums_used_in_bridges):
@@ -1413,24 +1554,24 @@ class AssemblyGraph(object):
             else:
                 segment_nums_to_remove += component_nums
         if segment_nums_to_remove:
-            log.log('Removed components used in bridges:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed components used in bridges:', 2)
+            log.log_number_list(sorted(segment_nums_to_remove), 2)
         self.remove_segments(segment_nums_to_remove)
 
-    def remove_unbridging_segments(self, single_copy_seg_nums):
+    def remove_unbridging_segments(self, anchor_seg_nums):
         """
-        Deletes any multi-copy segments which cannot possibly connect two single copy segments.
+        Deletes any segments which cannot possibly connect two anchor segments.
         """
         segment_nums_to_remove = []
         for seg_num in self.segments:
-            if seg_num in single_copy_seg_nums:
+            if seg_num in anchor_seg_nums:
                 continue
-            if not (self.search(seg_num, single_copy_seg_nums) and
-                    self.search(-seg_num, single_copy_seg_nums)):
+            if not (self.search(seg_num, anchor_seg_nums) and
+                    self.search(-seg_num, anchor_seg_nums)):
                 segment_nums_to_remove.append(seg_num)
         if segment_nums_to_remove:
-            log.log('Removed unbridging segments:\n' +
-                    ', '.join(str(x) for x in sorted(segment_nums_to_remove)) + '\n', 2)
+            log.log('Removed unbridging segments:', 2)
+            log.log_number_list(segment_nums_to_remove, 2)
         self.remove_segments(segment_nums_to_remove)
 
     def get_usedupness_score(self, seg_num, unbridged_graph):
@@ -1496,6 +1637,31 @@ class AssemblyGraph(object):
                 continue
 
             simple_loops.append((start, end, middle, repeat))
+
+        # Simple loops may just have the repeat node loop back to itself (i.e. no separate middle
+        # segment). Look for these structures.
+        for repeat in self.segments:
+            if repeat not in self.forward_links or repeat not in self.reverse_links or \
+                    len(self.forward_links[repeat]) != 2 or len(self.reverse_links[repeat]) != 2:
+                continue
+
+            # Make sure that the repeat loops back to itself.
+            if repeat not in self.forward_links[repeat] or repeat not in self.reverse_links[repeat]:
+                continue
+
+            start_segs = list(self.reverse_links[repeat])
+            start_segs.remove(repeat)
+            end_segs = list(self.forward_links[repeat])
+            end_segs.remove(repeat)
+            if len(start_segs) != 1 or len(end_segs) != 1:
+                continue
+            start = start_segs[0]
+            end = end_segs[0]
+            if abs(start) == abs(repeat) or abs(end) == abs(repeat):
+                continue
+
+            simple_loops.append((start, end, None, repeat))
+
         return simple_loops
 
     def max_path_segment_count(self, seg_num, start_end_depth):
@@ -1558,12 +1724,14 @@ class AssemblyGraph(object):
 
         new_forward_links = {}
         for seg_num, link_nums in self.forward_links.items():
-            new_forward_links[changes[seg_num]] = [changes[x] for x in link_nums]
+            if link_nums:
+                new_forward_links[changes[seg_num]] = [changes[x] for x in link_nums]
         self.forward_links = new_forward_links
 
         new_reverse_links = {}
         for seg_num, link_nums in self.reverse_links.items():
-            new_reverse_links[changes[seg_num]] = [changes[x] for x in link_nums]
+            if link_nums:
+                new_reverse_links[changes[seg_num]] = [changes[x] for x in link_nums]
         self.reverse_links = new_reverse_links
 
         self.copy_depths = {changes[x]: y for x, y in self.copy_depths.items()}
@@ -1821,6 +1989,10 @@ class AssemblyGraph(object):
         This function removes all overlaps from the graph by shortening segments. It assumes that
         all overlaps in the graph are the same size.
         """
+        if self.overlap == 0:
+            log.log('Graph has no overlaps - overlap removal not needed')
+            return
+
         # First we create a set of all graph edges, in both directions.
         all_edges = set()
         for start, ends in self.forward_links.items():
@@ -1900,48 +2072,72 @@ class AssemblyGraph(object):
         ordered_edges = list(all_edges)
         group_1 = set()
         group_2 = set()
+        num_edges = len(ordered_edges)
+        extra_verbose = log.logger.stdout_verbosity_level > 2
+        if extra_verbose:
+            log.log('Grouping graph edges based on overlap removal')
+        edge_num = 0
         for edge in ordered_edges:
+            if extra_verbose:
+                log.log_progress_line(edge_num, num_edges)
+                edge_num += 1
             if edge in group_1 or edge in group_2:
                 continue
 
+            new_group_1 = set()
+            new_group_2 = set()
+
             # Put an edge in the first group (arbitrary decision).
-            group_1.add(edge)
+            new_group_1.add(edge)
 
             while True:
-                new_group_1 = set()
-                new_group_2 = set()
+                group_1_size_before = len(new_group_1)
+                group_2_size_before = len(new_group_2)
 
-                for group_1_edge in group_1:
+                group_1_temp = set()
+                group_2_temp = set()
+
+                for group_1_edge in new_group_1:
                     for must_match_edge in must_match[group_1_edge]:
-                        if must_match_edge in group_2 or must_match_edge in new_group_2:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_1.add(must_match_edge)
+                        group_1_temp.add(must_match_edge)
                     for must_differ_edge in must_differ[group_1_edge]:
-                        if must_differ_edge in group_1 or must_differ_edge in new_group_1:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_2.add(must_differ_edge)
+                        group_2_temp.add(must_differ_edge)
 
-                for group_2_edge in group_2:
+                for group_2_edge in new_group_2:
                     for must_match_edge in must_match[group_2_edge]:
-                        if must_match_edge in group_1 or must_match_edge in new_group_1:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_2.add(must_match_edge)
+                        group_2_temp.add(must_match_edge)
                     for must_differ_edge in must_differ[group_2_edge]:
-                        if must_differ_edge in group_2 or must_differ_edge in new_group_2:
-                            raise CannotTrimOverlaps
-                        else:
-                            new_group_1.add(must_differ_edge)
+                        group_1_temp.add(must_differ_edge)
+
+                new_group_1.update(group_1_temp)
+                new_group_2.update(group_2_temp)
 
                 # We continue to loop until the groups stop growing.
-                group_1_size_before = len(group_1)
-                group_2_size_before = len(group_2)
-                group_1.update(new_group_1)
-                group_2.update(new_group_2)
-                if len(group_1) == group_1_size_before and len(group_2) == group_2_size_before:
+                if len(new_group_1) == group_1_size_before and \
+                        len(new_group_2) == group_2_size_before:
                     break
+
+            group_1.update(new_group_1)
+            group_2.update(new_group_2)
+
+        if extra_verbose:
+            log.log_progress_line(num_edges, num_edges, end_newline=True)
+
+        # Make sure there are no conflicts.
+        for group_1_edge in group_1:
+            for must_match_edge in must_match[group_1_edge]:
+                if must_match_edge in group_2:
+                    raise CannotTrimOverlaps
+            for must_differ_edge in must_differ[group_1_edge]:
+                if must_differ_edge in group_1:
+                    raise CannotTrimOverlaps
+        for group_2_edge in group_2:
+            for must_match_edge in must_match[group_2_edge]:
+                if must_match_edge in group_1:
+                    raise CannotTrimOverlaps
+            for must_differ_edge in must_differ[group_2_edge]:
+                if must_differ_edge in group_2:
+                    raise CannotTrimOverlaps
 
         # If the code got here, that means that all edges have been grouped according to the
         # rules, so now we produce sets of what to do for each segment. Segments in the
@@ -1965,6 +2161,7 @@ class AssemblyGraph(object):
                 large_trim_end.add(-end_seg)
 
         # Now we finally do the segment trimming!
+        log.log('\nRemoving graph overlaps\n', 3)
         log.log('             Bases     Bases', 3)
         log.log('           trimmed   trimmed', 3)
         log.log(' Segment      from      from', 3)
@@ -1976,6 +2173,7 @@ class AssemblyGraph(object):
             segment.trim_from_end(end_trim)
             log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
 
+        log.log('Graph overlaps removed')
         self.overlap = 0
 
     def get_downstream_seg_nums(self, seg_num):
@@ -2005,7 +2203,8 @@ class AssemblyGraph(object):
         multi-way junction).
         """
         segs_to_remove = []
-        for seg_num, seg in self.segments.items():
+        for seg_num in sorted(self.segments):  # sort for consistency between runs
+            seg = self.segments[seg_num]
             if seg.get_length() != self.overlap:
                 continue
             if seg_num in self.forward_links:
@@ -2017,34 +2216,44 @@ class AssemblyGraph(object):
             else:
                 reverse_connections = 0
 
+            # Don't delete junction points.
+            if forward_connections > 1 and reverse_connections > 1:
+                continue
+            if forward_connections == 0 and reverse_connections > 1:
+                continue
+            if forward_connections > 1 and reverse_connections == 0:
+                continue
+
+            segs_to_remove.append(seg_num)
+
             if forward_connections == 1 and reverse_connections > 0:
                 downstream_seg = self.forward_links[seg_num][0]
                 for upstream_seg in self.reverse_links[seg_num]:
                     self.add_link(upstream_seg, downstream_seg)
-                segs_to_remove.append(seg_num)
 
             elif reverse_connections == 1 and forward_connections > 0:
                 upstream_seg = self.reverse_links[seg_num][0]
                 for downstream_seg in self.forward_links[seg_num]:
                     self.add_link(upstream_seg, downstream_seg)
-                segs_to_remove.append(seg_num)
 
-        self.remove_segments(segs_to_remove)
-        if segs_to_remove and not suppress_log:
-            log.log('Removed zero-length segments: ' + ', '.join(str(x) for x in segs_to_remove))
+        if segs_to_remove:
+            self.remove_segments(segs_to_remove)
+        if not suppress_log and segs_to_remove:
+            log.log('')
+            log.log('Removed zero-length segments:')
+            log.log_number_list(segs_to_remove)
+        return len(segs_to_remove)
 
     def merge_small_segments(self, max_merge_size):
         """
         In some cases, small segments can be merged into neighbouring segments to simplify the
         graph somewhat. This function does just that!
         """
-        # This function assumes an overlap-free graph.
-        if self.overlap > 0:
-            return
-
+        assert self.overlap == 0
         merged_seg_nums = []
         while True:
-            for seg_num, segment in self.segments.items():
+            for seg_num in sorted(self.segments):  # sort for consistency between runs
+                segment = self.segments[seg_num]
                 if segment.get_length() > max_merge_size or segment.get_length() == 0:
                     continue
                 downstream_segs = self.get_downstream_seg_nums(seg_num)
@@ -2082,7 +2291,53 @@ class AssemblyGraph(object):
             self.remove_zero_length_segs(suppress_log=True)
 
         if merged_seg_nums:
-            log.log('Merged small segments: ' + ', '.join(str(x) for x in merged_seg_nums))
+            log.log('\nMerged small segments:')
+            log.log_number_list(merged_seg_nums)
+            self.remove_zero_length_segs()
+        return len(merged_seg_nums)
+
+    def expand_repeats(self):
+        """
+        This function moves sequence into repeat segments, wherever possible.
+        """
+        for seg_num in sorted(self.segments):  # sort for consistency between runs
+
+            def trim_amount_okay(seg_nums, trim_length):
+                for num in seg_nums:
+                    pos_seg_num = abs(num)
+                    seg_count = [abs(x) for x in seg_nums].count(pos_seg_num)  # should be 1 or 2
+                    if seg_count * trim_length > self.segments[pos_seg_num].get_length():
+                        return False
+                return True
+
+            segment = self.segments[seg_num]
+            inputs = sorted(self.get_upstream_seg_nums(seg_num))
+            exclusive_inputs = sorted(self.get_exclusive_inputs_signed(seg_num))
+            if len(inputs) > 1 and inputs == exclusive_inputs:
+                common_end = os.path.commonprefix([self.seq_from_signed_seg_num(x)[::-1]
+                                                   for x in inputs])[::-1]
+                common_end_len = len(common_end)
+                if common_end_len > 0 and trim_amount_okay(inputs, common_end_len):
+                    segment.prepend_to_forward_sequence(common_end)
+                    for in_seg in inputs:
+                        if in_seg > 0:
+                            self.segments[in_seg].trim_from_end(common_end_len)
+                        else:
+                            self.segments[-in_seg].trim_from_start(common_end_len)
+
+            outputs = sorted(self.get_downstream_seg_nums(seg_num))
+            exclusive_outputs = sorted(self.get_exclusive_outputs_signed(seg_num))
+            if len(outputs) > 1 and outputs == exclusive_outputs:
+                common_start = os.path.commonprefix([self.seq_from_signed_seg_num(x)
+                                                     for x in outputs])
+                common_start_len = len(common_start)
+                if common_start_len > 0 and trim_amount_okay(outputs, common_start_len):
+                    segment.append_to_forward_sequence(common_start)
+                    for out_seg in outputs:
+                        if out_seg > 0:
+                            self.segments[out_seg].trim_from_start(common_start_len)
+                        else:
+                            self.segments[-out_seg].trim_from_end(common_start_len)
 
     def starts_with_dead_end(self, signed_seg_num):
         """
@@ -2130,6 +2385,48 @@ class AssemblyGraph(object):
         # If the code got here, then the bridging mode is level 1 (normal). If the segment has
         # become single copy, then it's okay to merge.
         return seg_num in self.copy_depths and len(self.copy_depths[seg_num]) == 1
+
+    def find_simple_two_way_junctions(self, valid_segments):
+        """
+        This function returns a list of segment numbers that are simple two-way junctions.
+        Simple two-way junctions are defined as cases where two single copy segments join and then
+        split. The single copy segments must be in the valid_segments list. Also, the single
+        copy segments do not have to be unique, e.g. a loop can count as a two-way junction (the
+        same segment is in inputs and outputs.
+        """
+        valid_seg_nums = set([x.number for x in valid_segments])
+        simple_two_way_junctions = []
+        for segment in self.segments.values():
+            if self.get_copy_number(segment) != 2:
+                continue
+            seg_num = segment.number
+            input_count = (
+            len(self.reverse_links[seg_num]) if seg_num in self.reverse_links else 0)
+            output_count = (
+            len(self.forward_links[seg_num]) if seg_num in self.forward_links else 0)
+            if input_count != 2 or output_count != 2:
+                continue
+            exclusive_input_count = len(self.get_exclusive_inputs(seg_num))
+            exclusive_output_count = len(self.get_exclusive_outputs(seg_num))
+            if exclusive_input_count != 2 or exclusive_output_count != 2:
+                continue
+            neighbour_segments = self.get_connected_segments(seg_num)
+            if any(x not in valid_seg_nums for x in neighbour_segments):
+                continue
+            simple_two_way_junctions.append(seg_num)
+        return simple_two_way_junctions
+
+    def rotate_circular_sequences(self, shift_fraction=0.70710678118655):
+        """
+        Rotates the sequence to a new starting point. It shifts by a non-rational (well, almost)
+        fraction of the sequence length so repeated executions of this function don't result in
+        repeated starting positions.
+        """
+        completed_replicons = self.completed_circular_replicons()
+        for completed_replicon in completed_replicons:
+            segment = self.segments[completed_replicon]
+            shift = int(segment.get_length() * shift_fraction)
+            segment.rotate_sequence(shift, False)
 
 
 def get_headers_and_sequences(filename):
@@ -2253,20 +2550,6 @@ def build_reverse_links(links):
                 reverse_links[end] = []
             reverse_links[end].append(start)
     return reverse_links
-
-
-def remove_nums_from_links(links, nums_to_remove):
-    """
-    This function rebuilds a link dictionary excluding the given numbers.
-    nums_to_remove is expected to be a list of positive (unsigned) segment numbers.
-    """
-    new_links = {}
-    for n_1, n_2 in links.items():
-        if abs(n_1) not in nums_to_remove:
-            new_links[n_1] = [x for x in n_2 if abs(x) not in nums_to_remove]
-            if not new_links[n_1]:
-                del new_links[n_1]
-    return new_links
 
 
 def all_segments_are_one_base(segments):
@@ -2463,6 +2746,3 @@ def get_overlap_from_gfa_link(filename):
     return 0
 
 
-def remove_dupes_preserve_order(lst):
-    seen = set()
-    return [x for x in lst if not (x in seen or seen.add(x))]

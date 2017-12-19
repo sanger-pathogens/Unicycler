@@ -36,17 +36,6 @@ def get_default_from_help(option, help_text):
 
 class TestUnicyclerOptions(unittest.TestCase):
 
-    def test_no_options(self):
-        sys.argv = [sys.argv[0]]
-        with captured_output() as (out, err):
-            with self.assertRaises(SystemExit):
-                unicycler.unicycler.get_arguments()
-        stdout = out.getvalue().strip()
-        stderr = err.getvalue().strip()
-        self.assertEqual(len(stdout), 0)
-        self.assertTrue('error' in stderr)
-        self.assertTrue('required' in stderr)
-
     def test_absolute_paths(self):
         reads_1, reads_2 = '/path/to/reads_1.fastq.gz', '/path/to/reads_1.fastq.gz'
         unpaired, long = '/path/to/unpaired.fastq.gz', '/path/to/long.fastq.gz'
@@ -93,7 +82,7 @@ class TestUnicyclerOptions(unittest.TestCase):
         with captured_output() as (out, err):
             with self.assertRaises(SystemExit):
                 unicycler.unicycler.get_arguments()
-        help_text = out.getvalue().strip().split('Unicycler: a hybrid assembly pipeline for '
+        help_text = out.getvalue().strip().split('Unicycler: an assembly pipeline for '
                                                  'bacterial genomes')[1]
         verbosity_default = int(get_default_from_help('--verbosity', help_text))
         min_fasta_length_default = int(get_default_from_help('--min_fasta_length', help_text))

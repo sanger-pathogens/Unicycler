@@ -92,9 +92,15 @@ def make_repeaty_sequence(length, repeat_count):
 def run_spades(out_dir):
     reads_1 = os.path.join(out_dir, 'reads_1.fastq')
     reads_2 = os.path.join(out_dir, 'reads_2.fastq')
+    reads_unpaired = os.path.join(out_dir, 'reads_unpaired.fastq')
 
-    spades_cmd = ['spades.py', '-1', reads_1, '-2', reads_2, '-o', out_dir,
-                  '--only-assembler', '-k', '21,41,61,81']
+    spades_cmd = ['spades.py', '-o', out_dir, '--only-assembler', '-k', '21,41,61,81']
+
+    if os.path.isfile(reads_1):
+        spades_cmd += ['-1', reads_1, '-2', reads_2]
+    if os.path.isfile(reads_unpaired):
+        spades_cmd += ['-s', reads_unpaired]
+
     p = subprocess.Popen(spades_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
     return stdout.decode(), stderr.decode()
@@ -117,7 +123,7 @@ def check_one_graph_overlap(out_dir, k_size, output_line):
     table_row = output_line + [str(seg_count), str(edge_count), str(k_size), '%.1f' % milliseconds]
     unicycler.misc.print_table([table_row], col_separation=3, header_format='normal', indent=0,
                                alignments='RRRRRR', fixed_col_widths=col_widths, verbosity=0,
-                               left_align_header=False)
+                               left_align_header=False, bottom_align_header=False)
 
 
 if __name__ == '__main__':

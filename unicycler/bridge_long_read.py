@@ -18,13 +18,20 @@ from multiprocessing.dummy import Pool as ThreadPool
 import time
 import math
 import statistics
+import sys
 from collections import defaultdict
-from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor
-from .misc import float_to_str, reverse_complement, flip_number_order, score_function, \
-    print_table, get_right_arrow
-from .cpp_wrappers import consensus_alignment
+from .bridge_common import get_bridge_str, get_mean_depth, get_depth_agreement_factor, \
+    get_bridge_table_parameters, print_bridge_table_header, print_bridge_table_row
+from .misc import float_to_str, reverse_complement, flip_number_order, score_function
 from . import settings
 from .path_finding import get_best_paths_for_seq
+from . import log
+
+try:
+    from .cpp_wrappers import consensus_alignment
+except AttributeError as e:
+    sys.exit('Error when importing C++ library: ' + str(e) + '\n'
+             'Have you successfully built the library file using make?')
 
 
 class LongReadBridge(object):
@@ -170,19 +177,16 @@ class LongReadBridge(object):
             #     y=\left(a-1\right)\left(\frac{b}{x+b-1}\right)+1
             expected_consensus_to_ref_ratio = 1.0 + (mean_read_to_ref_ratio - 1.0) * \
                                                     (4 / (4 + num_span_reads - 1))
-            target_path_length = (2 * self.graph.overlap) + \
-                int(round((len(self.consensus_sequence) / expected_consensus_to_ref_ratio)))
-
-            mean_overlap = 0
+            target_path_length = int(round((len(self.consensus_sequence) /
+                                            expected_consensus_to_ref_ratio)))
 
         # For reads without sequence, we simply need a mean distance.
         else:
             self.consensus_sequence = ''
-            mean_overlap = int(round(sum(x[0] for x in reads_without_seq) /
-                                     len(reads_without_seq)))
+            mean_overlap = int(round(sum(x[0] for x in reads_without_seq) / len(reads_without_seq)))
             output.append(str(mean_overlap))
             output.append('')
-            target_path_length = mean_overlap + (2 * self.graph.overlap)
+            target_path_length = 0
             expected_scaled_score = 100.0
 
         output.append(str(target_path_length))
@@ -211,8 +215,7 @@ class LongReadBridge(object):
             output.append(str(self.all_paths[0][2]))
 
             self.graph_path = self.all_paths[0][0]
-            self.bridge_sequence = self.graph.get_bridge_path_sequence(self.graph_path,
-                                                                       self.start_segment)
+            self.bridge_sequence = self.graph.get_path_sequence(self.graph_path)
 
             # We start this bridge's quality using a function that takes into account the
             # actual, expected and minimum acceptable scores. If the actual scaled score is 100,
@@ -227,43 +230,15 @@ class LongReadBridge(object):
             self.quality = math.sqrt(1.0 /
                                      (1.0 + 2.0 ** (expected_scaled_score - actual_scaled_score)))
 
-        # If a path wasn't found, the consensus sequence is the bridge (with the overlaps added).
+        # If a path wasn't found, the consensus sequence is the bridge.
         else:
             self.graph_path = []
             output += ['', '', '', '', '']
-            start_overlap = \
-                self.graph.seq_from_signed_seg_num(self.start_segment)[-self.graph.overlap:]
-            end_overlap = \
-                self.graph.seq_from_signed_seg_num(self.end_segment)[:self.graph.overlap]
 
-            # If there is a consensus sequence, we simply tack the overlaps onto its ends.
             if self.consensus_sequence:
-                self.bridge_sequence = start_overlap + self.consensus_sequence + end_overlap
-
-            # If there is the consensus sequence is exactly zero, then the two segments butt up
-            # exactly.
-            elif mean_overlap == 0:
-                self.bridge_sequence = start_overlap + end_overlap
-
-            # If the consensus sequence is negative, that implies the start and the end segments
-            # overlap. In this case we need to find the exact overlap. If we don't find it, we
-            # just glue the sequences together, like we did for mean_overlap == 0.
+                self.bridge_sequence = self.consensus_sequence
             else:
-                larger_overlaps = list(range(abs(mean_overlap), self.graph.overlap))
-                smaller_overlaps = list(range(abs(mean_overlap) - 1, 0, -1))
-                test_overlaps = []
-                for i in range(max(len(larger_overlaps), len(smaller_overlaps))):
-                    if i < len(larger_overlaps):
-                        test_overlaps.append(larger_overlaps[i])
-                    if i < len(smaller_overlaps):
-                        test_overlaps.append(smaller_overlaps[i])
-                for test_overlap in test_overlaps:
-                    if start_overlap[-test_overlap:] == end_overlap[:test_overlap]:
-                        actual_overlap = test_overlap
-                        break
-                else:
-                    actual_overlap = 0
-                self.bridge_sequence = start_overlap + end_overlap[actual_overlap:]
+                self.bridge_sequence = ''
 
             # The quality of non-graph-path-supported bridges depends on the number of dead ends
             # and whether or not linear sequences are expected.
@@ -288,12 +263,16 @@ class LongReadBridge(object):
                 else:  # dead_end_count == 0
                     self.quality = settings.PATHLESS_BRIDGE_QUAL_NO_DEAD_ENDS
 
+            # Bridge length affects quality too: short bridges are better.
+            bridge_len = max(0, len(self.bridge_sequence))
+            half_qual_len = settings.LONG_READ_BRIDGE_HALF_QUAL_LENGTH
+            self.quality *= half_qual_len / (bridge_len + half_qual_len)
+
         # Expected read count is determined using the read lengths and bridge size. For a given
         # read length and bridge, there are an estimable number of positions where a read of that
         # length would be able to contribute to the bridge. This is used to get the probability
         # that any read would create a bridge, and totalling those up gives us our estimated count.
-        bridge_len = max(len(self.bridge_sequence), self.graph.overlap)
-        min_read_len = (2 * min_alignment_length) + bridge_len - (2 * self.graph.overlap)
+        min_read_len = (2 * min_alignment_length) + len(self.bridge_sequence)
         total_possible_placements = 0
         for read_len, count in read_lengths.items():
             if read_len < min_read_len:
@@ -355,6 +334,7 @@ class LongReadBridge(object):
         # the scores up a bit (otherwise they tend to hang near the bottom of the range).
         self.quality = 100.0 * math.sqrt(self.quality)
 
+        # noinspection PyTypeChecker
         output.append(self.quality)
 
         return output
@@ -367,7 +347,7 @@ class LongReadBridge(object):
         It has to balance the path quality with the path availability to make a choice.
         """
         best_path = self.all_paths[0][0]
-        best_sequence = unbridged_graph.get_bridge_path_sequence(best_path, self.start_segment)
+        best_sequence = unbridged_graph.get_path_sequence(best_path)
         best_scaled_score = self.all_paths[0][3]
         best_availability = graph.get_path_availability(best_path)
         for i in range(1, len(self.all_paths)):
@@ -394,8 +374,7 @@ class LongReadBridge(object):
             # availability), then it becomes the new best.
             if relative_score * relative_availability > 1.0:
                 best_path = potential_path
-                best_sequence = unbridged_graph.get_bridge_path_sequence(potential_path,
-                                                                         self.start_segment)
+                best_sequence = unbridged_graph.get_path_sequence(potential_path)
                 best_scaled_score = potential_scaled_score
                 best_availability = potential_availability
 
@@ -413,24 +392,26 @@ class LongReadBridge(object):
     @staticmethod
     def get_type_name():
         """
-        Returns the of the bridge types.
+        Returns the name of the bridge type.
         """
         return 'long read'
 
 
-def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments, verbosity,
-                             existing_bridges, min_scaled_score, threads, scoring_scheme,
-                             min_alignment_length, expected_linear_seqs, min_bridge_qual):
+def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verbosity,
+                             min_scaled_score, threads, scoring_scheme, min_alignment_length,
+                             expected_linear_seqs, min_bridge_qual):
     """
     Makes bridges between single copy segments using the alignments in the long reads.
     """
-    single_copy_seg_num_set = set()
-    for seg in single_copy_segments:
-        single_copy_seg_num_set.add(seg.number)
+    log.log_section_header('Building long read bridges')
+    log.log_explanation('Unicycler uses the long read alignments to produce bridges between '
+                        'anchor segments. These bridges can be formed using as few as one long '
+                        'read, giving Unicycler the ability to bridge the graph even when '
+                        'long-read depth is low.')
+
+    anchor_seg_nums = set(x.number for x in anchor_segments)
 
     # This dictionary will collect the read sequences which span between two single copy segments.
-    # These are the most useful sequences and will be used to either create a new bridge or enhance
-    # an existing bridge.
     # Key = tuple of signed segment numbers (the segments being bridged)
     # Value = list of tuples containing the bridging sequence and the single copy segment
     #         alignments.
@@ -438,11 +419,11 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
 
     for read_name in read_names:
         read = read_dict[read_name]
-        alignments = get_single_copy_alignments(read, single_copy_seg_num_set, min_scaled_score)
-        if not alignments:
+        alignments = get_single_copy_alignments(read, anchor_seg_nums, min_scaled_score)
+        if len(alignments) < 2:
             continue
 
-        # If the code got here, then we have some alignments to single copy segments. We grab
+        # If the code got here, then we have some alignments to anchor segments. We grab
         # neighbouring pairs of alignments, starting with the highest scoring ones and work our
         # way down. This means that we should have a pair for each neighbouring alignment, but
         # potentially also more distant pairs if the alignments are strong.
@@ -513,21 +494,14 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
         # If the start and end are the same and already exclusively connect (i.e. if this segment
         # is already circular), then skip - there's no need to bridge.
         if start == end and graph.get_downstream_seg_nums(start) == [start] and \
-                graph.get_upstream_seg_nums(start) == [start]:
+                        graph.get_upstream_seg_nums(start) == [start]:
             continue
 
-        for existing_bridge in existing_bridges:
-            if isinstance(existing_bridge, LongReadBridge) and \
-                    existing_bridge.start_segment == start and existing_bridge.end_segment == end:
-                matching_bridge = existing_bridge
-                break
-        else:
-            new_bridge = LongReadBridge(graph, start, end)
-            new_bridges.append(new_bridge)
-            matching_bridge = new_bridge
-        matching_bridge.reads += span
-    all_bridges = existing_bridges + new_bridges
-    all_bridges = sorted(all_bridges, key=lambda x: (x.start_segment, x.end_segment))
+        new_bridge = LongReadBridge(graph, start, end)
+        new_bridge.reads += span
+        new_bridges.append(new_bridge)
+
+    new_bridges = sorted(new_bridges, key=lambda x: (x.start_segment, x.end_segment))
 
     # During finalisation, we will compare the expected read count to the actual read count for
     # each bridge. To do this, we'll need the lengths of all reads (excluding those with no
@@ -542,24 +516,24 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
     # Now we need to finalise the bridges. This is the intensive step, as it involves creating a
     # consensus sequence, finding graph paths and doing alignments between the consensus and the
     # graph paths. We can therefore use threads to make this faster.
-    long_read_bridges = [x for x in all_bridges if isinstance(x, LongReadBridge)]
-    num_long_read_bridges = len(long_read_bridges)
+    num_long_read_bridges = len(new_bridges)
 
     # We want to display this table one row at a time, so we have to fix all of the column widths
     # at the start.
-    alignments, col_widths = get_long_read_bridge_table_parameters(graph, num_long_read_bridges,
-                                                                   verbosity)
-    print_long_read_bridge_table_header(alignments, col_widths, verbosity)
+    alignments, col_widths = get_bridge_table_parameters(graph, num_long_read_bridges, verbosity,
+                                                         'LongReadBridge')
+    print_bridge_table_header(alignments, col_widths, verbosity, 'LongReadBridge')
     completed_count = 0
 
     # Use a simple loop if we only have one thread.
     if threads == 1:
-        for bridge in long_read_bridges:
+        for bridge in new_bridges:
             output = bridge.finalise(scoring_scheme, min_alignment_length, read_lengths,
                                      estimated_genome_size, expected_linear_seqs)
             completed_count += 1
-            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                                 num_long_read_bridges, min_bridge_qual, verbosity)
+            print_bridge_table_row(alignments, col_widths, output, completed_count,
+                                   num_long_read_bridges, min_bridge_qual, verbosity,
+                                   'LongReadBridge')
 
     # Use a thread pool if we have more than one thread.
     else:
@@ -570,117 +544,50 @@ def create_long_read_bridges(graph, read_dict, read_names, single_copy_segments,
         # the big ones runs first which helps to more efficiently use the CPU cores.
         # E.g. if the biggest bridge was at the end, we'd be left waiting for it to finish with
         # only one core (bad), but if it was at the start, other work could be done in parallel.
-        long_read_bridges = sorted(long_read_bridges, reverse=True,
+        long_read_bridges = sorted(new_bridges, reverse=True,
                                    key=lambda x: x.predicted_time_to_finalise())
         for bridge in long_read_bridges:
             arg_list.append((bridge, scoring_scheme, min_alignment_length, read_lengths,
                              estimated_genome_size, expected_linear_seqs))
         for output in pool.imap_unordered(finalise_bridge, arg_list):
             completed_count += 1
-            print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                             num_long_read_bridges, min_bridge_qual, verbosity)
-    return all_bridges
+            print_bridge_table_row(alignments, col_widths, output, completed_count,
+                                   num_long_read_bridges, min_bridge_qual, verbosity,
+                                   'LongReadBridge')
 
+    # Now that the bridges are finalised, we split bridges that contain anchor segments in their
+    # path such that all bridges start and end on an anchor segment but contain no anchor segments
+    # in their path.
+    split_bridges = []
+    for bridge in new_bridges:
+        if not bridge.graph_path:
+            split_bridges.append(bridge)
+        else:  # bridge has a path
+            if not any(abs(x) in anchor_seg_nums for x in bridge.graph_path):  # already good
+                split_bridges.append(bridge)
 
-def get_long_read_bridge_table_parameters(graph, num_long_read_bridges, verbosity):
-    max_seg_num_len = len(str(max(graph.segments.keys()))) + 1
+            # If the bridge path contains one or more anchor segments, it must be split!
+            else:
+                full_path = [bridge.start_segment] + bridge.graph_path + [bridge.end_segment]
+                anchor_indices = []
+                for i, seg_num in enumerate(full_path):
+                    if abs(seg_num) in anchor_seg_nums:
+                        anchor_indices.append(i)
+                anchor_indices = sorted(anchor_indices)
+                for i in range(len(anchor_indices) - 1):
+                    start_i = anchor_indices[i]
+                    end_i = anchor_indices[i+1]
+                    start_seg_num = full_path[start_i]
+                    end_seg_num = full_path[end_i]
+                    new_path = full_path[start_i+1:end_i]
+                    split_bridge = LongReadBridge(graph, start_seg_num, end_seg_num)
+                    split_bridge.graph_path = new_path
+                    split_bridge.all_paths = [new_path]
+                    split_bridge.bridge_sequence = graph.get_path_sequence(new_path)
+                    split_bridge.quality = bridge.quality
+                    split_bridges.append(split_bridge)
 
-    table_alignments = 'RL'
-    table_col_widths = [2 * len(str(num_long_read_bridges)) + 1,  # Number
-                        max_seg_num_len + 10]                     # Start to end
-
-    if verbosity > 1:
-        table_alignments += 'RR'
-        table_col_widths += [5, 9]   # Read count, Consensus length
-
-    if verbosity > 2:
-        table_alignments += 'RR'
-        table_col_widths += [9, 8]   # Consensus time, Target length
-
-    if verbosity > 1:
-        table_alignments += 'LRR'
-        table_col_widths += [11, 8, 5]   # Search type, Search time, Path count
-
-    table_alignments += 'L'
-    table_col_widths += [40]  # Best path
-
-    if verbosity > 2:
-        table_alignments += 'RRRR'
-        table_col_widths += [9, 9, 12, 11]  # Best path length, raw score, scaled score, len disc
-
-    table_alignments += 'R'
-    table_col_widths += [7]  # Quality
-
-    return table_alignments, table_col_widths
-
-
-def print_long_read_bridge_table_header(alignments, col_widths, verbosity):
-    header_line_1 = ['', '']
-    header_line_2 = ['', 'Start ' + get_right_arrow() + ' end']
-
-    if verbosity > 1:
-        header_line_1 += ['',      'Consensus']
-        header_line_2 += ['Reads', 'len (bp)']
-    if verbosity > 2:
-        header_line_1 += ['Consensus', 'Target']
-        header_line_2 += ['time (s)',  'len (bp)']
-    if verbosity > 1:
-        header_line_1 += ['',            'Search',   'Path']
-        header_line_2 += ['Search type', 'time (s)', 'count']
-
-    header_line_1 += ['']
-    header_line_2 += ['Best path']
-
-    if verbosity > 2:
-        header_line_1 += ['Best path', 'Best path', 'Best path',    'Best path']
-        header_line_2 += ['len (bp)',  'raw score', 'scaled score', 'length disc']
-
-    header_line_1 += ['']
-    header_line_2 += ['Quality']
-
-    if any(x for x in header_line_1):
-        print_table([header_line_1], col_separation=2, alignments=alignments,
-                    header_format='normal', fixed_col_widths=col_widths, indent=0)
-    print_table([header_line_2], col_separation=2, alignments=alignments,
-                header_format='underline', fixed_col_widths=col_widths, indent=0)
-
-
-def print_long_read_bridge_table_row(alignments, col_widths, output, completed_count,
-                                     num_long_read_bridges, min_bridge_qual, verbosity):
-    fraction = str(completed_count) + '/' + str(num_long_read_bridges)
-
-    start, end, read_count, consensus_length, consensus_time, target_length, path_count, \
-        search_type, search_time, best_path, best_path_len, best_path_raw_score, \
-        best_path_scaled_score, best_path_length_discrepancy, quality = output
-
-    start_to_end = (start + ' ' + get_right_arrow()).rjust(7) + ' ' + end
-    quality_str = float_to_str(quality, 3)
-
-    table_row = [fraction, start_to_end]
-
-    if verbosity > 1:
-        table_row += [read_count, consensus_length]
-
-    if verbosity > 2:
-        table_row += [consensus_time, target_length]
-
-    if verbosity > 1:
-        table_row += [search_type, search_time, path_count]
-
-    table_row += [best_path]
-
-    if verbosity > 2:
-        table_row += [best_path_len, best_path_raw_score, best_path_scaled_score,
-                      best_path_length_discrepancy]
-
-    table_row += [quality_str]
-
-    sub_colour = {}
-    if quality < min_bridge_qual:
-        sub_colour[quality_str] = 'red'
-    print_table([table_row], col_separation=2, header_format='normal', indent=0,
-                left_align_header=False, alignments=alignments, fixed_col_widths=col_widths,
-                sub_colour=sub_colour)
+    return split_bridges
 
 
 def get_single_copy_alignments(read, single_copy_num_set, min_scaled_score):

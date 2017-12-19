@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
+#include <limits>
 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -25,7 +26,7 @@ mm_idx_t *mm_idx_init(int w, int k, int b)
 	if (w < 1) w = 1;
 	mi = (mm_idx_t*)calloc(1, sizeof(mm_idx_t));
 	mi->w = w, mi->k = k, mi->b = b;
-	mi->max_occ = UINT32_MAX;
+	mi->max_occ = std::numeric_limits<uint32_t>::max();
 	mi->B = (mm_idx_bucket_t*)calloc(1<<b, sizeof(mm_idx_bucket_t));
 	return mi;
 }
@@ -71,7 +72,7 @@ uint32_t mm_idx_cal_max_occ(const mm_idx_t *mi, float f)
 	size_t n = 0;
 	uint32_t thres;
 	khint_t *a, k;
-	if (f <= 0.) return UINT32_MAX;
+	if (f <= 0.) return std::numeric_limits<uint32_t>::max();
 	for (i = 0; i < 1<<mi->b; ++i)
 		if (mi->B[i].h) n += kh_size((idxhash_t*)mi->B[i].h);
 	a = (uint32_t*)malloc(n * 4);
@@ -262,7 +263,7 @@ mm_idx_t *mm_idx_build(const char *fn, int w, int k, int n_threads) // a simpler
 	mm_idx_t *mi;
 	fp = bseq_open(fn);
 	if (fp == 0) return 0;
-	mi = mm_idx_gen(fp, w, k, MM_IDX_DEF_B, 1<<18, n_threads, UINT64_MAX, 1);
+	mi = mm_idx_gen(fp, w, k, MM_IDX_DEF_B, 1<<18, n_threads, std::numeric_limits<uint64_t>::max(), 1);
 	mm_idx_set_max_occ(mi, 0.001);
 	bseq_close(fp);
 	return mi;

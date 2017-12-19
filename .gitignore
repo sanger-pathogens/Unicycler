@@ -37,3 +37,4 @@ gh-md-toc
 # CMake stuff (used by CLion)
 CMakeLists.txt
 cmake-build-debug/
+cmake-build-default/

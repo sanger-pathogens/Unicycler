@@ -112,10 +112,6 @@ typedef KDTreeSingleIndexAdaptor<L1_Adaptor<int, PointCloud>, PointCloud, 2> my_
 PointVector radiusSearchAroundPoint(Point point, int radius, PointCloud & cloud,
                                     my_kd_tree_t & index);
 
-PointVector getPointsInHighestDensityRegion(int searchRadius, std::string & trimmedRefSeq,
-                                            std::string * readSeq, PointCloud & cloud,
-                                            my_kd_tree_t & index);
-
 Point getHighestDensityPoint(int densityRadius, PointCloud & cloud, my_kd_tree_t & index,
                              std::string & trimmedRefSeq, std::string * readSeq);
 

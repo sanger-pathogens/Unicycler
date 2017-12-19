@@ -209,11 +209,61 @@ class TestMiscFunctions(unittest.TestCase):
         self.assertAlmostEqual(unicycler.misc.score_function(100000000000000.0, 1.0), 1.0)
         self.assertAlmostEqual(unicycler.misc.score_function(100000000000000.0, 10.0), 1.0)
 
-    def test_strip_read_extensions(self):
+    def test_strip_read_extensions_fasta(self):
         self.assertEqual(unicycler.misc.strip_read_extensions('file.fasta'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('file.fasta.gz'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fasta'), 'file')
         self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fasta.gz'), 'file')
+
+    def test_strip_read_extensions_fna(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fna'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fna.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fna'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fna.gz'), 'file')
+
+    def test_strip_read_extensions_fa(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fa'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fa.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fa'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fa.gz'), 'file')
+
+    def test_strip_read_extensions_other_fasta(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fas'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fsa.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fas'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fsa.gz'), 'file')
+
+    def test_strip_read_extensions_fastq(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fastq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fastq.gz'), 'file')
+
+    def test_strip_read_extensions_fq(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fq.gz'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fq'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.fq.gz'), 'file')
+
+    def test_strip_read_extensions_capitals(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('FILE.FASTA'), 'FILE')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.FNA.GZ'), 'file')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/FILE.fa.gz'), 'FILE')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/FiLe.FaStQ'), 'FiLe')
+
+    def test_strip_read_extensions_fastq_extra_dots(self):
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R1.fastq'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R2.fastq'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R1.fasta.gz'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.R2.fasta.gz'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R1.fasta'), 'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R2.fasta'), 'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R1.fasta.gz'),
+                         'file.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('path/to/file.R2.fasta.gz'),
+                         'file.R2')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.R1'), 'file.fastq.R1')
+        self.assertEqual(unicycler.misc.strip_read_extensions('file.fastq.R2'), 'file.fastq.R2')
 
     def test_add_line_breaks_to_sequence(self):
         self.assertEqual(unicycler.misc.add_line_breaks_to_sequence('ATGCTGATGAAAATACC', 4),
@@ -288,3 +338,60 @@ class TestMiscFunctions(unittest.TestCase):
                                       'GAGTTCTGCTGTGATAACGGAGAGAGACTGCGTGTCACGTTCGCGCTGGACTGCTGTGA'
                                       'TCGTGAG')
         os.remove(test_fasta)
+
+    def test_java_version_parsing_1(self):
+        java_version_output = 'java version "1.8.0_77"\n' \
+                              'Java(TM) SE Runtime Environment (build 1.8.0_77-b03)\n' \
+                              'Java HotSpot(TM) 64-Bit Server VM (build 25.77-b03, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.8.0_77')
+
+    def test_java_version_parsing_2(self):
+        java_version_output = 'java version "1.7.0_80"\n' \
+                              'Java(TM) SE Runtime Environment (build 1.7.0_80-b15)\n' \
+                              'Java HotSpot(TM) 64-Bit Server VM (build 24.80-b11, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.7.0_80')
+
+    def test_java_version_parsing_3(self):
+        java_version_output = 'java version "9.0.1"\n' \
+                              'Java(TM) SE Runtime Environment (build 9.0.1+11)\n' \
+                              'Java HotSpot(TM) 64-Bit Server VM (build 9.0.1+11, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '9.0.1')
+
+    def test_java_version_parsing_4(self):
+        java_version_output = 'openjdk version "1.8.0_131"\n' \
+                              'OpenJDK Runtime Environment (build 1.8.0_131-8u131-b11-2-b11)\n' \
+                              'OpenJDK 64-Bit Server VM (build 25.131-b11, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '1.8.0_131')
+
+    def test_java_version_parsing_5(self):
+        java_version_output = 'this is rubbish output'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '')
+
+    def test_spades_version_parsing_1(self):
+        spades_version_output = 'SPAdes v3.10.1'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.10.1')
+
+    def test_spades_version_parsing_2(self):
+        spades_version_output = 'SPAdes v3.8.2'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.8.2')
+
+    def test_spades_version_parsing_3(self):
+        spades_version_output = 'option -v not recognized\nSPAdes genome assembler v.3.5.0\n\n' \
+                                'Usage: SPAdes-3.5.0-Darwin/bin/spades.py [options] ' \
+                                '-o <output_dir>\n\nBasic options:'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '3.5.0')
+
+    def test_spades_version_parsing_4(self):
+        spades_version_output = 'option -v not recognized\nSPAdes genome assembler v.2.4.0\n\n' \
+                                'Usage: SPAdes-2.4.0-Darwin/bin/spades.py [options] ' \
+                                '-o <output_dir>\n\nBasic options:'
+        version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
+        self.assertEqual(version, '2.4.0')

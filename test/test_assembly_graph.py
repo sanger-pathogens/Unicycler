@@ -187,7 +187,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
         make sure they are the same.
         """
         temp_gfa = os.path.join(os.path.dirname(__file__), 'temp.gfa')
-        self.graph.save_to_gfa(temp_gfa)
+        self.graph.save_to_gfa(temp_gfa, include_insert_size=True)
         graph2 = unicycler.assembly_graph.AssemblyGraph(temp_gfa, 25)
         self.assertEqual(self.graph.overlap, graph2.overlap)
         self.assertEqual(self.graph.insert_size_mean, graph2.insert_size_mean)
@@ -730,3 +730,317 @@ class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([-5, -4, -3, -2, -1]), 0)
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([12, 13, 14]), 2)
         self.assertEqual(self.graph.dead_end_change_if_path_deleted([-14, -13, -12]), 2)
+
+
+class TestRepairMultiwayJunction(unittest.TestCase):
+    """
+    Tests the AssemblyGraph.repair_multi_way_junctions function
+    """
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_multiway_junction_repair.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def test_graph(self):
+        self.assertEqual(len(self.graph.segments), 38)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 84)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 84)
+
+    def test_repair_multi_way_junctions_1(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_1 = self.graph.get_downstream_seg_nums(1)
+        downstream_2 = self.graph.get_downstream_seg_nums(2)
+        upstream_3 = self.graph.get_upstream_seg_nums(-3)
+        upstream_4 = self.graph.get_upstream_seg_nums(-4)
+        new_seg_num = downstream_1[0]
+        self.assertEqual(downstream_1, [new_seg_num])
+        self.assertEqual(downstream_2, [new_seg_num])
+        self.assertEqual(upstream_3, [new_seg_num])
+        self.assertEqual(upstream_4, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-4, -3])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [1, 2])
+
+    def test_repair_multi_way_junctions_2(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_5 = self.graph.get_downstream_seg_nums(5)
+        downstream_6 = self.graph.get_downstream_seg_nums(6)
+        downstream_7 = self.graph.get_downstream_seg_nums(-7)
+        upstream_8 = self.graph.get_upstream_seg_nums(-8)
+        upstream_9 = self.graph.get_upstream_seg_nums(-9)
+        new_seg_num = downstream_5[0]
+        self.assertEqual(downstream_5, [new_seg_num])
+        self.assertEqual(downstream_6, [new_seg_num])
+        self.assertEqual(downstream_7, [new_seg_num])
+        self.assertEqual(upstream_8, [new_seg_num])
+        self.assertEqual(upstream_9, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-9, -8])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [-7, 5, 6])
+
+    def test_repair_multi_way_junctions_3(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_10 = self.graph.get_downstream_seg_nums(10)
+        downstream_11 = self.graph.get_downstream_seg_nums(11)
+        downstream_12 = self.graph.get_downstream_seg_nums(-12)
+        upstream_13 = self.graph.get_upstream_seg_nums(-13)
+        upstream_14 = self.graph.get_upstream_seg_nums(-14)
+        upstream_15 = self.graph.get_upstream_seg_nums(15)
+        new_seg_num = downstream_10[0]
+        self.assertEqual(downstream_10, [new_seg_num])
+        self.assertEqual(downstream_11, [new_seg_num])
+        self.assertEqual(downstream_12, [new_seg_num])
+        self.assertEqual(upstream_13, [new_seg_num])
+        self.assertEqual(upstream_14, [new_seg_num])
+        self.assertEqual(upstream_15, [new_seg_num])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-14, -13, 15])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [-12, 10, 11])
+
+    def test_repair_multi_way_junctions_4(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_16 = self.graph.get_downstream_seg_nums(16)
+        downstream_17 = self.graph.get_downstream_seg_nums(16)
+        downstream_18 = self.graph.get_downstream_seg_nums(-18)
+        upstream_19 = self.graph.get_upstream_seg_nums(-19)
+        upstream_20 = self.graph.get_upstream_seg_nums(-20)
+        new_seg_num = downstream_16[0]
+        self.assertEqual(downstream_16, [new_seg_num])
+        self.assertEqual(downstream_17, [new_seg_num])
+        self.assertEqual(downstream_18, [-20])
+        self.assertEqual(upstream_19, [new_seg_num])
+        self.assertEqual(sorted(upstream_20), sorted([-18, new_seg_num]))
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-20, -19])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [16, 17])
+
+    def test_repair_multi_way_junctions_5(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_21 = self.graph.get_downstream_seg_nums(21)
+        downstream_22 = self.graph.get_downstream_seg_nums(22)
+        downstream_23 = self.graph.get_downstream_seg_nums(-23)
+        upstream_24 = self.graph.get_upstream_seg_nums(-24)
+        upstream_25 = self.graph.get_upstream_seg_nums(-25)
+        upstream_26 = self.graph.get_upstream_seg_nums(26)
+        new_seg_num = downstream_21[0]
+        self.assertEqual(downstream_21, [new_seg_num])
+        self.assertEqual(sorted(downstream_22), sorted([26, new_seg_num]))
+        self.assertEqual(downstream_23, [-25])
+        self.assertEqual(upstream_24, [new_seg_num])
+        self.assertEqual(sorted(upstream_25), sorted([-23, new_seg_num]))
+        self.assertEqual(upstream_26, [22])
+        self.assertEqual(self.graph.segments[abs(new_seg_num)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num)), [-25, -24])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num)), [21, 22])
+
+    def test_repair_multi_way_junctions_6(self):
+        self.graph.repair_multi_way_junctions()
+        downstream_27 = self.graph.get_downstream_seg_nums(27)
+        downstream_28 = self.graph.get_downstream_seg_nums(28)
+        downstream_29 = self.graph.get_downstream_seg_nums(-29)
+        upstream_30 = self.graph.get_upstream_seg_nums(-30)
+        upstream_31 = self.graph.get_upstream_seg_nums(-31)
+        upstream_32 = self.graph.get_upstream_seg_nums(32)
+        new_seg_num_1 = downstream_27[0]
+        new_seg_num_2 = downstream_29[0]
+        self.assertEqual(downstream_27, [new_seg_num_1])
+        self.assertEqual(sorted(downstream_28), sorted([new_seg_num_1, new_seg_num_2]))
+        self.assertEqual(downstream_29, [new_seg_num_2])
+        self.assertEqual(upstream_30, [new_seg_num_1])
+        self.assertEqual(sorted(upstream_31), sorted([new_seg_num_1, new_seg_num_2]))
+        self.assertEqual(upstream_32, [new_seg_num_2])
+        self.assertEqual(self.graph.segments[abs(new_seg_num_1)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num_1)), [-31, -30])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num_1)), [27, 28])
+        self.assertEqual(self.graph.segments[abs(new_seg_num_2)].get_length(), 0)
+        self.assertEqual(sorted(self.graph.get_downstream_seg_nums(new_seg_num_2)), [-31, 32])
+        self.assertEqual(sorted(self.graph.get_upstream_seg_nums(new_seg_num_2)), [-29, 28])
+
+
+class TestRemoveZeroLengthSegments(unittest.TestCase):
+    """
+    Tests the AssemblyGraph.remove_zero_length_segs function
+    """
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_remove_zero_length_segs.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def link_exists(self, start, end):
+        return (end in self.graph.forward_links[start] and
+                start in self.graph.reverse_links[end] and
+                -start in self.graph.forward_links[-end] and
+                -end in self.graph.reverse_links[-start])
+
+    def test_graph(self):
+        self.assertEqual(len(self.graph.segments), 44)
+        self.assertEqual(sum(len(x) for x in self.graph.forward_links.values()), 114)
+        self.assertEqual(sum(len(x) for x in self.graph.reverse_links.values()), 114)
+
+    def test_remove_zero_length_segs_1(self):
+        """
+        Tests that segment 9638 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9638 not in self.graph.segments)
+        self.assertTrue(9469 in self.graph.segments)
+        self.assertTrue(self.link_exists(7719, 2695))
+
+    def test_remove_zero_length_segs_2(self):
+        """
+        Tests that segment 5849 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(5849 not in self.graph.segments)
+        self.assertTrue(self.link_exists(5381, -3894))
+
+    def test_remove_zero_length_segs_3(self):
+        """
+        Tests that segment 6513 has not been removed (it's a junction point).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(6513 in self.graph.segments)
+        self.assertTrue(self.link_exists(8853, 6513))
+        self.assertTrue(self.link_exists(2695, 6513))
+        self.assertTrue(self.link_exists(6513, 8824))
+        self.assertTrue(self.link_exists(6513, 9533))
+
+    def test_remove_zero_length_segs_4(self):
+        """
+        Tests that both segments 8851 and 8852 have been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8851 not in self.graph.segments)
+        self.assertTrue(8852 not in self.graph.segments)
+        self.assertTrue(1435 in self.graph.segments)
+        self.assertTrue(4731 in self.graph.segments)
+        self.assertTrue(self.link_exists(1435, -4731))
+
+    def test_remove_zero_length_segs_5(self):
+        """
+        Tests that segment 4907 has not been removed (it's a junction point and a dead end).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(4907 in self.graph.segments)
+        self.assertTrue(self.link_exists(4907, 8189))
+        self.assertTrue(self.link_exists(4907, -8223))
+
+    def test_remove_zero_length_segs_6(self):
+        """
+        Tests that segment 10029 has been removed (it's a dead end but not a junction).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(10029 not in self.graph.segments)
+        self.assertTrue(9867 in self.graph.segments)
+        self.assertTrue(self.link_exists(9867, 318))
+
+    def test_remove_zero_length_segs_7(self):
+        """
+        Tests that segment 9822 has been removed (it's on a simple path).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9822 not in self.graph.segments)
+        self.assertTrue(self.link_exists(-1435, 7719))
+
+    def test_remove_zero_length_segs_8(self):
+        """
+        Tests that segment 1 has been removed (it's isolated and unconnected).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(1 not in self.graph.segments)
+
+    def test_remove_zero_length_segs_9(self):
+        """
+        Tests that segment 8232 has been removed.
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8232 not in self.graph.segments)
+        self.assertTrue(self.link_exists(7453, 1272))
+        self.assertTrue(self.link_exists(-7450, 1272))
+
+    def test_remove_zero_length_segs_10(self):
+        """
+        Tests that segments 9125 and 9126 have been removed (results in a 3-way split).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(9125 not in self.graph.segments)
+        self.assertTrue(9126 not in self.graph.segments)
+        self.assertTrue(self.link_exists(1272, 5430))
+        self.assertTrue(self.link_exists(1272, -3106))
+        self.assertTrue(self.link_exists(1272, 5458))
+
+    def test_remove_zero_length_segs_11(self):
+        """
+        Tests that segments 8854 and 8855 have been removed (in a simple path).
+        """
+        self.graph.remove_zero_length_segs()
+        self.assertTrue(8854 not in self.graph.segments)
+        self.assertTrue(8855 not in self.graph.segments)
+        self.assertTrue(self.link_exists(2695, 6513))
+
+
+class TestExpandRepeats(unittest.TestCase):
+
+    def setUp(self):
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_expand_repeats.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
+        unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
+
+    def test_expand_repeats_1(self):
+        """
+        Tests that the common sequence in segments 3 and 4 (just a C) is moved onto segment 2.
+        """
+        self.assertTrue(self.graph.segments[2].forward_sequence.endswith('AGCGACTGC'))
+        self.assertTrue(self.graph.segments[3].forward_sequence.startswith, 'CAGCGACTAG')
+        self.assertTrue(self.graph.segments[4].forward_sequence.startswith, 'CTGACGAGCA')
+        self.graph.expand_repeats()
+        self.assertTrue(self.graph.segments[2].forward_sequence.endswith('AGCGACTGCC'))
+        self.assertTrue(self.graph.segments[3].forward_sequence.startswith, 'AGCGACTAG')
+        self.assertTrue(self.graph.segments[4].forward_sequence.startswith, 'TGACGAGCA')
+
+    def test_expand_repeats_2(self):
+        """
+        Tests that the common sequence in segments 7 and 8 (GATTAGCG) is moved onto segment 6.
+        """
+        self.assertTrue(self.graph.segments[6].forward_sequence.endswith('TACGATTAGC'))
+        self.assertTrue(self.graph.segments[7].forward_sequence.startswith, 'GATTAGCGGC')
+        self.assertTrue(self.graph.segments[8].forward_sequence.startswith, 'GATTAGCGCA')
+        self.graph.expand_repeats()
+        self.assertTrue(self.graph.segments[6].forward_sequence.endswith('GCGATTAGCG'))
+        self.assertTrue(self.graph.segments[7].forward_sequence.startswith, 'GCTTATCTT')
+        self.assertTrue(self.graph.segments[8].forward_sequence.startswith, 'CACGACATG')
+
+    def test_expand_repeats_3(self):
+        """
+        Tests that the common sequence on both strands of segment 1 is moved onto segment 2.
+        """
+        self.assertEqual(self.graph.segments[1].forward_sequence, 'ATGGGGGGAT')
+        self.assertTrue(self.graph.segments[2].forward_sequence.startswith('CGCTCAGGCG'))
+        self.graph.expand_repeats()
+        self.assertEqual(self.graph.segments[1].forward_sequence, 'GGGGGG')
+        self.assertTrue(self.graph.segments[2].forward_sequence.startswith('ATCGCTCAGGCG'))
+
+    def test_expand_repeats_4(self):
+        """
+        Tests that segment 5 isn't changed, because moving its common sequence (from each strand)
+        onto segment 6 would involve more trimming than the segment could handle.
+        """
+        self.assertEqual(self.graph.segments[5].forward_sequence, 'ATATATATAT')
+        self.assertTrue(self.graph.segments[6].forward_sequence.startswith('CGCTCAGGCG'))
+        self.graph.expand_repeats()
+        self.assertEqual(self.graph.segments[5].forward_sequence, 'ATATATATAT')
+        self.assertTrue(self.graph.segments[6].forward_sequence.startswith('CGCTCAGGCG'))
+
+    def test_expand_repeats_5(self):
+        """
+        Tests that paths through the graph are unchanged by the repeat expansion.
+        """
+        path_1_sequence_before = self.graph.get_path_sequence([-3, -2, 1, 2, 4])
+        path_2_sequence_before = self.graph.get_path_sequence([-7, -6, -5, 6, 8])
+        self.graph.expand_repeats()
+        path_1_sequence_after = self.graph.get_path_sequence([-3, -2, 1, 2, 4])
+        path_2_sequence_after = self.graph.get_path_sequence([-7, -6, -5, 6, 8])
+        self.assertEqual(path_1_sequence_before, path_1_sequence_after)
+        self.assertEqual(path_2_sequence_before, path_2_sequence_after)

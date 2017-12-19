@@ -571,7 +571,7 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(len(read.alignments), 1)
         alignment = read.alignments[0]
         self.assertEqual(alignment.read.name, '10')
-        self.assertTrue(alignment.raw_score >= 4981)
+        self.assertTrue(alignment.raw_score >= 4978)
         self.assertTrue(alignment.scaled_score > 71.07)
         read_start, read_end = alignment.read_start_end_positive_strand()
         self.assertEqual(read_start, 0)  # start of read
@@ -644,3 +644,21 @@ class TestToughAlignments(unittest.TestCase):
         self.assertEqual(alignment.read.name, '14')
         self.assertTrue(alignment.raw_score >= 204)
         self.assertTrue(alignment.scaled_score > 93.0)
+
+    def test_tough_alignment_15(self):
+        """
+        This read should hit the same reference twice, even at low sensitivities.
+        """
+        self.do_alignment('15', 0)
+        read = self.aligned_reads['15']
+        self.assertEqual(len(read.alignments), 2)
+        alignment_1 = read.alignments[0]
+        alignment_2 = read.alignments[1]
+        self.assertEqual(alignment_1.read.name, '15')
+        self.assertEqual(alignment_2.read.name, '15')
+        self.assertTrue(alignment_1.raw_score >= 1846)
+        self.assertTrue(alignment_2.raw_score >= 3137)
+        read_start, _ = alignment_1.read_start_end_positive_strand()
+        _, read_end = alignment_2.read_start_end_positive_strand()
+        self.assertEqual(read_start, 0)    # start of read
+        self.assertEqual(read_end, 4144)  # end of read

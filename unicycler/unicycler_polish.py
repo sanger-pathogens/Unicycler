@@ -244,7 +244,7 @@ def clean_up(args, pbalign_alignments=True, illumina_alignments=True, long_read_
             os.remove(f)
     if os.path.isdir('temp_pilon'):
         print_command(['rm', '-r', 'temp_pilon'], args.verbosity)
-        shutil.rmtree('temp_pilon')
+        shutil.rmtree('temp_pilon', ignore_errors=True)
 
 
 def get_tool_paths(args, short, pacbio, long_reads):
