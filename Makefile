@@ -32,7 +32,11 @@ endif
 ifeq ($(COMPILER),clang)
   COMPILER_VERSION := $(shell $(CXX) --version | grep version | grep -o -m 1 "[0-9]\+\.[0-9]\+\.*[0-9]*" | head -n 1)
 else
-  COMPILER_VERSION := $(shell $(CXX) -dumpversion)
+  COMPILER_VERSION := $(shell $(CXX) -dumpfullversion)
+  ifeq ($(COMPILER_VERSION),)
+      $(warning Falling back to -dumpversion as GCC did not support -dumpfullversion option)
+      COMPILER_VERSION := $(shell $(CXX) -dumpversion)
+  endif
 endif
 COMPILER_VERSION_NUMBER := $(shell echo $(COMPILER_VERSION) | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' -e 's/^[0-9]\{3,4\}$$/&00/')
 $(info Compiler: $(COMPILER) $(COMPILER_VERSION))
