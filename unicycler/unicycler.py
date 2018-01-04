@@ -1005,7 +1005,7 @@ def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_comman
                 filtered_read_dict[read_name] = read_dict[read_name]
         read_names = filtered_read_names
         read_dict = filtered_read_dict
-        log.log('\nDiscarded', contaminant_read_count, 'reads as contamination', 2)
+        log.log('\nDiscarded ' + str(contaminant_read_count) + ' reads as contamination', 2)
 
     # Use the long reads which aligned entirely within contigs (which are most likely correct)
     # to determine a minimum score.
