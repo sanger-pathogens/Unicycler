@@ -63,7 +63,7 @@ class MiniasmBridge(object):
             path_start_time = time.time()
             self.all_paths, progressive_path_search = \
                 get_best_paths_for_seq(graph, self.start_segment, self.end_segment,
-                                       target_path_length, bridge_sequence, scoring_scheme, 0.9)
+                                       target_path_length, bridge_sequence, scoring_scheme, 90.0)
             path_time = time.time() - path_start_time
 
             output.append(str(len(self.all_paths)))
