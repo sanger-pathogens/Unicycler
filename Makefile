@@ -32,9 +32,9 @@ endif
 ifeq ($(COMPILER),clang)
   COMPILER_VERSION := $(shell $(CXX) --version | grep version | grep -o -m 1 "[0-9]\+\.[0-9]\+\.*[0-9]*" | head -n 1)
 else
-  COMPILER_VERSION := $(shell $(CXX) -dumpfullversion)
+  COMPILER_VERSION := $(shell $(CXX) -dumpfullversion 2> /dev/null)
   ifeq ($(COMPILER_VERSION),)
-      $(warning Falling back to -dumpversion as GCC did not support -dumpfullversion option)
+      $(info Falling back to -dumpversion as compiler did not support -dumpfullversion)
       COMPILER_VERSION := $(shell $(CXX) -dumpversion)
   endif
 endif
