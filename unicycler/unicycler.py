@@ -417,7 +417,6 @@ def get_arguments():
                                    'using Pilon'
                                    if show_all_args else argparse.SUPPRESS)
 
-
     # VCF options
     polish_group = parser.add_argument_group('VCF',
                                              'These options control the production of the VCF of '
@@ -599,7 +598,7 @@ def get_anchor_segments(graph):
             anchor_seg_nums |= set(new_anchor_segs)
 
     anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums], reverse=True,
-                              key=lambda x: x.get_length())
+                             key=lambda x: x.get_length())
 
     # TO DO: if long reads are available, I could potentially use them to more reliably determine
     # whether segments are single-copy or not single-copy. Something like taking all long reads
@@ -610,9 +609,9 @@ def get_anchor_segments(graph):
     log.log('', 2)
     total_anchor_length = sum([x.get_length() for x in anchor_segments])
     log.log(int_to_str(len(anchor_segments)) +
-          ' anchor segments (' + int_to_str(total_anchor_length) + ' bp) out of ' +
-          int_to_str(len(graph.segments)) +
-          ' total segments (' + int_to_str(graph.get_total_length()) + ' bp)')
+            ' anchor segments (' + int_to_str(total_anchor_length) + ' bp) out of ' +
+            int_to_str(len(graph.segments)) +
+            ' total segments (' + int_to_str(graph.get_total_length()) + ' bp)')
     log.log('\nAnchor segments:', 2)
     log.log_number_list([x.number for x in anchor_segments], 2)
 
@@ -809,6 +808,7 @@ def check_dependencies(args, short_reads_available, long_reads_available):
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
                                pilon_status, bcftools_status, args)
 
+
 def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
                                pilon_status, bcftools_status, args):
@@ -847,11 +847,11 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
         quit_with_error('could not find java - either specify its location using --java_path or '
                         'use --no_pilon to remove Java dependency')
     if java_status == 'bad':
-        quit_with_error('Java did not run correctly - either specify its location using --java_path or '
-                        'use --no_pilon to remove Java dependency')
+        quit_with_error('Java did not run correctly - either specify its location using '
+                        '--java_path or use --no_pilon to remove Java dependency')
     if pilon_status == 'not found':
         quit_with_error('could not find pilon or pilon*.jar - either specify its location '
-                            'using --pilon_path or use --no_pilon to remove Pilon dependency')
+                        'using --pilon_path or use --no_pilon to remove Pilon dependency')
     if pilon_status == 'bad':
         quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
                         'fix it, specify a different location using --pilon_path or use '

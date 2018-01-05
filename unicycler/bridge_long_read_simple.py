@@ -39,7 +39,6 @@ except AttributeError as att_err:
              'Have you successfully built the library file using make?')
 
 
-
 class SimpleLongReadBridge(object):
     def __init__(self, graph, start, end, path, votes_for, votes_against):
 
@@ -226,7 +225,6 @@ def simple_bridge_two_way_junctions(graph, start_overlap_reads, end_overlap_read
 
         table_row += [str(option_1_votes), str(option_2_votes), str(neither_option_votes)]
 
-
         # If there aren't any votes at all, that's a shame! The long reads were probably too few
         # and/or too short to span the junction.
         if option_1_votes == 0 and option_2_votes == 0:
@@ -291,7 +289,7 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
     seg_nums_to_bridge = set(x.number for x in segments_to_bridge)
     loops = [x for x in loops
              if abs(x[0]) in seg_nums_to_bridge and abs(x[1]) in seg_nums_to_bridge and
-                abs(x[3]) not in seg_nums_to_bridge]
+             abs(x[3]) not in seg_nums_to_bridge]
     loops = [x for x in loops if abs(x[0]) != abs(x[1])]
     if not loops:
         log.log('No suitable simple loops present')
@@ -405,8 +403,8 @@ def simple_bridge_loops(graph, start_overlap_reads, end_overlap_reads, minimap_a
 def get_read_loop_vote_one_arg(all_args):
     start, end, middle, repeat, strand, minimap_alignments, read, read_dict, graph, \
         max_tested_loop_count, scoring_scheme = all_args
-    return get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, read, read_dict,
-                       graph, max_tested_loop_count, scoring_scheme)
+    return get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, read,
+                              read_dict, graph, max_tested_loop_count, scoring_scheme)
 
 
 def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, read, read_dict,

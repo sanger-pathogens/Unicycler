@@ -2400,10 +2400,10 @@ class AssemblyGraph(object):
             if self.get_copy_number(segment) != 2:
                 continue
             seg_num = segment.number
-            input_count = (
-            len(self.reverse_links[seg_num]) if seg_num in self.reverse_links else 0)
-            output_count = (
-            len(self.forward_links[seg_num]) if seg_num in self.forward_links else 0)
+            input_count = (len(self.reverse_links[seg_num])
+                           if seg_num in self.reverse_links else 0)
+            output_count = (len(self.forward_links[seg_num])
+                            if seg_num in self.forward_links else 0)
             if input_count != 2 or output_count != 2:
                 continue
             exclusive_input_count = len(self.get_exclusive_inputs(seg_num))

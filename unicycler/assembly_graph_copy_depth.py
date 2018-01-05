@@ -205,7 +205,6 @@ def add_to_copy_depth_table(before_str, after_str, copy_depth_table):
     copy_depth_table.append([before_str, get_right_arrow(), after_str])
 
 
-
 def redistribute_copy_depths(graph, error_margin, copy_depth_table):
     """
     This function deals with the easier case of copy depth redistribution: where one segments
@@ -256,7 +255,7 @@ def redistribute_copy_depths(graph, error_margin, copy_depth_table):
         if best_arrangement is not None:
             for connection_num, connection_depths in zip(connections, best_arrangement):
                 if (connection_num in graph.manual_multiplicity and
-                    graph.manual_multiplicity[connection_num] != len(connection_depths)):
+                        graph.manual_multiplicity[connection_num] != len(connection_depths)):
                     conflict = True
 
         if lowest_error < error_margin and not conflict:

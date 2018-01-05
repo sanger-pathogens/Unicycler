@@ -228,7 +228,7 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
 
     if reads_already_exist:
         log.log('Corrected reads already exist. Will use these reads instead of running SPAdes '
-              'error correction:')
+                'error correction:')
         if using_paired_reads:
             log.log('  ' + corrected_1)
             log.log('  ' + corrected_2)
@@ -338,7 +338,7 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
     unpaired = read_files[2]
 
     using_paired_reads = short1 is not None and short2 is not None and \
-                         os.path.isfile(short1) and os.path.isfile(short2)
+        os.path.isfile(short1) and os.path.isfile(short2)
     using_unpaired_reads = unpaired is not None and os.path.isfile(unpaired)
 
     kmer_string = ','.join([str(x) for x in kmers])

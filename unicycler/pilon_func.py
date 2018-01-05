@@ -232,8 +232,10 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
     if using_paired_reads:
         paired_sam_filename = str(round_num) + '_paired_alignments.sam'
         paired_bam_filename = str(round_num) + '_paired_alignments.bam'
-        this_bowtie2_command = bowtie2_command + ['-S', paired_sam_filename, '-1', args.short1, '-2', args.short2]
-        run_bowtie_samtools_commands(args, this_bowtie2_command, paired_sam_filename, paired_bam_filename)
+        this_bowtie2_command = bowtie2_command + ['-S', paired_sam_filename,
+                                                  '-1', args.short1, '-2', args.short2]
+        run_bowtie_samtools_commands(args, this_bowtie2_command, paired_sam_filename,
+                                     paired_bam_filename)
     else:
         paired_bam_filename = ''
 
@@ -241,7 +243,8 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
         unpaired_sam_filename = str(round_num) + '_unpaired_alignments.sam'
         unpaired_bam_filename = str(round_num) + '_unpaired_alignments.bam'
         this_bowtie2_command = bowtie2_command + ['-S', unpaired_sam_filename, '-U', args.unpaired]
-        run_bowtie_samtools_commands(args, this_bowtie2_command, unpaired_sam_filename, unpaired_bam_filename)
+        run_bowtie_samtools_commands(args, this_bowtie2_command, unpaired_sam_filename,
+                                     unpaired_bam_filename)
     else:
         unpaired_bam_filename = ''
 
@@ -325,10 +328,10 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
 
     if args.keep < 3:
         list_of_files = [input_filename, pilon_fasta_filename, pilon_changes_filename,
-                         input_filename + '.1.bt2', input_filename + '.2.bt2', input_filename + '.3.bt2',
-                         input_filename + '.4.bt2', input_filename + '.rev.1.bt2',
-                         input_filename + '.rev.2.bt2', pilon_output_filename,
-                         paired_bam_filename, paired_bam_filename + '.bai',
+                         input_filename + '.1.bt2', input_filename + '.2.bt2',
+                         input_filename + '.3.bt2', input_filename + '.4.bt2',
+                         input_filename + '.rev.1.bt2', input_filename + '.rev.2.bt2',
+                         pilon_output_filename, paired_bam_filename, paired_bam_filename + '.bai',
                          unpaired_bam_filename, unpaired_bam_filename + '.bai']
         for f in list_of_files:
             try:

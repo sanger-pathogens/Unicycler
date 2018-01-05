@@ -744,6 +744,7 @@ def convert_fastq_to_fasta(fastq, fasta):
                 fasta.write('>' + name + '\n')
                 fasta.write(sequence + '\n')
 
+
 def get_ascii_art():
     ascii_art = (bold_red("       __\n") +
                  bold_red("       \ \___\n") +

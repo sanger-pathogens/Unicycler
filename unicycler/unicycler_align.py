@@ -367,7 +367,7 @@ def print_alignment_summary_table(read_dict, verbosity, using_contamination):
     ref_bases_aligned = 0
     for read in read_dict.values():
         ref_bases_aligned += read.get_reference_bases_aligned()
-    log.log_section_header('Read alignment summary', single_newline=(verbosity>1))
+    log.log_section_header('Read alignment summary', single_newline=(verbosity > 1))
     max_v = max(len(read_dict), ref_bases_aligned)
 
     if using_contamination:

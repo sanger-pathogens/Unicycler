@@ -78,7 +78,7 @@ class MinimapAlignment(object):
 
     def get_string_for_cpp_scrub(self):
         return '\t'.join([str(x) for x in [self.read_length, self.read_start, self.read_end,
-                                          self.ref_length, self.ref_start, self.ref_end]])
+                                           self.ref_length, self.ref_start, self.ref_end]])
 
     def __repr__(self):
         return str(self.read_start) + '-' + str(self.read_end) + '(' + self.read_strand + '):' + \
@@ -188,10 +188,11 @@ def align_long_reads_to_assembly_graph(graph, long_read_filename, working_dir, t
     graph.save_to_fasta(segments_fasta, verbosity=2)
     minimap_alignments_str = minimap_align_reads(segments_fasta, long_read_filename, threads, 3,
                                                  'default')
-    minimap_alignments = load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
-                                                 allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
-                                                 filter_by_minimisers=True,
-                                                 minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)
+    minimap_alignments = \
+        load_minimap_alignments(minimap_alignments_str, filter_overlaps=True,
+                                allowed_overlap=settings.ALLOWED_MINIMAP_OVERLAP,
+                                filter_by_minimisers=True,
+                                minimiser_ratio=settings.MAX_TO_MIN_MINIMISER_RATIO)
     log.log('Number of minimap alignments: ' + str(len(minimap_alignments)), 2)
     log.log('', 1)
     return minimap_alignments

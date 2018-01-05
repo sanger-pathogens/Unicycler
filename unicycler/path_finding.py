@@ -54,7 +54,7 @@ def get_best_paths_for_seq(graph, start_seg, end_seg, target_length, sequence, s
     except TooManyPaths:
         progressive_path_search = True
         paths = progressive_path_find(graph, start_seg, end_seg, min_length, max_length,
-                                          sequence, scoring_scheme, expected_scaled_score)
+                                      sequence, scoring_scheme, expected_scaled_score)
 
     # Sort by length discrepancy from the target so the closest length matches come first.
     paths = sorted(paths, key=lambda x: abs(target_length - graph.get_bridge_path_length(x)))

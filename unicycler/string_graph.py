@@ -371,7 +371,6 @@ class StringGraph(object):
         following_seg_name = following_segments[0]
         return preceding_seg_name == pos_seg_name and following_seg_name == pos_seg_name
 
-
     def completed_circular_replicons(self):
         completed_components = []
         single_segment_components = [x for x in self.get_connected_components() if len(x) == 1]
@@ -380,7 +379,6 @@ class StringGraph(object):
             if self.segment_is_circular(seg):
                 completed_components.append(seg)
         return completed_components
-
 
     def get_connected_components(self):
         """
@@ -427,7 +425,6 @@ class StringGraph(object):
             for segment in upstream_segments:
                 connected_segments.add(get_unsigned_seg_name(segment))
         return list(connected_segments)
-
 
     def replace_with_polished_sequences(self, polished_fasta, scoring_scheme):
         """
@@ -574,7 +571,8 @@ class StringGraphSegment(object):
         return len(self.forward_sequence)
 
     def gfa_segment_line(self, include_depth=True):
-        s_line_parts = ['S', self.full_name, self.forward_sequence, 'LN:i:' + str(self.get_length())]
+        s_line_parts = ['S', self.full_name, self.forward_sequence,
+                        'LN:i:' + str(self.get_length())]
         if include_depth:
             s_line_parts += ['dp:f:' + str(self.depth)]
         return '\t'.join(s_line_parts) + '\n'
@@ -655,6 +653,7 @@ def get_adjusted_contig_name_and_seq(contig_name, full_seq, start_pos, end_pos):
     adjusted_seq = full_seq[start_pos:end_pos]
 
     return adjusted_name, adjusted_seq
+
 
 def merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames):
     """

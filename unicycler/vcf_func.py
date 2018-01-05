@@ -101,7 +101,7 @@ def make_vcf(vcf_filename, args, assembly_file, insert_size_1st, insert_size_99t
         raise CannotMakeVcf('samtools faidx encountered an error:\n' + e.output.decode())
 
     mpileup_command = args.samtools_path + ' mpileup -v -u -f ' + input_fasta + ' ' + \
-                      bam_filename + ' | ' + args.bcftools_path + ' call -c -v -o ' + vcf_filename
+        bam_filename + ' | ' + args.bcftools_path + ' call -c -v -o ' + vcf_filename
     log.log(mpileup_command)
     mpileup = subprocess.Popen(mpileup_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                shell=True)

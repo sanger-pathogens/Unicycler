@@ -62,8 +62,8 @@ class MiniasmBridge(object):
             output += [str(target_path_length), '', str(target_path_length)]
             path_start_time = time.time()
             self.all_paths, progressive_path_search = \
-                get_best_paths_for_seq(graph, self.start_segment, self.end_segment, target_path_length,
-                                       bridge_sequence, scoring_scheme, 0.9)
+                get_best_paths_for_seq(graph, self.start_segment, self.end_segment,
+                                       target_path_length, bridge_sequence, scoring_scheme, 0.9)
             path_time = time.time() - path_start_time
 
             output.append(str(len(self.all_paths)))
@@ -188,9 +188,9 @@ def create_miniasm_bridges(graph, string_graph, anchor_segments, scoring_scheme,
         preceding_seg_name = preceding_seg_name[7:]
         following_seg_name = following_seg_name[7:]
         preceding_segment_number = int(preceding_seg_name[:-1]) * \
-                                   (1 if preceding_seg_name[-1] == '+' else -1)
+            (1 if preceding_seg_name[-1] == '+' else -1)
         following_segment_number = int(following_seg_name[:-1]) * \
-                                   (1 if following_seg_name[-1] == '+' else -1)
+            (1 if following_seg_name[-1] == '+' else -1)
         assert abs(preceding_segment_number) in anchor_seg_nums
         assert abs(following_segment_number) in anchor_seg_nums
 

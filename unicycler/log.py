@@ -52,7 +52,6 @@ class Log(object):
         else:
             self.log_file = None
 
-
     def __del__(self):
         if self.log_file and not self.log_file.closed:
             self.log_file.close()
@@ -60,6 +59,7 @@ class Log(object):
 
 # This is the one and only instance of the Log class.
 logger = Log()
+
 
 def log(text, verbosity=1, stderr=False, end='\n', print_to_screen=True, write_to_log_file=True):
     text_no_formatting = remove_formatting(text)
