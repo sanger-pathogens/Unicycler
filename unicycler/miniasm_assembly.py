@@ -496,7 +496,7 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
             not_last = i < len(unitig_contig_positions) - 1
             last_and_circular = (i == len(unitig_contig_positions) - 1 and circular_unitig)
             if not_last or last_and_circular:
-                assert end_pos > 0
+                assert end_pos >= 0
                 bridge_start = end_pos
                 if not_last:
                     bridge_end = unitig_contig_positions[i+1][0]
@@ -519,24 +519,6 @@ def place_contigs(miniasm_dir, assembly_graph, unitig_graph, threads, scoring_sc
                     seg_name = 'BRIDGE_' + str(next(bridge_num))
                     new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
                     segment_names.append(seg_name + '+')
-
-                # ... and it is circular, then make a bridge connecting to the start.
-                if circular_unitig:
-                    bridge_seq = unitig_seq[end_pos:unitig_length]
-                    first_contig_start_overlap = unitig_contig_positions[0][0]
-
-                    # If the first contig overlaps the start, then the bridge needs to be shortened.
-                    if first_contig_start_overlap < 0:
-                        bridge_seq = bridge_seq[:first_contig_start_overlap]
-
-                    # If the first contig doesn't overlap, then we need more bridge sequence.
-                    else:
-                        bridge_seq += unitig_seq[:first_contig_start_overlap]
-
-                    if bridge_seq:
-                        seg_name = 'BRIDGE_' + str(next(bridge_num))
-                        new_graph.segments[seg_name] = StringGraphSegment(seg_name, bridge_seq)
-                        segment_names.append(seg_name + '+')
 
         # Create links between all the new segments.
         if circular_unitig:
