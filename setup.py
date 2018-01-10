@@ -188,6 +188,22 @@ class UnicyclerClean(Command):
             os.remove(delete_file)
 
 
+class UnicyclerToolCheck(Command):
+    """
+    Custom command to run the tool check for unicycler without having to call install
+    """
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        tool_check()
+
+
 setup(name='unicycler',
       version=__version__,
       description='bacterial genome assembler for hybrid read sets',
@@ -204,5 +220,6 @@ setup(name='unicycler',
                                         'unicycler_scrub = unicycler.unicycler_scrub:main']},
       zip_safe=False,
       cmdclass={'install': UnicyclerInstall,
-                'clean': UnicyclerClean}
+                'clean': UnicyclerClean,
+                'toolcheck': UnicyclerToolCheck}
       )
