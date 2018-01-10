@@ -73,6 +73,8 @@ def tool_check():
               ', '.join(missing_tools))
         print('You may need to install them to use all Unicycler features.')
         print('')
+    else:
+        print('All tools required by Unicycler were found.')
 
 
 class UnicyclerInstall(install):
