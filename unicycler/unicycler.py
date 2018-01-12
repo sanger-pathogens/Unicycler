@@ -603,7 +603,7 @@ def get_anchor_segments(graph, min_anchor_seg_len):
     if min_anchor_seg_len is None:
         min_anchor_seg_len = 0
     anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums
-                              if x.get_length() >= min_anchor_seg_len],
+                              if graph.segments[x].get_length() >= min_anchor_seg_len],
                              reverse=True, key=lambda x: x.get_length())
 
     # TO DO: if long reads are available, I could potentially use them to more reliably determine
