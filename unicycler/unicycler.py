@@ -96,7 +96,7 @@ def main():
             graph.save_to_gfa(overlap_removed_graph_filename, save_copy_depth_info=True,
                               newline=True, include_insert_size=True)
 
-        anchor_segments = get_anchor_segments(graph)
+        anchor_segments = get_anchor_segments(graph, args.min_anchor_seg_len)
 
         # TO DO: SHORT READ ALIGNMENT TO GRAPH
         # * This would be very useful for a number of reasons:
@@ -309,6 +309,9 @@ def get_arguments():
     other_group.add_argument('--linear_seqs', type=int, required=False, default=0,
                              help='The expected number of linear (i.e. non-circular) sequences in '
                                   'the underlying sequence')
+    other_group.add_argument('--min_anchor_seg_len', type=int, required=False,
+                             help='If set, Unicycler will not use segments shorter than this as '
+                                  'scaffolding anchors (default: automatic threshold)')
 
     # SPAdes assembly options
     spades_group = parser.add_argument_group('SPAdes assembly',
@@ -537,7 +540,7 @@ def make_output_directory(out_dir, verbosity):
     return message
 
 
-def get_anchor_segments(graph):
+def get_anchor_segments(graph, min_anchor_seg_len):
     """
     Returns a list of the graph segments that will be used for bridging.
     """
@@ -597,8 +600,11 @@ def get_anchor_segments(graph):
         if new_anchor_segs:
             anchor_seg_nums |= set(new_anchor_segs)
 
-    anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums], reverse=True,
-                             key=lambda x: x.get_length())
+    if min_anchor_seg_len is None:
+        min_anchor_seg_len = 0
+    anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums
+                              if x.get_length >= min_anchor_seg_len],
+                             reverse=True, key=lambda x: x.get_length())
 
     # TO DO: if long reads are available, I could potentially use them to more reliably determine
     # whether segments are single-copy or not single-copy. Something like taking all long reads
