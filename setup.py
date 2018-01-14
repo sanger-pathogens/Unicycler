@@ -61,6 +61,22 @@ def missing_tool(tool_name):
         return []
 
 
+def tool_check():
+    # Check for required programs.
+    tools = ['spades.py', 'java', 'pilon', 'samtools', 'bowtie2', 'bowtie2-build',
+             'makeblastdb', 'tblastn']
+    missing_tools = []
+    for tool in tools:
+        missing_tools += missing_tool(tool)
+    if missing_tools:
+        print('WARNING: some tools required by Unicycler could not be found: ' +
+              ', '.join(missing_tools))
+        print('You may need to install them to use all Unicycler features.')
+        print('')
+    else:
+        print('All tools required by Unicycler were found.')
+
+
 class UnicyclerInstall(install):
     """
     The install process copies the C++ shared library to the install location.
@@ -129,17 +145,7 @@ class UnicyclerInstall(install):
                   '-l long_reads.fastq.gz -o path/to/output_dir')
             print('')
 
-            # Check for required programs.
-            tools = ['spades.py', 'java', 'pilon', 'samtools', 'bowtie2', 'bowtie2-build',
-                     'makeblastdb', 'tblastn']
-            missing_tools = []
-            for tool in tools:
-                missing_tools += missing_tool(tool)
-            if missing_tools:
-                print('WARNING: some tools required by Unicycler could not be found: ' +
-                      ', '.join(missing_tools))
-                print('You may need to install them to use all Unicycler features.')
-                print('')
+            tool_check()
 
 
 class UnicyclerClean(Command):
@@ -184,6 +190,22 @@ class UnicyclerClean(Command):
             os.remove(delete_file)
 
 
+class UnicyclerToolCheck(Command):
+    """
+    Custom command to run the tool check for unicycler without having to call install
+    """
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        tool_check()
+
+
 setup(name='unicycler',
       version=__version__,
       description='bacterial genome assembler for hybrid read sets',
@@ -200,5 +222,6 @@ setup(name='unicycler',
                                         'unicycler_scrub = unicycler.unicycler_scrub:main']},
       zip_safe=False,
       cmdclass={'install': UnicyclerInstall,
-                'clean': UnicyclerClean}
+                'clean': UnicyclerClean,
+                'toolcheck': UnicyclerToolCheck}
       )
