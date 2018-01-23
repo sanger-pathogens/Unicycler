@@ -13,4 +13,4 @@ details. You should have received a copy of the GNU General Public License along
 not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = '0.4.4'
+__version__ = '0.4.5-beta'

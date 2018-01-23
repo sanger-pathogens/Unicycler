@@ -29,7 +29,7 @@ class BadFastq(Exception):
 
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
-                          spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac,
+                          spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
                           no_spades_correct, expected_linear_seqs):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best.
@@ -69,8 +69,11 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     else:
         reads = spades_read_correction(short1, short2, short_unpaired, spades_dir, threads,
                                        spades_path, keep)
-    kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count, min_k_frac,
-                                max_k_frac)
+    if kmers is not None:
+        kmer_range = kmers
+    else:
+        kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count,
+                                    min_k_frac, max_k_frac)
     assem_dir = os.path.join(spades_dir, 'assembly')
 
     log.log_section_header('SPAdes assemblies')

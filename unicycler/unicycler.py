@@ -84,7 +84,7 @@ def main():
                                           args.depth_filter, args.verbosity,
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
-                                          args.no_correct, args.linear_seqs)
+                                          args.kmers, args.no_correct, args.linear_seqs)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -333,6 +333,10 @@ def get_arguments():
                               help='Highest k-mer size for SPAdes assembly, expressed as a '
                                    'fraction of the read length'
                                    if show_all_args else argparse.SUPPRESS)
+    spades_group.add_argument('--kmers', type=str, default=None,
+                              help='Exact k-mers to use for SPAdes assembly, comma-separated '
+                                   '(example: 22,33,44, default: automatic)'
+                                   if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--kmer_count', type=int, default=10,
                               help='Number of k-mer steps to use in SPAdes assembly'
                                    if show_all_args else argparse.SUPPRESS)
@@ -481,6 +485,21 @@ def get_arguments():
 
     if args.threads <= 0:
         quit_with_error('--threads must be at least 1')
+
+    if args.kmers is not None:
+        args.kmers = args.kmers.split(',')
+        try:
+            args.kmers = [int(x) for x in args.kmers]
+            if any(x % 2 == 0 for x in args.kmers):
+                raise ValueError
+        except ValueError:
+            quit_with_error('--kmers must be comma-separated odd integers without spaces '
+                            '(example: --kmers 21,31,41)')
+        if any(x > 127 or x < 11 for x in args.kmers):
+            quit_with_error('--kmers values must be in the range of 11 to 127 (inclusive)')
+        if len(args.kmers) != len(set(args.kmers)):
+            quit_with_error('--kmers cannot contain duplicate values')
+        args.kmers = sorted(args.kmers)
 
     # Set up bridging mode related stuff.
     user_set_bridge_qual = args.min_bridge_qual is not None
