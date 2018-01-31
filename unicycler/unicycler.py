@@ -84,7 +84,8 @@ def main():
                                           args.depth_filter, args.verbosity,
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
-                                          args.kmers, args.no_correct, args.linear_seqs)
+                                          args.kmers, args.no_correct, args.linear_seqs,
+                                          args.spades_tmp_dir)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -311,7 +312,8 @@ def get_arguments():
                                   'the underlying sequence')
     other_group.add_argument('--min_anchor_seg_len', type=int, required=False,
                              help='If set, Unicycler will not use segments shorter than this as '
-                                  'scaffolding anchors (default: automatic threshold)')
+                                  'scaffolding anchors (default: automatic threshold)'
+                                  if show_all_args else argparse.SUPPRESS)
 
     # SPAdes assembly options
     spades_group = parser.add_argument_group('SPAdes assembly',
@@ -343,6 +345,11 @@ def get_arguments():
     spades_group.add_argument('--depth_filter', type=float, default=0.25,
                               help='Filter out contigs lower than this fraction of the chromosomal '
                                    'depth, if doing so does not result in graph dead ends'
+                                   if show_all_args else argparse.SUPPRESS)
+    spades_group.add_argument('--spades_tmp_dir', type=str, default=None,
+                              help="Specify SPAdes temporary directory using the SPAdes --tmp-dir "
+                                   "option (default: make a temporary directory in the output "
+                                   "directory)"
                                    if show_all_args else argparse.SUPPRESS)
 
     # Miniasm assembly options
@@ -526,6 +533,8 @@ def get_arguments():
         args.unpaired = os.path.abspath(args.unpaired)
     if args.long:
         args.long = os.path.abspath(args.long)
+    if args.spades_tmp_dir:
+        args.spades_tmp_dir = os.path.abspath(args.spades_tmp_dir)
 
     if args.vcf and args.no_pilon:
         quit_with_error('cannot use --no_pilon with --vcf')

@@ -30,7 +30,7 @@ class BadFastq(Exception):
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
-                          no_spades_correct, expected_linear_seqs):
+                          no_spades_correct, expected_linear_seqs, spades_tmp_dir):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best.
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
@@ -68,7 +68,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         reads = (short1, short2, short_unpaired)
     else:
         reads = spades_read_correction(short1, short2, short_unpaired, spades_dir, threads,
-                                       spades_path, keep)
+                                       spades_path, keep, spades_tmp_dir)
     if kmers is not None:
         kmer_range = kmers
     else:
@@ -94,7 +94,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     best_graph_filename = ''
 
     graph_files, insert_size_mean, insert_size_deviation = \
-        spades_assembly(reads, assem_dir, kmer_range, threads, spades_path)
+        spades_assembly(reads, assem_dir, kmer_range, threads, spades_path, spades_tmp_dir)
 
     existing_graph_files = [x for x in graph_files if x is not None]
     if not existing_graph_files:
@@ -167,7 +167,8 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     if best_kmer != kmer_range[-1]:
         new_kmer_range = [x for x in kmer_range if x <= best_kmer]
         graph_file, insert_size_mean, insert_size_deviation = \
-            spades_assembly(reads, assem_dir, new_kmer_range, threads, spades_path, just_last=True)
+            spades_assembly(reads, assem_dir, new_kmer_range, threads, spades_path, spades_tmp_dir,
+                            just_last=True)
         best_graph_filename = graph_file
     paths_file = os.path.join(assem_dir, 'contigs.paths')
     if os.path.isfile(paths_file):
@@ -199,11 +200,15 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     if keep < 3 and os.path.isdir(spades_dir):
         log.log('\nDeleting ' + spades_dir + '/')
         shutil.rmtree(spades_dir, ignore_errors=True)
+    if keep < 3 and spades_tmp_dir is not None and os.path.isdir(spades_tmp_dir):
+        log.log('Deleting ' + spades_tmp_dir + '/')
+        shutil.rmtree(spades_tmp_dir, ignore_errors=True)
 
     return assembly_graph
 
 
-def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path, keep):
+def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path, keep,
+                           spades_tmp_dir):
     """
     This runs SPAdes with the --only-error-correction option.
     """
@@ -252,6 +257,8 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     if using_unpaired_reads:
         command += ['-s', unpaired]
     command += ['-o', read_correction_dir, '--threads', str(threads), '--only-error-correction']
+    if spades_tmp_dir is not None:
+        command += ['--tmp-dir', spades_tmp_dir]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     while process.poll() is None:
@@ -332,7 +339,8 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
     return corrected_1, corrected_2, corrected_u
 
 
-def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=False):
+def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp_dir,
+                    just_last=False):
     """
     This runs a SPAdes assembly, possibly continuing from a previous assembly.
     """
@@ -353,6 +361,8 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, just_last=
             command += ['--only-assembler', '-1', short1, '-2', short2]
         if using_unpaired_reads:
             command += ['--only-assembler', '-s', unpaired]
+    if spades_tmp_dir is not None:
+        command += ['--tmp-dir', spades_tmp_dir]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     insert_size_mean = None
