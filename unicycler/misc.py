@@ -468,6 +468,16 @@ def add_line_breaks_to_sequence(sequence, line_length=0):
     return seq_with_breaks
 
 
+END_FORMATTING = '\033[0m'
+BOLD = '\033[1m'
+UNDERLINE = '\033[4m'
+RED = '\033[31m'
+GREEN = '\033[32m'
+MAGENTA = '\033[35m'
+YELLOW = '\033[93m'
+DIM = '\033[2m'
+
+
 class MyHelpFormatter(argparse.HelpFormatter):
     """
     This is a custom formatter class for argparse. It allows for some custom formatting,
@@ -478,16 +488,37 @@ class MyHelpFormatter(argparse.HelpFormatter):
         terminal_width = shutil.get_terminal_size().columns
         os.environ['COLUMNS'] = str(terminal_width)
         max_help_position = min(max(24, terminal_width // 3), 40)
+        try:
+            self.colours = int(subprocess.check_output(['tput', 'colors']).decode().strip())
+        except (ValueError, subprocess.CalledProcessError, FileNotFoundError, AttributeError):
+            self.colours = 1
         super().__init__(prog, max_help_position=max_help_position)
 
     def _get_help_string(self, action):
+        """
+        Override this function to add default values, but only when 'default' is not already in the
+        help text.
+        """
         help_text = action.help
         if action.default != argparse.SUPPRESS and 'default' not in help_text.lower() and \
                 action.default is not None:
             help_text += ' (default: ' + str(action.default) + ')'
         return help_text
 
+    def start_section(self, heading):
+        """
+        Override this method to add bold underlining to section headers.
+        """
+        if self.colours > 1:
+            heading = BOLD + heading + END_FORMATTING
+        super().start_section(heading)
+
     def _split_lines(self, text, width):
+        """
+        Override this method to add special behaviour for help texts that start with:
+          'B|' - loop text to the column of the equals sign
+          'R|' - loop text one option per line
+        """
         if text.startswith('B|') or text.startswith('R|'):
             text_lines = text[2:].splitlines()
             wrapped_text_lines = []
@@ -496,16 +527,11 @@ class MyHelpFormatter(argparse.HelpFormatter):
                     wrapped_text_lines.append(line)
                 else:
                     wrap_column = 2
-
-                    # The bridging mode help text should wrap each line around to the column of
-                    # the equals sign.
                     if text.startswith('B|'):
                         line_parts = line.split()
                         wrap_column += line.find('=')
                         join = ''
                         current_line = '  ' + line_parts[0]
-
-                    # The other multi-option help texts should wrap an entire option at a time.
                     else:  # text.startswith('R|')
                         line_parts = line.split(', ')
                         join = ','
@@ -527,15 +553,61 @@ class MyHelpFormatter(argparse.HelpFormatter):
         else:
             return argparse.HelpFormatter._fill_text(self, text, width, indent)
 
+    def _format_action(self, action):
+        """
+        Override this method to make help descriptions dim.
+        """
+        # determine the required width and the entry label
+        help_position = min(self._action_max_length + 2,
+                            self._max_help_position)
+        help_width = self._width - help_position
+        action_width = help_position - self._current_indent - 2
+        action_header = self._format_action_invocation(action)
 
-END_FORMATTING = '\033[0m'
-BOLD = '\033[1m'
-UNDERLINE = '\033[4m'
-RED = '\033[31m'
-GREEN = '\033[32m'
-MAGENTA = '\033[35m'
-YELLOW = '\033[93m'
-DIM = '\033[2m'
+        # ho nelp; start on same line and add a final newline
+        if not action.help:
+            tup = self._current_indent, '', action_header
+            action_header = '%*s%s\n' % tup
+            indent_first = 0
+
+        # short action name; start on the same line and pad two spaces
+        elif len(action_header) <= action_width:
+            tup = self._current_indent, '', action_width, action_header
+            action_header = '%*s%-*s  ' % tup
+            indent_first = 0
+
+        # long action name; start on the next line
+        else:
+            tup = self._current_indent, '', action_header
+            action_header = '%*s%s\n' % tup
+            indent_first = help_position
+
+        # collect the pieces of the action help
+        parts = [action_header]
+
+        # if there was help for the action, add lines of help text
+        if action.help:
+            help_text = self._expand_help(action)
+            help_lines = self._split_lines(help_text, help_width)
+            first_line = help_lines[0]
+            if self.colours > 8:
+                first_line = DIM + first_line + END_FORMATTING
+            parts.append('%*s%s\n' % (indent_first, '', first_line))
+            for line in help_lines[1:]:
+                if self.colours > 8:
+                    line = DIM + line + END_FORMATTING
+                parts.append('%*s%s\n' % (help_position, '', line))
+
+        # or add a newline if the description doesn't end with one
+        elif not action_header.endswith('\n'):
+            parts.append('\n')
+
+        # if there are any sub-actions, add their help as well
+        for subaction in self._iter_indented_subactions(action):
+            parts.append(self._format_action(subaction))
+
+        # return a single string
+        return self._join_parts(parts)
 
 
 def print_table(table, alignments='', max_col_width=30, col_separation=3, indent=2,
