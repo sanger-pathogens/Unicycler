@@ -372,6 +372,13 @@ class TestMiscFunctions(unittest.TestCase):
         version = unicycler.misc.java_version_from_java_output(java_version_output)
         self.assertEqual(version, '')
 
+    def test_java_version_parsing_6(self):
+        java_version_output = 'openjdk version "9-Ubuntu"\n' \
+                              'OpenJDK Runtime Environment (build 9-Ubuntu+0-9b181-4)\n' \
+                              'OpenJDK 64-Bit Server VM (build 9-Ubuntu+0-9b181-4, mixed mode)'
+        version = unicycler.misc.java_version_from_java_output(java_version_output)
+        self.assertEqual(version, '9-Ubuntu')
+
     def test_spades_version_parsing_1(self):
         spades_version_output = 'SPAdes v3.10.1'
         version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
