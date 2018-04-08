@@ -225,10 +225,13 @@ class AssemblyGraph(object):
 
     def get_single_copy_depth(self):
         """
-        Determines the single copy read depth for the graph (i.e. the median depth by base).
+        Determines the single copy read depth for the graph. It uses the median depth (by base)
+        using the 10 longest segments in the graph.
         """
-        median_depth = self.get_median_read_depth()
-        log.log('Median graph depth: ' + float_to_str(median_depth, 2), 2)
+        ten_longest_contigs = sorted(self.segments.values(), reverse=True,
+                                     key=lambda x: x.get_length())[:10]
+        median_depth = self.get_median_read_depth(ten_longest_contigs)
+        log.log('Median depth of 10 longest contigs: ' + float_to_str(median_depth, 2), 2)
         log.log('', 2)
         return median_depth
 
