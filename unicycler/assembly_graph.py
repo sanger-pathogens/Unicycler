@@ -287,12 +287,14 @@ class AssemblyGraph(object):
 
     def normalise_read_depths(self):
         """
-        For every segment in the graph, divide its depth by the graph's median.
-        This makes segments with the median depth have a depth of 1, segments with more than the
-        median a depth of greater than 1 and segments with less than the median a depth of less
-        than 1.
+        For every segment in the graph, divide its depth by the median depth of the 10 longest
+        contigs. This makes segments with the median depth have a depth of 1, segments with more
+        than the median a depth of greater than 1 and segments with less than the median a depth of
+        less than 1.
         """
-        median_depth = self.get_median_read_depth()
+        ten_longest_contigs = sorted(self.segments.values(), reverse=True,
+                                     key=lambda x: x.get_length())[:10]
+        median_depth = self.get_median_read_depth(ten_longest_contigs)
         if median_depth == 0.0:
             return
         for segment in self.segments.values():
@@ -1204,8 +1206,8 @@ class AssemblyGraph(object):
         sorted_bridges = sorted(bridges, key=lambda x: (x.get_type_score(), x.quality),
                                 reverse=True)
 
-        # The displayed table will only show applied bridges for verbosity 1. Higher verbosities
-        # will show all bridges and whether or not they were applied.
+        # The displayed table will only show applied bridges for verbosity 1. Higher verbosity
+        # levels will show all bridges and whether or not they were applied.
         bridge_application_table = [['Bridge type', 'Start ' + get_right_arrow() + ' end', 'Path',
                                      'Quality']]
         if verbosity > 1:
@@ -1454,6 +1456,7 @@ class AssemblyGraph(object):
             segs_in_path_groups = set()
             for seg_num in seg_nums_used_in_bridges:
                 if seg_num in self.segments and seg_num not in segs_in_path_groups:
+                    # noinspection PyTypeChecker
                     path = self.get_simple_path(seg_num, None, 2)
                     if all(abs(x) in seg_nums_used_in_bridges for x in path):
                         path_groups.append(path)
@@ -1484,6 +1487,7 @@ class AssemblyGraph(object):
         while True:
             potentially_deletable_paths = []
             for seg_num in self.segments:
+                # noinspection PyTypeChecker
                 path = self.get_simple_path(seg_num, None, 2)
                 path_lengths = [max(1, self.segments[abs(x)].get_length() - self.overlap)
                                 for x in path]
@@ -2747,5 +2751,3 @@ def get_overlap_from_gfa_link(filename):
                     cigar = line_parts[5]
                     return int(cigar[:-1])
     return 0
-
-
