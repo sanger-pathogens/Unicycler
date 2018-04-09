@@ -423,7 +423,9 @@ class AssemblyGraph(object):
           3) deleting the segment would not create any dead ends
         """
         segment_nums_to_remove = []
-        whole_graph_cutoff = self.get_median_read_depth() * relative_depth_cutoff
+        ten_longest_contigs = sorted(self.segments.values(), reverse=True,
+                                     key=lambda x: x.get_length())[:10]
+        whole_graph_cutoff = self.get_median_read_depth(ten_longest_contigs) * relative_depth_cutoff
         connected_components = self.get_connected_components()
         for component in connected_components:
             component_segs = [self.segments[x] for x in component]
