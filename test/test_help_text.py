@@ -158,6 +158,6 @@ class TestEmptyCommand(unittest.TestCase):
     def test_error_message(self):
         # When run without any arguments, Unicycler should print its basic help.
         self.assertTrue('Unicycler:' in self.stderr)
-        self.assertTrue('Help:' in self.stderr)
-        self.assertTrue('Input:' in self.stderr)
-        self.assertTrue('Output:' in self.stderr)
+        self.assertTrue('Help' in self.stderr)
+        self.assertTrue('Input' in self.stderr)
+        self.assertTrue('Output' in self.stderr)
