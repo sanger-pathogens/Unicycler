@@ -1062,8 +1062,9 @@ def clean_up_spades_graph(graph):
                         'remove overlaps and simplify the graph structure. The end result is a '
                         'graph ready for bridging.', verbosity=1)
     graph.remove_all_overlaps()
-    graph.remove_zero_length_segs()
     while True:
+        graph.repair_multi_way_junctions()
+        graph.remove_unnecessary_links()
         graph.expand_repeats()
         if not graph.remove_zero_length_segs():
             break

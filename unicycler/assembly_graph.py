@@ -452,8 +452,8 @@ class AssemblyGraph(object):
                 segment_nums_to_remove += component_nums
         self.remove_segments(segment_nums_to_remove)
         if segment_nums_to_remove:
-            log.log('\nRemoved homopolymer_loops:', 2)
-            log.log_number_list(segment_nums_to_remove, 2)
+            log.log('Removed homopolymer loops:', 3)
+            log.log_number_list(segment_nums_to_remove, 3)
 
     def remove_segments(self, nums_to_remove):
         """
@@ -939,7 +939,7 @@ class AssemblyGraph(object):
         log.log('Normalise read depths       ' + get_dim_timestamp(), 3)
         self.normalise_read_depths()
         log.log('Remove zero length segments ' + get_dim_timestamp(), 3)
-        self.remove_zero_length_segs()
+        self.remove_zero_length_segs(suppress_log=True)
         log.log('Sort link order             ' + get_dim_timestamp(), 3)
         self.sort_link_order()
         log.log('Graph cleaning finished     ' + get_dim_timestamp(), 3)
@@ -2251,6 +2251,9 @@ class AssemblyGraph(object):
             log.log('')
             log.log('Removed zero-length segments:')
             log.log_number_list(segs_to_remove)
+        if suppress_log and segs_to_remove:
+            log.log('  Removed zero-length segments:', 2)
+            log.log_number_list(segs_to_remove, 2)
         return len(segs_to_remove)
 
     def merge_small_segments(self, max_merge_size):

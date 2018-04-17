@@ -125,6 +125,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
             spades_results_table.append(table_line)
             continue
 
+        log.log('\nCleaning k{} graph'.format(kmer), 2)
         assembly_graph.clean(read_depth_filter)
         clean_graph_filename = os.path.join(spades_dir, ('k%03d' % kmer) + '_assembly_graph.gfa')
         assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
