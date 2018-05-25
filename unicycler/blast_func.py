@@ -36,6 +36,7 @@ def find_start_gene(sequence, start_genes_fasta, identity_threshold, coverage_th
     # gene overlaps from the end to the start, we have to duplicate some of the replicon sequence
     # for the BLAST database.
     seq_len = len(sequence)
+    start_genes_fasta = os.path.abspath(start_genes_fasta)
     queries = load_fasta(start_genes_fasta)
     if not queries:
         raise CannotFindStart
