@@ -493,6 +493,9 @@ def get_arguments():
     if args.threads <= 0:
         quit_with_error('--threads must be at least 1')
 
+    if args.kmer_count < 1:
+        quit_with_error('--kmer_count must be at least 1')
+
     if args.kmers is not None:
         args.kmers = args.kmers.split(',')
         try:

@@ -490,12 +490,19 @@ def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, 
     if starting_kmer < 11:
         starting_kmer = 11
 
-    # Create the k-mer range from a non-linear function that spaces out the early k-mers more and
-    # makes the later k-mers (which are most likely to be the good, used ones) closer together.
-    kmer_range = []
-    for x in [x / (kmer_count - 1) for x in range(kmer_count)]:
-        kmer_range.append((max_kmer - starting_kmer) * (2 - 2 / (x + 1)) + starting_kmer)
-    kmer_range = sorted(list(set([round_to_nearest_odd(x) for x in kmer_range])))
+    if kmer_count == 1:
+        kmer_range = [max_kmer]
+    elif kmer_count == 2:
+        kmer_range = [starting_kmer, max_kmer]
+    else:
+        # Create the k-mer range from a non-linear function that spaces out the early k-mers more
+        # and makes the later k-mers (which are most likely to be the good, used ones) closer
+        # together.
+        kmer_range = []
+        for x in [x / (kmer_count - 1) for x in range(kmer_count)]:
+            kmer_range.append((max_kmer - starting_kmer) * (2 - 2 / (x + 1)) + starting_kmer)
+        kmer_range = sorted(list(set([round_to_nearest_odd(x) for x in kmer_range])))
+
     kmer_range_str = ', '.join([str(x) for x in kmer_range])
 
     log.log('Median read length: ' + str(median_read_length))
