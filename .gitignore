@@ -33,6 +33,7 @@ setuptools*.zip
 .idea/
 
 gh-md-toc
+.coverage
 
 # CMake stuff (used by CLion)
 CMakeLists.txt
