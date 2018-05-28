@@ -16,6 +16,7 @@ import unicycler.unicycler
 import sys
 import os
 import io
+import re
 from contextlib import contextmanager
 
 
@@ -31,7 +32,9 @@ def captured_output():
 
 
 def get_default_from_help(option, help_text):
-    return help_text.split(option)[1].split('default:')[1].split(')')[0].strip()
+    h = help_text.split(option)[1].replace('\n', '')
+    h = re.sub('\033.*?m', '', h)
+    return h.split('default:')[1].split(')')[0].strip()
 
 
 class TestUnicyclerOptions(unittest.TestCase):
