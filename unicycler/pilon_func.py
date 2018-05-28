@@ -336,7 +336,7 @@ def polish_with_pilon(graph, args, polish_dir, insert_size_1st, insert_size_99th
         for f in list_of_files:
             try:
                 os.remove(f)
-            except FileNotFoundError:
+            except (FileNotFoundError, OSError):
                 pass
 
     return total_count
