@@ -1070,19 +1070,29 @@ def java_path_and_version(java_path):
 
     # Make sure Java is 1.7+
     try:
-        major_version = int(version.split('.')[0])
-        if major_version < 1:
-            status = 'too old'
-        elif major_version > 1:
-            status = 'good'
-        else:  # major_version == 1
-            minor_version = int(version.split('.')[1])
-            if minor_version < 7:
+        if '.' in version:
+            major_version = int(version.split('.')[0])
+            if major_version < 1:
+                status = 'too old'
+            elif major_version > 1:
+                status = 'good'
+            else:  # major_version == 1
+                minor_version = int(version.split('.')[1])
+                if minor_version < 7:
+                    status = 'too old'
+                else:
+                    status = 'good'
+        elif '-' in version:
+            # E.g. '9-Ubuntu'
+            major_version = int(version.split('-')[0])
+            if major_version < 7:
                 status = 'too old'
             else:
                 status = 'good'
+        else:
+            status = 'bad'
     except (ValueError, IndexError):
-        version, status = '?', 'too old'
+        status = 'bad'
     return found_java_path, version, status
 
 
