@@ -73,7 +73,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         kmer_range = kmers
     else:
         kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count,
-                                    min_k_frac, max_k_frac)
+                                    min_k_frac, max_k_frac, spades_path)
     assem_dir = os.path.join(spades_dir, 'assembly')
 
     log.log_section_header('SPAdes assemblies')
@@ -427,8 +427,27 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp
         return graph_files, insert_size_mean, insert_size_deviation
 
 
+def get_max_spades_kmer(spades_path):
+    """
+    SPAdes usually has a maximum k-mer size of 127, but this can be changed when compiling SPAdes,
+    so this function checks the help text to see what it is.
+    https://github.com/ablab/spades/issues/40
+    """
+    try:
+        process = subprocess.Popen([spades_path, '--help'], stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        out, err = process.communicate()
+        all_output = out.decode() + err.decode()
+        all_output = all_output.replace('\n', ' ')
+        all_output = ' '.join(all_output.split())
+        max_kmer = all_output.split('must be odd and less than ')[1].split(')')[0]
+        return int(max_kmer) - 1
+    except (IndexError, ValueError):
+        return 127
+
+
 def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, spades_dir,
-                   kmer_count, min_kmer_frac, max_kmer_frac):
+                   kmer_count, min_kmer_frac, max_kmer_frac, spades_path):
     """
     Uses the read lengths to determine the k-mer range to be used in the SPAdes assembly.
     """
@@ -453,6 +472,11 @@ def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, 
             except ValueError:
                 pass
 
+    max_spades_kmer = get_max_spades_kmer(spades_path)
+    log.log('SPAdes maximum k-mer: {}'.format(max_spades_kmer))
+    if max_spades_kmer != 127:
+        log.log('    (unusual value, probably indicates custom SPAdes compilation)')
+
     # If the code got here, then the k-mer range doesn't already exist and we'll create one by
     # examining the read lengths.
     read_lengths = get_read_lengths(reads_1_filename) + get_read_lengths(reads_2_filename) + \
@@ -460,8 +484,8 @@ def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, 
     read_lengths = sorted(read_lengths)
     median_read_length = read_lengths[len(read_lengths) // 2 - 1]
     max_kmer = round_to_nearest_odd(max_kmer_frac * median_read_length)
-    if max_kmer > 127:
-        max_kmer = 127
+    if max_kmer > max_spades_kmer:
+        max_kmer = max_spades_kmer
     starting_kmer = round_to_nearest_odd(min_kmer_frac * max_kmer / max_kmer_frac)
     if starting_kmer < 11:
         starting_kmer = 11
