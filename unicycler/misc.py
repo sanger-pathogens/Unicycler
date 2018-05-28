@@ -941,10 +941,21 @@ def racon_path_and_version(racon_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     out = out.decode().lower()
-    if 'racon' in out and 'options' in out:
-        return found_racon_path, '-', 'good'
-    else:
+    if 'racon' not in out or  'options' not in out:
         return found_racon_path, '-', 'bad'
+
+    return found_racon_path, racon_version(found_racon_path), 'good'
+
+
+def racon_version(found_racon_path):
+    command = [found_racon_path, '--version']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = process.communicate()
+    out = out.decode().lower()
+    if out.startswith('v'):
+        return out[1:]
+    else:
+        return '-'
 
 
 def makeblastdb_path_and_version(makeblastdb_path):

@@ -21,7 +21,7 @@ import sys
 import itertools
 import collections
 from .misc import green, red, line_iterator, print_table, int_to_str, float_to_str, \
-    reverse_complement, gfa_path
+    reverse_complement, gfa_path, racon_version
 from .minimap_alignment import align_long_reads_to_assembly_graph, range_overlap_size, \
     load_minimap_alignments
 from .string_graph import StringGraph, StringGraphSegment, \
@@ -334,6 +334,9 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
     else:  # Hybrid assembly
         racon_loop_count = settings.RACON_POLISH_LOOP_COUNT_HYBRID
 
+    # The Racon command will be different for older versions of Racon.
+    old_racon_version = (racon_version(racon_path) == '-')
+
     for polish_round_count in range(racon_loop_count):
 
         mappings_filename = os.path.join(polish_dir, ('%03d' % next(counter)) + '_alignments.paf')
@@ -366,16 +369,33 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
             break
 
         # Run Racon. It crashes sometimes, so repeat until its return code is 0.
-        command = [racon_path, '--verbose', '9', '-t', str(threads), '--bq', '-1',
-                   polish_reads, mappings_filename, current_fasta, polished_fasta]
         return_code = 1
         for t in range(100):  # Only try a fixed number of times, to prevent an infinite loop.
+
+            # The old version of Racon takes the output file (polished fasta) as an argument.
+            if old_racon_version:
+                command = [racon_path, '--verbose', '9', '-t', str(threads), '--bq', '-1',
+                           polish_reads, mappings_filename, current_fasta, polished_fasta]
+
+            # The new version of Racon outputs the polished fasta to stdout.
+            else:
+                command = [racon_path, '-t', str(threads), polish_reads, mappings_filename,
+                           current_fasta]
+
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = process.communicate()
-            with open(racon_log, 'wb') as log_file:
-                log_file.write(out)
-                log_file.write(err)
             return_code = process.returncode
+
+            if old_racon_version:
+                with open(racon_log, 'wb') as log_file:
+                    log_file.write(out)
+                    log_file.write(err)
+            else:
+                with open(racon_log, 'wb') as log_file:
+                    log_file.write(err)
+                with open(polished_fasta, 'wb') as out_file:
+                    out_file.write(out)
+
             if return_code == 0 and os.path.isfile(polished_fasta):
                 break
             if os.path.isfile(polished_fasta):
@@ -387,7 +407,8 @@ def polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph, racon
         if return_code != 0 or not os.path.isfile(polished_fasta):
             break
 
-        unitig_graph.replace_with_polished_sequences(polished_fasta, scoring_scheme)
+        unitig_graph.replace_with_polished_sequences(polished_fasta, scoring_scheme,
+                                                     old_racon_version)
         unitig_graph.save_to_fasta(fixed_fasta)
         unitig_graph.rotate_circular_sequences()
         unitig_graph.save_to_fasta(rotated_fasta)
