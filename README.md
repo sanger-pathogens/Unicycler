@@ -53,6 +53,7 @@ And read about how we use it to complete bacterial genomes here:
     * [Known contamination](#known-contamination)
     * [Manual multiplicity](#manual-multiplicity)
     * [Manual completion](#manual-completion)
+    * [Using an external long-read assembly](#using-an-external-long-read-assembly)
 * [Other included tools](#other-included-tools)
 * [Paper](#paper)
 * [Acknowledgements](#acknowledgements)
@@ -367,40 +368,42 @@ usage: unicycler [-h] [--help_all] [--version] [-1 SHORT1] [-2 SHORT2] [-s UNPAI
 Unicycler: an assembly pipeline for bacterial genomes
 
 Help:
-  -h, --help                           Show this help message and exit
-  --help_all                           Show a help message with all program options
-  --version                            Show Unicycler's version number
+  -h, --help                     Show this help message and exit
+  --help_all                     Show a help message with all program options
+  --version                      Show Unicycler's version number
 
 Input:
-  -1 SHORT1, --short1 SHORT1           FASTQ file of first short reads in each pair (required)
-  -2 SHORT2, --short2 SHORT2           FASTQ file of second short reads in each pair (required)
-  -s UNPAIRED, --unpaired UNPAIRED     FASTQ file of unpaired short reads (optional)
-  -l LONG, --long LONG                 FASTQ or FASTA file of long reads (optional)
+  -1 SHORT1, --short1 SHORT1     FASTQ file of first short reads in each pair (required)
+  -2 SHORT2, --short2 SHORT2     FASTQ file of second short reads in each pair (required)
+  -s UNPAIRED, --unpaired UNPAIRED
+                                 FASTQ file of unpaired short reads (optional)
+  -l LONG, --long LONG           FASTQ or FASTA file of long reads (optional)
 
 Output:
-  -o OUT, --out OUT                    Output directory (required)
-  --verbosity VERBOSITY                Level of stdout and log file information (default: 1)
-                                         0 = no stdout, 1 = basic progress indicators, 2 = extra info,
-                                         3 = debugging info
-  --min_fasta_length MIN_FASTA_LENGTH  Exclude contigs from the FASTA file which are shorter than this length
-                                       (default: 100)
-  --keep KEEP                          Level of file retention (default: 1)
-                                         0 = only keep final files: assembly (FASTA, GFA and log),
-                                         1 = also save graphs at main checkpoints,
-                                         2 = also keep SAM (enables fast rerun in different mode),
-                                         3 = keep all temp files and save all graphs (for debugging)
-  --vcf                                Produce a VCF by mapping the short reads to the final assembly
-                                       (experimental, default: do not produce a vcf file)
+  -o OUT, --out OUT              Output directory (required)
+  --verbosity VERBOSITY          Level of stdout and log file information (default: 1)
+                                   0 = no stdout, 1 = basic progress indicators, 2 = extra info,
+                                   3 = debugging info
+  --min_fasta_length MIN_FASTA_LENGTH
+                                 Exclude contigs from the FASTA file which are shorter than this
+                                 length (default: 100)
+  --keep KEEP                    Level of file retention (default: 1)
+                                   0 = only keep final files: assembly (FASTA, GFA and log),
+                                   1 = also save graphs at main checkpoints,
+                                   2 = also keep SAM (enables fast rerun in different mode),
+                                   3 = keep all temp files and save all graphs (for debugging)
+  --vcf                          Produce a VCF by mapping the short reads to the final assembly
+                                 (experimental, default: do not produce a vcf file)
 
 Other:
-  -t THREADS, --threads THREADS        Number of threads used (default: 8)
-  --mode {conservative,normal,bold}    Bridging mode (default: normal)
-                                         conservative = smaller contigs, lowest misassembly rate
-                                         normal = moderate contig size and misassembly rate
-                                         bold = longest contigs, higher misassembly rate
-  --linear_seqs LINEAR_SEQS            The expected number of linear (i.e. non-circular) sequences in the
-                                       underlying sequence (default: 0)
-
+  -t THREADS, --threads THREADS  Number of threads used (default: 8)
+  --mode {conservative,normal,bold}
+                                 Bridging mode (default: normal)
+                                   conservative = smaller contigs, lowest misassembly rate
+                                   normal = moderate contig size and misassembly rate
+                                   bold = longest contigs, higher misassembly rate
+  --linear_seqs LINEAR_SEQS      The expected number of linear (i.e. non-circular) sequences in
+                                 the underlying sequence (default: 0)
 ```
 
 ### Advanced options
@@ -409,77 +412,96 @@ Run `unicycler --help_all` to see a complete list of the program's options. Thes
 
 ```
 SPAdes assembly:
-  These options control the short-read SPAdes assembly at the beginning of the Unicycler pipeline.
+  These options control the short-read SPAdes assembly at the beginning of the Unicycler
+  pipeline.
 
-  --spades_path SPADES_PATH           Path to the SPAdes executable (default: spades.py)
-  --no_correct                        Skip SPAdes error correction step (default: conduct SPAdes error
-                                      correction)
-  --min_kmer_frac MIN_KMER_FRAC       Lowest k-mer size for SPAdes assembly, expressed as a fraction of the read
-                                      length (default: 0.2)
-  --max_kmer_frac MAX_KMER_FRAC       Highest k-mer size for SPAdes assembly, expressed as a fraction of the read
-                                      length (default: 0.95)
-  --kmer_count KMER_COUNT             Number of k-mer steps to use in SPAdes assembly (default: 10)
-  --depth_filter DEPTH_FILTER         Filter out contigs lower than this fraction of the chromosomal depth, if
-                                      doing so does not result in graph dead ends (default: 0.25)
+  --spades_path SPADES_PATH      Path to the SPAdes executable (default: spades.py)
+  --no_correct                   Skip SPAdes error correction step (default: conduct SPAdes error
+                                 correction)
+  --min_kmer_frac MIN_KMER_FRAC  Lowest k-mer size for SPAdes assembly, expressed as a fraction of
+                                 the read length (default: 0.2)
+  --max_kmer_frac MAX_KMER_FRAC  Highest k-mer size for SPAdes assembly, expressed as a fraction
+                                 of the read length (default: 0.95)
+  --kmers KMERS                  Exact k-mers to use for SPAdes assembly, comma-separated
+                                 (example: 22,33,44, default: automatic)
+  --kmer_count KMER_COUNT        Number of k-mer steps to use in SPAdes assembly (default: 10)
+  --depth_filter DEPTH_FILTER    Filter out contigs lower than this fraction of the chromosomal
+                                 depth, if doing so does not result in graph dead ends (default:
+                                 0.25)
+  --spades_tmp_dir SPADES_TMP_DIR
+                                 Specify SPAdes temporary directory using the SPAdes --tmp-dir
+                                 option (default: make a temporary directory in the output
+                                 directory)
 
 miniasm+Racon assembly:
   These options control the use of miniasm and Racon to produce long-read bridges.
 
-  --no_miniasm                        Skip miniasm+Racon bridging (default: use miniasm and Racon to produce
-                                      long-read bridges)
-  --racon_path RACON_PATH             Path to the Racon executable (default: racon)
+  --no_miniasm                   Skip miniasm+Racon bridging (default: use miniasm and Racon to
+                                 produce long-read bridges)
+  --racon_path RACON_PATH        Path to the Racon executable (default: racon)
+  --existing_long_read_assembly EXISTING_LONG_READ_ASSEMBLY
+                                 A pre-prepared long read assembly for the sample in GFA format.
+                                 If this option is used, Unicycler will skip the miniasm/Racon
+                                 steps and instead use the given assembly (default: perform long
+                                 read assembly using miniasm/Racon)
 
 Assembly rotation:
-  These options control the rotation of completed circular sequence near the end of the Unicycler pipeline.
+  These options control the rotation of completed circular sequence near the end of the
+  Unicycler pipeline.
 
-  --no_rotate                         Do not rotate completed replicons to start at a standard gene (default:
-                                      completed replicons are rotated)
-  --start_genes START_GENES           FASTA file of genes for start point of rotated replicons (default:
-                                      start_genes.fasta)
-  --start_gene_id START_GENE_ID       The minimum required BLAST percent identity for a start gene search
-                                      (default: 90.0)
-  --start_gene_cov START_GENE_COV     The minimum required BLAST percent coverage for a start gene search
-                                      (default: 95.0)
+  --no_rotate                    Do not rotate completed replicons to start at a standard gene
+                                 (default: completed replicons are rotated)
+  --start_genes START_GENES      FASTA file of genes for start point of rotated replicons
+                                 (default: start_genes.fasta)
+  --start_gene_id START_GENE_ID  The minimum required BLAST percent identity for a start gene
+                                 search (default: 90.0)
+  --start_gene_cov START_GENE_COV
+                                 The minimum required BLAST percent coverage for a start gene
+                                 search (default: 95.0)
   --makeblastdb_path MAKEBLASTDB_PATH
-                                      Path to the makeblastdb executable (default: makeblastdb)
-  --tblastn_path TBLASTN_PATH         Path to the tblastn executable (default: tblastn)
+                                 Path to the makeblastdb executable (default: makeblastdb)
+  --tblastn_path TBLASTN_PATH    Path to the tblastn executable (default: tblastn)
 
 Pilon polishing:
-  These options control the final assembly polish using Pilon at the end of the Unicycler pipeline.
+  These options control the final assembly polish using Pilon at the end of the Unicycler
+  pipeline.
 
-  --no_pilon                          Do not use Pilon to polish the final assembly (default: Pilon is used)
-  --bowtie2_path BOWTIE2_PATH         Path to the bowtie2 executable (default: bowtie2)
+  --no_pilon                     Do not use Pilon to polish the final assembly (default: Pilon is
+                                 used)
+  --bowtie2_path BOWTIE2_PATH    Path to the bowtie2 executable (default: bowtie2)
   --bowtie2_build_path BOWTIE2_BUILD_PATH
-                                      Path to the bowtie2_build executable (default: bowtie2-build)
-  --samtools_path SAMTOOLS_PATH       Path to the samtools executable (default: samtools)
-  --pilon_path PILON_PATH             Path to a Pilon executable or the Pilon Java archive file (default: pilon)
-  --java_path JAVA_PATH               Path to the java executable (default: java)
-  --min_polish_size MIN_POLISH_SIZE   Contigs shorter than this value (bp) will not be polished using Pilon
-                                      (default: 10000)
+                                 Path to the bowtie2_build executable (default: bowtie2-build)
+  --samtools_path SAMTOOLS_PATH  Path to the samtools executable (default: samtools)
+  --pilon_path PILON_PATH        Path to a Pilon executable or the Pilon Java archive file
+                                 (default: pilon)
+  --java_path JAVA_PATH          Path to the java executable (default: java)
+  --min_polish_size MIN_POLISH_SIZE
+                                 Contigs shorter than this value (bp) will not be polished using
+                                 Pilon (default: 10000)
 
 VCF:
   These options control the production of the VCF of the final assembly.
 
-  --bcftools_path BCFTOOLS_PATH       Path to the bcftools executable (default: bcftools)
+  --bcftools_path BCFTOOLS_PATH  Path to the bcftools executable (default: bcftools)
 
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.
 
   --min_component_size MIN_COMPONENT_SIZE
-                                      Graph components smaller than this size (bp) will be removed from the final
-                                      graph (default: 1000)
+                                 Graph components smaller than this size (bp) will be removed from
+                                 the final graph (default: 1000)
   --min_dead_end_size MIN_DEAD_END_SIZE
-                                      Graph dead ends smaller than this size (bp) will be removed from the final
-                                      graph (default: 1000)
+                                 Graph dead ends smaller than this size (bp) will be removed from
+                                 the final graph (default: 1000)
 
 Long read alignment:
   These options control the alignment of long reads to the assembly graph.
 
-  --contamination CONTAMINATION       FASTA file of known contamination in long reads
-  --scores SCORES                     Comma-delimited string of alignment scores: match, mismatch, gap open, gap
-                                      extend (default: 3,-6,-5,-2)
-  --low_score LOW_SCORE               Score threshold - alignments below this are considered poor (default: set
-                                      threshold automatically)
+  --contamination CONTAMINATION  FASTA file of known contamination in long reads
+  --scores SCORES                Comma-delimited string of alignment scores: match, mismatch, gap
+                                 open, gap extend (default: 3,-6,-5,-2)
+  --low_score LOW_SCORE          Score threshold - alignments below this are considered poor
+                                 (default: set threshold automatically)
 ```
 
 
@@ -618,6 +640,12 @@ If you believe this has happened in your assembly, you can manually assign multi
 ### Manual completion
 
 If Unicycler doesn't complete your bacterial genome assembly on its own, you may be able to complete it manually with a bit of bioinformatics detective work. There's no single, straight-forward procedure for doing so, but I've put together [a few examples on the Unicycler wiki](https://github.com/rrwick/Unicycler/wiki/Tips-for-finishing-genomes) which may be helpful.
+
+
+### Using an external long-read assembly
+
+If you have a long-read assembly that you've prepared outside Unicycler and trust (e.g. with Canu), you can give it to Unicycler with `--existing_long_read_assembly`. Unicycler will then skip its miniasm/Racon step and use this assembly instead.
+
 
 
 
