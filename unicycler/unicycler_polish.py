@@ -106,6 +106,8 @@ def get_arguments():
     settings_group = parser.add_argument_group('Polishing settings',
                                                'Various settings for polishing behaviour '
                                                '(defaults should work well in most cases)')
+    settings_group.add_argument('--no_fix_local', action='store_true',
+                                help='do not fix local misassemblies')
     settings_group.add_argument('--min_insert', type=int,
                                 help='minimum valid short read insert size (default: auto)')
     settings_group.add_argument('--max_insert', type=int,
@@ -410,6 +412,11 @@ def pilon_small_changes(fasta, round_num, args, all_ale_scores):
 
 
 def pilon_large_changes(fasta, round_num, args, all_ale_scores):
+    if args.no_fix_local:
+        if args.verbosity > 0:
+            print('Not fixing local misassemblies', flush=True)
+        return fasta, round_num, []
+
     current, round_num, applied_variant = ale_assessed_changes(fasta, round_num, args, True, False,
                                                                all_ale_scores, 'local',
                                                                'Pilon polish, large variants, '

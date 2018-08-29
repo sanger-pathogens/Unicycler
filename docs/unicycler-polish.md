@@ -85,6 +85,7 @@ Generic long reads:
 Polishing settings:
   Various settings for polishing behaviour (defaults should work well in most cases)
 
+  --no_fix_local                        do not fix local misassemblies (default: False)
   --min_insert MIN_INSERT               minimum valid short read insert size (default: auto)
   --max_insert MAX_INSERT               maximum valid short read insert size (default: auto)
   --min_align_length MIN_ALIGN_LENGTH   Minimum long read alignment length (default: 1000)
