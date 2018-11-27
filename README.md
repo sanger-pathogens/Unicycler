@@ -428,6 +428,8 @@ SPAdes assembly:
   --depth_filter DEPTH_FILTER    Filter out contigs lower than this fraction of the chromosomal
                                  depth, if doing so does not result in graph dead ends (default:
                                  0.25)
+  --largest_component            Only keep the largest connected component of the assembly graph
+                                 (default: keep all connected components)
   --spades_tmp_dir SPADES_TMP_DIR
                                  Specify SPAdes temporary directory using the SPAdes --tmp-dir
                                  option (default: make a temporary directory in the output

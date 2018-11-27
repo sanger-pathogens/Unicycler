@@ -30,7 +30,8 @@ class BadFastq(Exception):
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
-                          no_spades_correct, expected_linear_seqs, spades_tmp_dir):
+                          no_spades_correct, expected_linear_seqs, spades_tmp_dir,
+                          largest_component):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best.
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
@@ -126,7 +127,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
             continue
 
         log.log('\nCleaning k{} graph'.format(kmer), 2)
-        assembly_graph.clean(read_depth_filter)
+        assembly_graph.clean(read_depth_filter, largest_component)
         clean_graph_filename = os.path.join(spades_dir, ('k%03d' % kmer) + '_assembly_graph.gfa')
         assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
 
@@ -183,7 +184,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
                                    insert_size_mean=insert_size_mean,
                                    insert_size_deviation=insert_size_deviation)
-    assembly_graph.clean(read_depth_filter)
+    assembly_graph.clean(read_depth_filter, largest_component)
     clean_graph_filename = os.path.join(spades_dir, 'k' + str(best_kmer) + '_assembly_graph.gfa')
     assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
 

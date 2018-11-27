@@ -8,6 +8,7 @@
 #include <limits>
 
 #pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wvla"
 #pragma GCC diagnostic ignored "-Wvla-extension"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"

@@ -455,6 +455,28 @@ class AssemblyGraph(object):
             log.log('Removed homopolymer loops:', 3)
             log.log_number_list(segment_nums_to_remove, 3)
 
+    def choose_largest_component(self):
+        """
+        Special logic: throw out all of the graph's connected components except for the largest one.
+        """
+        largest_component_length = None
+        connected_components = self.get_connected_components()
+        for component_nums in connected_components:
+            component_segments = [self.segments[x] for x in component_nums]
+            component_length = sum(x.get_length() for x in component_segments)
+            if largest_component_length is None or component_length > largest_component_length:
+                largest_component_length = component_length
+        segment_nums_to_remove = []
+        for component_nums in connected_components:
+            component_segments = [self.segments[x] for x in component_nums]
+            component_length = sum(x.get_length() for x in component_segments)
+            if component_length < largest_component_length:
+                segment_nums_to_remove += component_nums
+        self.remove_segments(segment_nums_to_remove)
+        if segment_nums_to_remove:
+            log.log('\nRemoved not-largest components:', 3)
+            log.log_number_list(segment_nums_to_remove, 3)
+
     def remove_segments(self, nums_to_remove):
         """
         This function deletes all segments in the nums_to_remove list, along with their links. It
@@ -923,7 +945,7 @@ class AssemblyGraph(object):
             dead_ends += 1
         return potential_dead_ends - dead_ends
 
-    def clean(self, read_depth_filter):
+    def clean(self, read_depth_filter, largest_component):
         """
         This function does various graph repairs, filters and normalisations to make it a bit
         nicer.
@@ -934,6 +956,9 @@ class AssemblyGraph(object):
         self.filter_by_read_depth(read_depth_filter)
         log.log('Filter homopolymer loops    ' + get_dim_timestamp(), 3)
         self.filter_homopolymer_loops()
+        if largest_component:
+            log.log('Keep largest component      ' + get_dim_timestamp(), 3)
+            self.choose_largest_component()
         log.log('Merge all possible          ' + get_dim_timestamp(), 3)
         self.merge_all_possible(None, 2)
         log.log('Normalise read depths       ' + get_dim_timestamp(), 3)

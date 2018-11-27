@@ -85,7 +85,7 @@ def main():
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.kmers, args.no_correct, args.linear_seqs,
-                                          args.spades_tmp_dir)
+                                          args.spades_tmp_dir, args.largest_component)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -345,6 +345,10 @@ def get_arguments():
     spades_group.add_argument('--depth_filter', type=float, default=0.25,
                               help='Filter out contigs lower than this fraction of the chromosomal '
                                    'depth, if doing so does not result in graph dead ends'
+                                   if show_all_args else argparse.SUPPRESS)
+    spades_group.add_argument('--largest_component', action='store_true',
+                              help='Only keep the largest connected component of the assembly '
+                                   'graph (default: keep all connected components)'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--spades_tmp_dir', type=str, default=None,
                               help="Specify SPAdes temporary directory using the SPAdes --tmp-dir "
