@@ -184,7 +184,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
                                    insert_size_mean=insert_size_mean,
                                    insert_size_deviation=insert_size_deviation)
-    assembly_graph.clean(read_depth_filter, largest_component)
+    removed_count, removed_length = assembly_graph.clean(read_depth_filter, largest_component)
     clean_graph_filename = os.path.join(spades_dir, 'k' + str(best_kmer) + '_assembly_graph.gfa')
     assembly_graph.save_to_gfa(clean_graph_filename, verbosity=2)
 
@@ -198,9 +198,14 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
                 row_colour={best_kmer_row: 'green'},
                 row_extra_text={best_kmer_row: ' ' + get_left_arrow() + 'best'})
 
+    # Report on the results of the read depth filter (can help with identifying levels of
+    # contamination).
+    log.log('\nRead depth filter: removed {} contigs totalling {} bp'.format(removed_count,
+                                                                           removed_length))
+
     # Clean up.
     if keep < 3 and os.path.isdir(spades_dir):
-        log.log('\nDeleting ' + spades_dir + '/')
+        log.log('Deleting ' + spades_dir + '/')
         shutil.rmtree(spades_dir, ignore_errors=True)
     if keep < 3 and spades_tmp_dir is not None and os.path.isdir(spades_tmp_dir):
         log.log('Deleting ' + spades_tmp_dir + '/')

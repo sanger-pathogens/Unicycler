@@ -423,6 +423,7 @@ class AssemblyGraph(object):
           3) deleting the segment would not create any dead ends
         """
         segment_nums_to_remove = []
+        total_length_removed = 0
         ten_longest_contigs = sorted(self.segments.values(), reverse=True,
                                      key=lambda x: x.get_length())[:10]
         whole_graph_cutoff = self.get_median_read_depth(ten_longest_contigs) * relative_depth_cutoff
@@ -437,7 +438,9 @@ class AssemblyGraph(object):
                             self.all_segments_below_depth(component, whole_graph_cutoff) or \
                             self.dead_end_change_if_deleted(seg_num) <= 0:
                         segment_nums_to_remove.append(seg_num)
+                        total_length_removed += segment.get_length()
         self.remove_segments(segment_nums_to_remove)
+        return len(segment_nums_to_remove), total_length_removed
 
     def filter_homopolymer_loops(self):
         """
@@ -953,7 +956,7 @@ class AssemblyGraph(object):
         log.log('Repair multi way junctions  ' + get_dim_timestamp(), 3)
         self.repair_multi_way_junctions()
         log.log('Filter by read depth        ' + get_dim_timestamp(), 3)
-        self.filter_by_read_depth(read_depth_filter)
+        removed_count, removed_length = self.filter_by_read_depth(read_depth_filter)
         log.log('Filter homopolymer loops    ' + get_dim_timestamp(), 3)
         self.filter_homopolymer_loops()
         if largest_component:
@@ -968,6 +971,7 @@ class AssemblyGraph(object):
         log.log('Sort link order             ' + get_dim_timestamp(), 3)
         self.sort_link_order()
         log.log('Graph cleaning finished     ' + get_dim_timestamp(), 3)
+        return removed_count, removed_length
 
     def final_clean(self):
         """
