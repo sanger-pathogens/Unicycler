@@ -30,8 +30,8 @@ SIMPLE_REPEAT_BRIDGING_BAND_SIZE = 50
 CONTIG_READ_QSCORE = 40
 
 # This is the maximum number of times an assembly will be Racon polished
-RACON_POLISH_LOOP_COUNT_HYBRID = 5
-RACON_POLISH_LOOP_COUNT_LONG_ONLY = 10
+RACON_POLISH_LOOP_COUNT_HYBRID = 2
+RACON_POLISH_LOOP_COUNT_LONG_ONLY = 4
 
 
 # This is the number of times assembly graph contigs are included in the Racon polish reads. E.g.
