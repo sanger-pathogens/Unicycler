@@ -490,7 +490,7 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
                 best_score = test_seq_score
                 best_count = loop_count
 
-        # Break when we've hit the max loop count. But if the max isn't our best, then we keep
+        # Break when we've hit the max loop count. But if the max is our best, then we keep
         # trying higher.
         if loop_count >= max_tested_loop_count and loop_count != best_count:
             break

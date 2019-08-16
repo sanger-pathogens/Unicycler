@@ -916,10 +916,10 @@ def rotate_completed_replicons(graph, args, counter):
         log.log_section_header('Rotating completed replicons')
         log.log_explanation('Any completed circular contigs (i.e. single contigs which have one '
                             'link connecting end to start) can have their start position changed '
-                            'with altering the sequence. For consistency, Unicycler now searches '
-                            'for a starting gene (dnaA or repA) in each such contig, and if one '
-                            'is found, the contig is rotated to start with that gene on the '
-                            'forward strand.')
+                            'without altering the sequence. For consistency, Unicycler now '
+                            'searches for a starting gene (dnaA or repA) in each such contig, and '
+                            'if one is found, the contig is rotated to start with that gene on '
+                            'the forward strand.')
 
         rotation_result_table = [['Segment', 'Length', 'Depth', 'Starting gene', 'Position',
                                   'Strand', 'Identity', 'Coverage']]
