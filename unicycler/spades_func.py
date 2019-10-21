@@ -263,7 +263,8 @@ def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades
         command += ['-1', short1, '-2', short2]
     if using_unpaired_reads:
         command += ['-s', unpaired]
-    command += ['-o', read_correction_dir, '--threads', str(threads), '--only-error-correction']
+    command += ['-o', read_correction_dir, '--threads', str(threads), '--only-error-correction',
+                '--phred-offset', '33']
     if spades_tmp_dir is not None:
         command += ['--tmp-dir', spades_tmp_dir]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
