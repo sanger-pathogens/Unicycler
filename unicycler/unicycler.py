@@ -162,16 +162,16 @@ def main():
         bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
                                                    read_dict, long_read_filename, scoring_scheme,
                                                    anchor_segments)
+        if not args.no_long_read_alignment:
+            read_names, min_scaled_score, min_alignment_length = \
+                align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,
+                                                   read_dict, read_names, long_read_filename)
 
-        read_names, min_scaled_score, min_alignment_length = \
-            align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,
-                                               read_dict, read_names, long_read_filename)
-
-        expected_linear_seqs = args.linear_seqs > 0
-        bridges += create_long_read_bridges(graph, read_dict, read_names, anchor_segments,
-                                            args.verbosity, min_scaled_score, args.threads,
-                                            scoring_scheme, min_alignment_length,
-                                            expected_linear_seqs, args.min_bridge_qual)
+            expected_linear_seqs = args.linear_seqs > 0
+            bridges += create_long_read_bridges(graph, read_dict, read_names, anchor_segments,
+                                                args.verbosity, min_scaled_score, args.threads,
+                                                scoring_scheme, min_alignment_length,
+                                                expected_linear_seqs, args.min_bridge_qual)
 
     if short_reads_available:
         seg_nums_used_in_bridges = graph.apply_bridges(bridges, args.verbosity,
@@ -370,8 +370,8 @@ def get_arguments():
                                     if show_all_args else argparse.SUPPRESS)
     miniasm_group.add_argument('--existing_long_read_assembly', type=str, default=None,
                                help='A pre-prepared long read assembly for the sample in GFA '
-                                    'format. If this option is used, Unicycler will skip the '
-                                    'miniasm/Racon steps and instead use the given assembly '
+                                    'or FASTA format. If this option is used, Unicycler will skip '
+                                    'the miniasm/Racon steps and instead use the given assembly '
                                     '(default: perform long read assembly using miniasm/Racon)'
                                     if show_all_args else argparse.SUPPRESS)
 
@@ -466,6 +466,10 @@ def get_arguments():
                                             'These options control the alignment of long reads to '
                                             'the assembly graph.'
                                             if show_all_args else argparse.SUPPRESS)
+    miniasm_group.add_argument('--no_long_read_alignment', action='store_true',
+                               help='Skip long-read-alignment-bases bridging (default: use '
+                                    'long-read alignments to produce bridges)'
+                                    if show_all_args else argparse.SUPPRESS)
     add_aligning_arguments(align_group, show_all_args)
 
     # If no arguments were used, print the entire help (argparse default is to just give an error
