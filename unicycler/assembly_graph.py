@@ -1643,6 +1643,8 @@ class AssemblyGraph(object):
 
         # We'll search specifically for the middle segments as they should be easy to spot.
         for middle in self.segments:
+            if self.segments[middle].get_length() > settings.MAX_SIMPLE_LOOP_SIZE:
+                continue
 
             # A middle segment will always have exactly one connection on each end which connect
             # to the same segment (the repeat segment).

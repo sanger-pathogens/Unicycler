@@ -181,3 +181,5 @@ REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING = 0.5
 # limits the amount of trimming it's willing to do. I.e. if miniasm trimmed more than this from a
 # contig, Unicycler won't.
 MAX_MINIASM_DEAD_END_TRIM_SIZE = 100
+
+MAX_SIMPLE_LOOP_SIZE = 10000
