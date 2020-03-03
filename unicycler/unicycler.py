@@ -466,10 +466,10 @@ def get_arguments():
                                             'These options control the alignment of long reads to '
                                             'the assembly graph.'
                                             if show_all_args else argparse.SUPPRESS)
-    miniasm_group.add_argument('--no_long_read_alignment', action='store_true',
-                               help='Skip long-read-alignment-bases bridging (default: use '
-                                    'long-read alignments to produce bridges)'
-                                    if show_all_args else argparse.SUPPRESS)
+    align_group.add_argument('--no_long_read_alignment', action='store_true',
+                             help='Skip long-read-alignment-bases bridging (default: use '
+                                  'long-read alignments to produce bridges)'
+                                  if show_all_args else argparse.SUPPRESS)
     add_aligning_arguments(align_group, show_all_args)
 
     # If no arguments were used, print the entire help (argparse default is to just give an error
