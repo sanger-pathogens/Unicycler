@@ -891,23 +891,9 @@ def spades_path_and_version(spades_path):
     if 'python version' in out and 'is not supported' in out:
         return found_spades_path, '', 'Python problem'
 
-    # Make sure SPAdes is 3.6.2+
+    # Make sure SPAdes is 3.6.2 - 3.13.0
     try:
-        major_version = int(version.split('.')[0])
-        if major_version < 3:
-            status = 'too old'
-        else:
-            minor_version = int(version.split('.')[1])
-            if minor_version < 6:
-                status = 'too old'
-            elif minor_version > 6:
-                status = 'good'
-            else:  # minor_version == 6
-                patch_version = int(version.split('.')[2])
-                if patch_version < 2:
-                    status = 'too old'
-                else:
-                    status = 'good'
+        status = spades_status_from_version(version)
     except (ValueError, IndexError):
         version, status = '?', 'too old'
 
@@ -933,6 +919,36 @@ def spades_version_from_spades_output(spades_output):
     return ''
 
 
+def spades_status_from_version(version):
+    major_version = int(version.split('.')[0])
+    if major_version < 3:
+        return 'too old'
+    if major_version >= 4:
+        return 'too new'
+
+    minor_version = int(version.split('.')[1])
+    if minor_version < 6:
+        return 'too old'
+    if minor_version > 13:
+        return 'too new'
+    assert 6 <= minor_version <= 13
+
+    patch_version = int(version.split('.')[2])
+    if 6 < minor_version < 13:
+        return 'good'
+    assert minor_version == 6 or minor_version == 13
+    if minor_version == 6:
+        if patch_version < 2:
+            return 'too old'
+        else:
+            return 'good'
+    if minor_version == 13:
+        if patch_version > 0:
+            return 'too new'
+        else:
+            return 'good'
+
+
 def racon_path_and_version(racon_path):
     found_racon_path = shutil.which(racon_path)
     if found_racon_path is None:
@@ -941,7 +957,7 @@ def racon_path_and_version(racon_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     out = out.decode().lower()
-    if 'racon' not in out or  'options' not in out:
+    if 'racon' not in out or 'options' not in out:
         return found_racon_path, '-', 'bad'
 
     return found_racon_path, racon_version(found_racon_path), 'good'

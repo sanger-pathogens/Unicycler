@@ -94,7 +94,7 @@ Reasons to __not__ use Unicycler:
     * [ICC](https://software.intel.com/en-us/c-compilers) also works (though I don't know the minimum required version number)
 * [setuptools](https://packaging.python.org/installing/#install-pip-setuptools-and-wheel) (only required for installation of Unicycler)
 * For short-read or hybrid assembly:
-  * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 or later (`spades.py`)
+  * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 – v3.13.0 (`spades.py`)
 * For long-read or hybrid assembly:
   * [Racon](https://github.com/isovic/racon) (`racon`)
 * For polishing

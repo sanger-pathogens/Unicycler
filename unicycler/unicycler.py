@@ -843,7 +843,8 @@ def check_dependencies(args, short_reads_available, long_reads_available):
     for i, row in enumerate(program_table):
         if 'not used' in row:
             row_colours[i] = 'dim'
-        elif 'too old' in row or 'not found' in row or 'bad' in row or 'Python problem' in row:
+        elif ('too old' in row or 'too new' in row or 'not found' in row or 'bad' in row or
+              'Python problem' in row):
             row_colours[i] = 'red'
 
     print_table(program_table, alignments='LLLL', row_colour=row_colours, max_col_width=60,
@@ -866,8 +867,8 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     log.log('')
     if spades_status == 'not found':
         quit_with_error('could not find SPAdes at ' + args.spades_path)
-    if spades_status == 'too old':
-        quit_with_error('Unicycler requires SPAdes v3.6.2 or higher')
+    if spades_status == 'too old' or spades_status == 'too new':
+        quit_with_error('Unicycler requires SPAdes v3.6.2 - v3.13.0')
     if spades_status == 'Python problem':
         quit_with_error('SPAdes cannot run due to an incompatible Python version')
     if spades_status == 'bad':

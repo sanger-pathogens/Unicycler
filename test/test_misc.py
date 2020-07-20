@@ -402,3 +402,36 @@ class TestMiscFunctions(unittest.TestCase):
                                 '-o <output_dir>\n\nBasic options:'
         version = unicycler.misc.spades_version_from_spades_output(spades_version_output)
         self.assertEqual(version, '2.4.0')
+
+    def test_spades_version_status_1(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('2.4.0'), 'too old')
+
+    def test_spades_version_status_2(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.4.0'), 'too old')
+
+    def test_spades_version_status_3(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.6.0'), 'too old')
+
+    def test_spades_version_status_4(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.6.1'), 'too old')
+
+    def test_spades_version_status_5(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.6.2'), 'good')
+
+    def test_spades_version_status_6(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.7.0'), 'good')
+
+    def test_spades_version_status_7(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.9.9'), 'good')
+
+    def test_spades_version_status_8(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.13.0'), 'good')
+
+    def test_spades_version_status_9(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.13.1'), 'too new')
+
+    def test_spades_version_status_10(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('3.14.1'), 'too new')
+
+    def test_spades_version_status_11(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('4.0.0'), 'too new')
