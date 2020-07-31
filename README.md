@@ -10,6 +10,17 @@ And read about how we use it to complete bacterial genomes here:
 
 
 
+# A note on Trycycler
+
+[Trycycler](https://github.com/rrwick/Trycycler/wiki) is a newer tool that in many cases is a better choice than Unicycler. Here is a quick guide on whether you should use Unicycler or Trycycler to assemble your bacterial genome:
+* If you only have short reads, use Unicycler (Trycycler does not do short-read assembly).
+* If you only have long reads, Trycycler is a better choice. While Unicycler can do long-read-only assembly, its approach is somewhat out-of-date. Something else to consider is the depth of your long reads, as Trycycler prefers deeper read sets. If your long-read set is particularly shallow (~25× or less), then [Flye](https://github.com/fenderglass/Flye) might be your best option.
+* If you have both short and long reads (i.e. are doing a hybrid assembly), then Unicycler and [Trycycler+polishing](https://github.com/rrwick/Trycycler/wiki/Polishing-after-Trycycler) are both viable options. If you have lots of long reads (~100× depth or more), use Trycycler+polishing. If you have sparse long reads (~25× or less), use Unicycler. If your long-read depth falls between those values, it might be worth trying both approaches.
+
+You can read more on Trycycler's FAQ page: [Should I use Unicycler or Trycycler to assemble my bacterial genome?](https://github.com/rrwick/Trycycler/wiki/FAQ-and-miscellaneous-tips#should-i-use-unicycler-or-trycycler-to-assemble-my-bacterial-genome)
+
+
+
 # Table of contents
 
 * [Introduction](#introduction)
