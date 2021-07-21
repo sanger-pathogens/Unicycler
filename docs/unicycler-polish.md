@@ -11,7 +11,7 @@ It should be considered somewhat experimental, so use with caution!
 * If polishing with PacBio reads: [pbalign](https://github.com/PacificBiosciences/pbalign), [BLASR](https://github.com/PacificBiosciences/blasr), [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)
     * PacBio software is most easily installed using [pitchfork](https://github.com/PacificBiosciences/pitchfork).
 * If polishing with Illumina and PacBio reads: all of the above dependencies plus [ALE](https://github.com/sc932/ALE).
-* If polishing with both Illumina and long reads (e.g. Nanopore): all of the Illumina polishing dependencies, [Racon](https://github.com/isovic/racon), [FreeBayes](https://github.com/ekg/freebayes) and [ALE](https://github.com/sc932/ALE).
+* If polishing with both Illumina and long reads (e.g. Nanopore): all of the Illumina polishing dependencies, [Racon](https://github.com/lbcb-sci/racon), [FreeBayes](https://github.com/ekg/freebayes) and [ALE](https://github.com/sc932/ALE).
 
 
 ### Process
@@ -22,7 +22,7 @@ Unicycler polish uses an exhaustive iterative process that is time-consuming but
     1. Run [Pilon](https://github.com/broadinstitute/pilon/wiki) in 'bases' mode (substitutions and small indels). If any changes were suggested, apply them and repeat this step.
     2. Run Pilon in 'local' mode (larger variants), and assess each change with ALE. If any variant improves the ALE score, apply it and go back to step 1-i.
 2. If long reads are available:
-    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Racon](https://github.com/isovic/racon) and gather all suggested small changes.
+    1. Run [GenomicConsensus](https://github.com/PacificBiosciences/GenomicConsensus)/[Racon](https://github.com/lbcb-sci/racon) and gather all suggested small changes.
     2. Use [FreeBayes](https://github.com/ekg/freebayes) to assess each long read-suggested change by looking for ambiguity in the Illumina read mapping. If any were found, apply them and go back to step 2-i.
 3. If Illumina reads are available:
     1. Execute step 1 again.
