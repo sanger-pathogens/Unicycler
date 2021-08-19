@@ -1,6 +1,6 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/isovic/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a hybrid assembly.
+Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/lbcb-sci/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a hybrid assembly.
 
 Read more about Unicycler here:
 > [__Wick RR, Judd LM, Gorrie CL, Holt KE.__ Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. _PLoS Comput Biol_ 2017.](http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005595)
@@ -107,7 +107,7 @@ Reasons to __not__ use Unicycler:
 * For short-read or hybrid assembly:
   * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 – v3.13.0 (`spades.py`)
 * For long-read or hybrid assembly:
-  * [Racon](https://github.com/isovic/racon) (`racon`)
+  * [Racon](https://github.com/lbcb-sci/racon) (`racon`)
 * For polishing
   * [Pilon](https://github.com/broadinstitute/pilon/wiki) (`pilon1.xx.jar`)
   * [Java](https://www.java.com/download/) (`java`)
@@ -285,7 +285,7 @@ The version of miniasm that comes with Unicycler is slightly modified in a coupl
 
 ### Racon polishing
 
-After miniasm assembly, Unicycler carries out multiple rounds of polishing with [Racon](https://github.com/isovic/racon) to improve the sequence accuracy. It will polish until the assembly stops improving, as measured by the agreement between the reads and the assembly. Circular replicons are 'rotated' (have their starting position shifted) between rounds of polishing to ensure that no part of the sequence is left unpolished.
+After miniasm assembly, Unicycler carries out multiple rounds of polishing with [Racon](https://github.com/lbcb-sci/racon) to improve the sequence accuracy. It will polish until the assembly stops improving, as measured by the agreement between the reads and the assembly. Circular replicons are 'rotated' (have their starting position shifted) between rounds of polishing to ensure that no part of the sequence is left unpolished.
 
 
 
