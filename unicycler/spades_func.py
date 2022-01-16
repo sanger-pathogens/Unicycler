@@ -361,7 +361,8 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp
     using_unpaired_reads = unpaired is not None and os.path.isfile(unpaired)
 
     kmer_string = ','.join([str(x) for x in kmers])
-    command = [spades_path, '-o', out_dir, '-k', kmer_string, '--threads', str(threads)]
+    command = [spades_path, '-o', out_dir, '-k', kmer_string, '--threads', str(threads),
+               '-m', '1024']
     if just_last:
         command += ['--restart-from', 'k' + str(kmers[-1])]
     else:
