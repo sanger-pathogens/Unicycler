@@ -668,7 +668,6 @@ Unicycler also comes with a few other tools which may be of interest:
 
 * [Unicycler-align](docs/unicycler-align.md): semi-global alignment of long reads
 * [Unicycler-polish](docs/unicycler-polish.md): hybrid assembly polishing
-* [Unicycler-scrub](docs/unicycler-scrub.md): read scrubber for trimming ends and splitting chimeras
 * [Unicycler-check](docs/unicycler-check.md): misassembly detection and alignment visualisation
 
 These tools may be experimental, incomplete or no longer under development, so use with caution!

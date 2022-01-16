@@ -265,10 +265,6 @@ def minimap_align_reads(reference_fasta, reads_fastq, threads, sensitivity_level
         preset = 1
     elif preset_name == 'find contigs':
         preset = 2
-    if preset_name == 'scrub reads with reads':
-        preset = 1
-    if preset_name == 'scrub assembly with reads':
-        preset = 2
     ptr = C_LIB.minimapAlignReads(reference_fasta.encode('utf-8'), reads_fastq.encode('utf-8'),
                                   threads, sensitivity_level, preset)
     return c_string_to_python_string(ptr)
@@ -359,33 +355,3 @@ def end_seq_alignment(sequence_1, sequence_2, scoring_scheme):
     return C_LIB.endAlignment(sequence_1.encode('utf-8'), sequence_2.encode('utf-8'),
                               scoring_scheme.match, scoring_scheme.mismatch,
                               scoring_scheme.gap_open, scoring_scheme.gap_extend)
-
-
-# This function does the Unicycler-scrub splitting in C++ (for speed).
-C_LIB.splitSequences.argtypes = [c_char_p,  # Alignments string
-                                 c_int,     # Sequence length
-                                 c_double,  # Starting score
-                                 c_int,     # Positive score feather size
-                                 c_int,     # Negative score feather size
-                                 c_double,  # Positive score scaling factor
-                                 c_int]     # Split adjustment
-C_LIB.splitSequences.restype = c_void_p     # String describing pos/neg ranges of sequence
-
-def split_sequences_cpp(alignments, seq_len, parameters):
-    alignments_string = ';'.join(a.get_string_for_cpp_scrub() for a in alignments)
-    ptr = C_LIB.splitSequences(alignments_string.encode('utf-8'), seq_len,
-                               parameters.starting_score, parameters.pos_score_feather_size,
-                               parameters.neg_score_feather_size,
-                               parameters.pos_score_scaling_factor, parameters.split_adjustment)
-    ranges_str = c_string_to_python_string(ptr)
-    pos_ranges_str, neg_ranges_str = ranges_str.split(';')
-    pos_ranges, neg_ranges = [], []
-    if pos_ranges_str:
-        for range in pos_ranges_str.split(','):
-            range_parts = range.split('-')
-            pos_ranges.append((int(range_parts[0]), int(range_parts[1])))
-    if neg_ranges_str:
-        for range in neg_ranges_str.split(','):
-            range_parts = range.split('-')
-            neg_ranges.append((int(range_parts[0]), int(range_parts[1])))
-    return pos_ranges, neg_ranges
