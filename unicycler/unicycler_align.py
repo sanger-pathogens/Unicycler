@@ -146,7 +146,7 @@ def get_arguments():
 def add_aligning_arguments(parser, show_help):
     """
     Adds some aligning-specific arguments to the parser. These are in a separate function because
-    other tools (e.g. unicycler.py, unicycler_check.py) can use this function too.
+    other tools (e.g. unicycler.py) can use this function too.
     """
     parser.add_argument('--contamination', required=False,
                         help='FASTA file of known contamination in long reads'
