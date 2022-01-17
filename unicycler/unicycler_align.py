@@ -73,29 +73,6 @@ SAM_WRITE_LOCK = threading.Lock()
 VERBOSITY = 0
 
 
-def main():
-    """
-    If this script is run on its own, execution starts here.
-    """
-    # Fix the random seed so the program produces the same output every time it's run.
-    random.seed(0)
-
-    full_command = ' '.join(sys.argv)
-    args = get_arguments()
-    check_file_exists(args.ref)
-    check_file_exists(args.reads)
-
-    references = load_references(args.ref)
-    read_dict, read_names, read_filename = load_long_reads(args.reads)
-    scoring_scheme = AlignmentScoringScheme(args.scores)
-
-    semi_global_align_long_reads(references, args.ref, read_dict, read_names, read_filename,
-                                 args.threads, scoring_scheme, [args.low_score], args.keep_bad,
-                                 args.min_len, args.sam, full_command, args.allowed_overlap,
-                                 args.sensitivity, args.contamination, VERBOSITY)
-    sys.exit(0)
-
-
 def get_arguments():
     """
     Specifies the command line arguments required by the script.

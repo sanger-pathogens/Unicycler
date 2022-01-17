@@ -41,13 +41,6 @@ class AlignmentScoringScheme(object):
         return str(self.match) + ',' + str(self.mismatch) + ',' + str(self.gap_open) + ',' + \
                str(self.gap_extend)
 
-    def get_full_string(self):
-        """
-        Returns a string verbosely describing the scheme.
-        """
-        return 'match = ' + str(self.match) + ', mismatch = ' + str(self.mismatch) + \
-               ', gap open = ' + str(self.gap_open) + ', gap extend = ' + str(self.gap_extend)
-
 
 class Alignment(object):
     """
