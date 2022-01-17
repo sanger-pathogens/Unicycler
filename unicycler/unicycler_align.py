@@ -3,13 +3,10 @@
 Copyright 2017 Ryan Wick (rrwick@gmail.com)
 https://github.com/rrwick/Unicycler
 
-This module makes Unicycler's semi-global long read alignment available as a stand-alone program.
-It is executed when a user runs `unicycler_align` (after installation) or
-`unicycler_align-runner.py`.
-
-Semi-global alignment does not penalise end gaps, but the alignment will continue until one of the
-two sequences ends. This includes cases where the two sequences overlap and cases where one
-sequence is contained within the other:
+This module controls Unicycler's semi-global long read alignment. Semi-global alignment does not
+penalise end gaps, but the alignment will continue until one of the two sequences ends. This
+includes cases where the two sequences overlap and cases where one sequence is contained within the
+other:
 
   TAGAA        GTGCCGGAACA         GGCCACAC     AGTAAGAT
   |||||          |||||||           |||||           |||||
