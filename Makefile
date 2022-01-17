@@ -24,6 +24,8 @@ ifneq (,$(findstring clang,$(COMPILER_HELP)))
     COMPILER = clang
 else ifneq (,$(findstring g++,$(COMPILER_HELP)))
     COMPILER = g++
+else ifneq (,$(findstring c++,$(COMPILER_HELP)))
+    COMPILER = c++
 else ifneq (,$(findstring Intel,$(COMPILER_HELP)))
     COMPILER = icpc
 else

@@ -44,6 +44,8 @@
 #ifndef SEQAN_INCLUDE_SEQAN_BASIC_ARRAY_CONSTRUCT_DESTRUCT_H_
 #define SEQAN_INCLUDE_SEQAN_BASIC_ARRAY_CONSTRUCT_DESTRUCT_H_
 
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+
 namespace seqan {
 
 // ============================================================================

@@ -39,6 +39,8 @@
 #ifndef SEQAN_INCLUDE_SEQAN_BASIC_TRIPLE_BASE_H_
 #define SEQAN_INCLUDE_SEQAN_BASIC_TRIPLE_BASE_H_
 
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+
 namespace seqan {
 
 // ============================================================================

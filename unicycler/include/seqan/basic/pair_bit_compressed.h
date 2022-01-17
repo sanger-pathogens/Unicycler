@@ -37,6 +37,8 @@
 #ifndef SEQAN_INCLUDE_SEQAN_BASIC_PAIR_BIT_PACKED_H_
 #define SEQAN_INCLUDE_SEQAN_BASIC_PAIR_BIT_PACKED_H_
 
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+
 namespace seqan {
 
 // ============================================================================

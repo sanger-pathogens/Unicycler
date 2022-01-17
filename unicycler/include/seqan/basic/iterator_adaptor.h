@@ -38,6 +38,8 @@
 #ifndef SEQAN_INCLUDE_SEQAN_BASIC_ITERATOR_ADAPTOR_H_
 #define SEQAN_INCLUDE_SEQAN_BASIC_ITERATOR_ADAPTOR_H_
 
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+
 namespace seqan {
 
 // ============================================================================
