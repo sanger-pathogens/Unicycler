@@ -352,10 +352,10 @@ def get_arguments():
                                help='Path to the Racon executable'
                                     if show_all_args else argparse.SUPPRESS)
     miniasm_group.add_argument('--existing_long_read_assembly', type=str, default=None,
-                               help='A pre-prepared long read assembly for the sample in GFA '
+                               help='A pre-prepared long-read assembly for the sample in GFA '
                                     'or FASTA format. If this option is used, Unicycler will skip '
                                     'the miniasm/Racon steps and instead use the given assembly '
-                                    '(default: perform long read assembly using miniasm/Racon)'
+                                    '(default: perform long-read assembly using miniasm/Racon)'
                                     if show_all_args else argparse.SUPPRESS)
 
     # Rotation options
@@ -404,7 +404,7 @@ def get_arguments():
                                      if show_all_args else argparse.SUPPRESS)
 
     # Add the arguments for the aligner, but suppress the help text.
-    align_group = parser.add_argument_group('Long read alignment',
+    align_group = parser.add_argument_group('Long-read alignment',
                                             'These options control the alignment of long reads to '
                                             'the assembly graph.'
                                             if show_all_args else argparse.SUPPRESS)
