@@ -80,8 +80,8 @@ def main():
                                           args.depth_filter, args.verbosity,
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
-                                          args.kmers, args.no_correct, args.linear_seqs,
-                                          args.spades_tmp_dir, args.largest_component)
+                                          args.kmers, args.linear_seqs, args.spades_tmp_dir,
+                                          args.largest_component)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -309,10 +309,6 @@ def get_arguments():
                                              if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--spades_path', type=str, default='spades.py',
                               help='Path to the SPAdes executable'
-                                   if show_all_args else argparse.SUPPRESS)
-    spades_group.add_argument('--no_correct', action='store_true',
-                              help='Skip SPAdes error correction step (default: conduct SPAdes '
-                                   'error correction)'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--min_kmer_frac', type=float, default=0.2,
                               help='Lowest k-mer size for SPAdes assembly, expressed as a '

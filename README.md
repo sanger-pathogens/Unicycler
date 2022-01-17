@@ -216,11 +216,6 @@ When assembling just Illumina reads, Unicycler functions mainly as a SPAdes opti
 More information on the Illumina-only assembly process is described in the steps below.
 
 
-### Read correction
-
-Unicycler uses SPAdes' built-in read correction step before assembling the Illumina reads. This can be disabled with `--no_correct` if your Illumina reads are very high quality or you've already performed read QC.
-
-
 ### SPAdes assembly
 
 <img align="right" src="misc/k-mer_plot.png" width="156" height="179">
@@ -418,8 +413,6 @@ SPAdes assembly:
   pipeline.
 
   --spades_path SPADES_PATH      Path to the SPAdes executable (default: spades.py)
-  --no_correct                   Skip SPAdes error correction step (default: conduct SPAdes error
-                                 correction)
   --min_kmer_frac MIN_KMER_FRAC  Lowest k-mer size for SPAdes assembly, expressed as a fraction of
                                  the read length (default: 0.2)
   --max_kmer_frac MAX_KMER_FRAC  Highest k-mer size for SPAdes assembly, expressed as a fraction

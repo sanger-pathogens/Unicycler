@@ -63,7 +63,6 @@ class TestBasicHelpText(unittest.TestCase):
 
     def test_extended_options(self):
         self.assertFalse('--spades_path' in self.stdout)
-        self.assertFalse('--no_correct' in self.stdout)
         self.assertFalse('--min_kmer_frac' in self.stdout)
         self.assertFalse('--max_kmer_frac' in self.stdout)
         self.assertFalse('--kmer_count' in self.stdout)
@@ -113,7 +112,6 @@ class TestExtendedHelpText(unittest.TestCase):
 
     def test_extended_options(self):
         self.assertTrue('--spades_path' in self.stdout)
-        self.assertTrue('--no_correct' in self.stdout)
         self.assertTrue('--min_kmer_frac' in self.stdout)
         self.assertTrue('--max_kmer_frac' in self.stdout)
         self.assertTrue('--kmer_count' in self.stdout)

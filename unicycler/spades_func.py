@@ -30,8 +30,7 @@ class BadFastq(Exception):
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
-                          no_spades_correct, expected_linear_seqs, spades_tmp_dir,
-                          largest_component):
+                          expected_linear_seqs, spades_tmp_dir, largest_component):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best.
     'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
@@ -65,11 +64,8 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         except BadFastq:
             quit_with_error('this read file is not properly formatted as FASTQ: ' + short_unpaired)
 
-    if no_spades_correct:
-        reads = (short1, short2, short_unpaired)
-    else:
-        reads = spades_read_correction(short1, short2, short_unpaired, spades_dir, threads,
-                                       spades_path, keep, spades_tmp_dir)
+    reads = (short1, short2, short_unpaired)
+
     if kmers is not None:
         kmer_range = kmers
     else:
@@ -211,139 +207,6 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         shutil.rmtree(spades_tmp_dir, ignore_errors=True)
 
     return assembly_graph
-
-
-def spades_read_correction(short1, short2, unpaired, spades_dir, threads, spades_path, keep,
-                           spades_tmp_dir):
-    """
-    This runs SPAdes with the --only-error-correction option.
-    """
-    log.log_section_header('SPAdes read error correction')
-    log.log_explanation('Unicycler uses the SPAdes read error correction module to reduce the '
-                        'number of errors in the short read before SPAdes assembly. This can make '
-                        'the assembly faster and simplify the assembly graph structure.')
-
-    using_paired_reads = bool(short1) and bool(short2)
-    using_unpaired_reads = bool(unpaired)
-
-    # If the corrected reads already exist, then we just use them and proceed.
-    corrected_1 = os.path.join(spades_dir, 'corrected_1.fastq.gz')
-    corrected_2 = os.path.join(spades_dir, 'corrected_2.fastq.gz')
-    corrected_u = os.path.join(spades_dir, 'corrected_u.fastq.gz')
-    corrected_1_exists = os.path.isfile(corrected_1)
-    corrected_2_exists = os.path.isfile(corrected_2)
-    corrected_u_exists = os.path.isfile(corrected_u)
-
-    reads_already_exist = True
-    if using_paired_reads and (not corrected_1_exists or not corrected_2_exists):
-        reads_already_exist = False
-    if using_unpaired_reads and not corrected_u_exists:
-        reads_already_exist = False
-
-    if reads_already_exist:
-        log.log('Corrected reads already exist. Will use these reads instead of running SPAdes '
-                'error correction:')
-        if using_paired_reads:
-            log.log('  ' + corrected_1)
-            log.log('  ' + corrected_2)
-        if using_unpaired_reads:
-            log.log('  ' + corrected_u)
-        if not using_paired_reads:
-            corrected_1, corrected_2 = None, None
-        if not using_unpaired_reads:
-            corrected_u = None
-        return corrected_1, corrected_2, corrected_u
-
-    # If the corrected reads don't exist, then we run SPAdes in error correction only mode.
-    read_correction_dir = os.path.join(spades_dir, 'read_correction')
-    command = [spades_path]
-    if using_paired_reads:
-        assert bool(short1) and bool(short2)
-        command += ['-1', short1, '-2', short2]
-    if using_unpaired_reads:
-        command += ['-s', unpaired]
-    command += ['-o', read_correction_dir, '--threads', str(threads), '--only-error-correction',
-                '--phred-offset', '33']
-    if spades_tmp_dir is not None:
-        command += ['--tmp-dir', spades_tmp_dir]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    while process.poll() is None:
-        spades_output = process.stdout.readline().rstrip().decode()
-        if 'Command line:' in spades_output:
-            spades_output = ' '.join(spades_output.split()).replace('Command line: ', '')
-            log.log('Command: ' + bold(spades_output))
-            log.log('', 2)
-        elif spades_output:
-            log.log(dim(spades_output), 2)
-
-    spades_error = process.stderr.readline().strip().decode()
-    return_code = process.returncode
-    if spades_error:
-        quit_with_error('SPAdes encountered an error: ' + spades_error)
-    if return_code != 0:
-        quit_with_error('SPAdes crashed! Please view spades.log for more information.')
-
-    # Read error correction should be done now, so copy the corrected read files to a more
-    # permanent location.
-    if using_paired_reads:
-        short1_no_extension = strip_read_extensions(short1)
-        short2_no_extension = strip_read_extensions(short2)
-
-        # Try to deal with particularly strange names for paired reads.
-        if short1_no_extension in short2_no_extension or short2_no_extension in short1_no_extension:
-            for i in range(min(len(short1), len(short2))):
-                short1_no_extension = os.path.basename(short1)[:i]
-                short2_no_extension = os.path.basename(short2)[:i]
-                if short1_no_extension != short2_no_extension:
-                    break
-        if short1_no_extension in short2_no_extension or short2_no_extension in short1_no_extension:
-            quit_with_error('could not process read file names')
-    else:
-        short1_no_extension, short2_no_extension = '', ''
-
-    corrected_dir = os.path.join(read_correction_dir, 'corrected')
-    files = os.listdir(corrected_dir)
-    for spades_file in files:
-        file_path = os.path.join(corrected_dir, spades_file)
-        if using_paired_reads and short1_no_extension in spades_file:
-            shutil.move(file_path, corrected_1)
-        elif using_paired_reads and short2_no_extension in spades_file:
-            shutil.move(file_path, corrected_2)
-        elif using_unpaired_reads and '_unpaired' in spades_file:
-            shutil.move(file_path, corrected_u)
-        elif using_unpaired_reads and not using_paired_reads and \
-                spades_file.endswith('.cor.fastq.gz'):
-            shutil.move(file_path, corrected_u)
-
-    corrected_1_exists = os.path.isfile(corrected_1)
-    corrected_2_exists = os.path.isfile(corrected_2)
-    corrected_u_exists = os.path.isfile(corrected_u)
-
-    if using_paired_reads and (not corrected_1_exists or not corrected_2_exists):
-        quit_with_error('SPAdes read error correction failed. '
-                        'See spades_assembly/read_correction/spades.log for more info.')
-    if using_unpaired_reads and not corrected_u_exists:
-        quit_with_error('SPAdes read error correction failed. '
-                        'See spades_assembly/read_correction/spades.log for more info.')
-    if keep < 3:
-        shutil.rmtree(read_correction_dir, ignore_errors=True)
-
-    if not using_paired_reads:
-        corrected_1 = None
-        corrected_2 = None
-    if not using_unpaired_reads:
-        corrected_u = None
-
-    log.log('')
-    log.log('Corrected reads:')
-    if using_paired_reads:
-        log.log('  ' + corrected_1)
-        log.log('  ' + corrected_2)
-    if using_unpaired_reads:
-        log.log('  ' + corrected_u)
-
-    return corrected_1, corrected_2, corrected_u
 
 
 def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp_dir,
