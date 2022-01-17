@@ -738,23 +738,6 @@ def remove_formatting(text):
     return re.sub('\033.*?m', '', text)
 
 
-def get_all_files_in_current_dir():
-    return [f for f in os.listdir('.') if os.path.isfile(f)]
-
-
-def convert_fastq_to_fasta(fastq, fasta):
-    open_func = get_open_function(fastq)
-    with open_func(fastq, 'rt') as fastq:
-        with open(fasta, 'wt') as fasta:
-            for line in fastq:
-                name = line.strip()[1:].split()[0]
-                sequence = next(fastq).strip()
-                _ = next(fastq)
-                _ = next(fastq)
-                fasta.write('>' + name + '\n')
-                fasta.write(sequence + '\n')
-
-
 def get_ascii_art():
     ascii_art = (bold_red("       __\n") +
                  bold_red("       \ \___\n") +
@@ -906,9 +889,9 @@ def racon_version(found_racon_path):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out, _ = process.communicate()
     out = out.decode().lower()
-    if out.startswith('v'):
-        return out[1:]
-    else:
+    try:
+        return re.search(r'(\d+\.\d+\.\d+)', out).group(1)
+    except (AttributeError, IndexError):
         return '-'
 
 

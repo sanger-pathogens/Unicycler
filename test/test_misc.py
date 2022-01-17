@@ -320,65 +320,6 @@ class TestMiscFunctions(unittest.TestCase):
         self.assertEqual(t,
                          unicycler.misc.remove_formatting(unicycler.misc.bold_yellow_underline(t)))
 
-    def test_get_all_files_in_current_dir(self):
-        starting_cwd = os.getcwd()
-        test_dir = os.path.dirname(__file__)
-        os.chdir(test_dir)
-        self.assertTrue(os.path.basename(__file__) in unicycler.misc.get_all_files_in_current_dir())
-        os.chdir(starting_cwd)
-
-    def test_convert_fastq_to_fasta(self):
-        test_fastq = os.path.join(os.path.dirname(__file__), 'test_misc.fastq')
-        test_fasta = os.path.join(os.path.dirname(__file__), 'temp_test.fasta')
-        unicycler.misc.convert_fastq_to_fasta(test_fastq, test_fasta)
-        fasta = unicycler.misc.load_fasta(test_fasta)
-        self.assertEqual(len(fasta), 3)
-        self.assertEqual(fasta[1][0], 'read_2')
-        self.assertEqual(fasta[1][1], 'CACATACAGGCAGAGTGGCCGTGAAAGAAAGCAATCAGCGATGGTGCTCTGACGGGTTC'
-                                      'GAGTTCTGCTGTGATAACGGAGAGAGACTGCGTGTCACGTTCGCGCTGGACTGCTGTGA'
-                                      'TCGTGAG')
-        os.remove(test_fasta)
-
-    def test_java_version_parsing_1(self):
-        java_version_output = 'java version "1.8.0_77"\n' \
-                              'Java(TM) SE Runtime Environment (build 1.8.0_77-b03)\n' \
-                              'Java HotSpot(TM) 64-Bit Server VM (build 25.77-b03, mixed mode)'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '1.8.0_77')
-
-    def test_java_version_parsing_2(self):
-        java_version_output = 'java version "1.7.0_80"\n' \
-                              'Java(TM) SE Runtime Environment (build 1.7.0_80-b15)\n' \
-                              'Java HotSpot(TM) 64-Bit Server VM (build 24.80-b11, mixed mode)'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '1.7.0_80')
-
-    def test_java_version_parsing_3(self):
-        java_version_output = 'java version "9.0.1"\n' \
-                              'Java(TM) SE Runtime Environment (build 9.0.1+11)\n' \
-                              'Java HotSpot(TM) 64-Bit Server VM (build 9.0.1+11, mixed mode)'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '9.0.1')
-
-    def test_java_version_parsing_4(self):
-        java_version_output = 'openjdk version "1.8.0_131"\n' \
-                              'OpenJDK Runtime Environment (build 1.8.0_131-8u131-b11-2-b11)\n' \
-                              'OpenJDK 64-Bit Server VM (build 25.131-b11, mixed mode)'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '1.8.0_131')
-
-    def test_java_version_parsing_5(self):
-        java_version_output = 'this is rubbish output'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '')
-
-    def test_java_version_parsing_6(self):
-        java_version_output = 'openjdk version "9-Ubuntu"\n' \
-                              'OpenJDK Runtime Environment (build 9-Ubuntu+0-9b181-4)\n' \
-                              'OpenJDK 64-Bit Server VM (build 9-Ubuntu+0-9b181-4, mixed mode)'
-        version = unicycler.misc.java_version_from_java_output(java_version_output)
-        self.assertEqual(version, '9-Ubuntu')
-
     def test_spades_version_parsing_1(self):
         spades_version_output = 'SPAdes v3.10.1'
         version = unicycler.misc.spades_version_from_spades_output(spades_version_output)

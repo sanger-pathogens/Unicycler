@@ -83,133 +83,124 @@ def make_miniasm_string_graph(graph, read_dict, long_read_filename, scoring_sche
     branching_paths_removed_filename = os.path.join(miniasm_dir, '11_branching_paths_removed.gfa')
     unitig_graph_filename = os.path.join(miniasm_dir, '12_unitig_graph.gfa')
     racon_polished_filename = os.path.join(miniasm_dir, '13_racon_polished.gfa')
-    pilon_polished_filename = os.path.join(miniasm_dir, '14_pilon_polished.gfa')
-    contigs_placed_filename = os.path.join(miniasm_dir, '15_contigs_placed.gfa')
+    contigs_placed_filename = os.path.join(miniasm_dir, '14_contigs_placed.gfa')
     miniasm_read_list = os.path.join(miniasm_dir, 'all_reads.txt')
 
-    # If the long read assembly already exists, then we can skip ahead quite a lot.
-    if os.path.isfile(pilon_polished_filename) and os.path.isfile(miniasm_read_list):
-        log.log('Long read assembly already exists: ' + pilon_polished_filename)
-        log.log('')
-        unitig_graph = StringGraph(pilon_polished_filename)
+    assembly_read_names = get_miniasm_assembly_reads(graph, read_dict, long_read_filename,
+                                                     miniasm_dir, args.threads)
 
-    # If not, we need to do all of the long read assembly steps now.
+    # TO DO: identify chimeric reads and throw them out. This was part of miniasm, but it was
+    # removed due to 'not working as intended', so I pulled it out of my miniasm as well.
+
+    save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph,
+                                seg_nums_to_bridge)
+
+    # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
+    # alignments are excluded (because single-copy contigs, by definition, should not
+    # significantly overlap each other).
+    log.log('Finding overlaps with minimap... ', end='')
+    minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
+                                                 assembly_reads_filename,
+                                                 args.threads, 0, 'read vs read')
+    overlap_count = 0
+    with open(mappings_filename, 'wt') as mappings:
+        for minimap_alignment_str in line_iterator(minimap_alignments_str):
+            if minimap_alignment_str.count('CONTIG_') < 2:
+                mappings.write(minimap_alignment_str)
+                mappings.write('\n')
+                overlap_count += 1
+
+    if overlap_count == 0:
+        log.log(red('failed'))
     else:
-        assembly_read_names = get_miniasm_assembly_reads(graph, read_dict, long_read_filename,
-                                                         miniasm_dir, args.threads)
+        log.log(green('success'))
+        log.log('  ' + int_to_str(overlap_count) + ' overlaps\n')
 
-        # TO DO: identify chimeric reads and throw them out. This was part of miniasm, but it was
-        # removed due to 'not working as intended', so I pulled it out of my miniasm as well.
+    # TO DO: refine these overlaps? Perhaps using Unicycler-align? I suspect that the quality
+    # of a miniasm assembly is highly dependent on the input overlaps.
+    #
+    # I could even try to do more sophisticated stuff, like using the alignments to identify
+    # repeat regions, then finding these repeat regions in reads and tossing out alignments
+    # which are contained only in repeat regions.
 
-        save_assembly_reads_to_file(assembly_reads_filename, assembly_read_names, read_dict, graph,
-                                    seg_nums_to_bridge)
+    # TO DO: Unicycler's mode (conservative, normal or bold) should appropriately affect the
+    # miniasm settings.
 
-        # Do an all-vs-all alignment of the assembly FASTQ, for miniasm input. Contig-contig
-        # alignments are excluded (because single-copy contigs, by definition, should not
-        # significantly overlap each other).
-        log.log('Finding overlaps with minimap... ', end='')
-        minimap_alignments_str = minimap_align_reads(assembly_reads_filename,
-                                                     assembly_reads_filename,
-                                                     args.threads, 0, 'read vs read')
-        overlap_count = 0
-        with open(mappings_filename, 'wt') as mappings:
-            for minimap_alignment_str in line_iterator(minimap_alignments_str):
-                if minimap_alignment_str.count('CONTIG_') < 2:
-                    mappings.write(minimap_alignment_str)
-                    mappings.write('\n')
-                    overlap_count += 1
+    # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
+    log.log('Assembling reads with miniasm... ', end='')
+    min_depth = 3
+    miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir, min_depth)
+    if not os.path.isfile(string_graph_filename):
+        log.log(red('failed'))
+        raise MiniasmFailure('miniasm failed to generate a string graph')
+    string_graph = StringGraph(string_graph_filename)
 
-        if overlap_count == 0:
-            log.log(red('failed'))
-        else:
-            log.log(green('success'))
-            log.log('  ' + int_to_str(overlap_count) + ' overlaps\n')
+    if len(string_graph.segments) == 0:
+        log.log(red('empty result'))
+        unitig_graph = None
 
-        # TO DO: refine these overlaps? Perhaps using Unicycler-align? I suspect that the quality
-        # of a miniasm assembly is highly dependent on the input overlaps.
-        #
-        # I could even try to do more sophisticated stuff, like using the alignments to identify
-        # repeat regions, then finding these repeat regions in reads and tossing out alignments
-        # which are contained only in repeat regions.
+    else:
+        log.log(green('success'))
+        log.log('  ' + int_to_str(len(string_graph.segments)) + ' segments, ' +
+                int_to_str(len(string_graph.links) // 2) + ' links\n')
 
-        # TO DO: Unicycler's mode (conservative, normal or bold) should appropriately affect the
-        # miniasm settings.
+        if not short_reads_available and args.keep > 0:
+            shutil.copyfile(string_graph_filename,
+                            gfa_path(args.out, next(counter), 'string_graph'))
 
-        # Now actually do the miniasm assembly, which will create a GFA file of the string graph.
-        log.log('Assembling reads with miniasm... ', end='')
-        min_depth = 3
-        miniasm_assembly(assembly_reads_filename, mappings_filename, miniasm_dir, min_depth)
-        if not os.path.isfile(string_graph_filename):
-            log.log(red('failed'))
-            raise MiniasmFailure('miniasm failed to generate a string graph')
-        string_graph = StringGraph(string_graph_filename)
+        string_graph.remove_branching_paths()
+        string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
 
-        if len(string_graph.segments) == 0:
-            log.log(red('empty result'))
-            unitig_graph = None
+        log.log('Merging segments into unitigs:')
+        unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph,
+                                                                     read_nicknames)
+        circular_count = unitig_graph.get_circular_segment_count()
+        linear_count = unitig_graph.get_linear_segment_count()
+        unitig_graph_size = unitig_graph.get_total_segment_length()
+        if circular_count > 0:
+            log.log('  ' + int_to_str(circular_count) + ' circular unitig' +
+                    ('' if circular_count == 1 else 's'))
+        if linear_count > 0:
+            log.log('  ' + int_to_str(linear_count) + ' linear unitig' +
+                    ('' if linear_count == 1 else 's'))
+        log.log('  total size = ' + int_to_str(unitig_graph_size) + ' bp')
 
-        else:
-            log.log(green('success'))
-            log.log('  ' + int_to_str(len(string_graph.segments)) + ' segments, ' +
-                    int_to_str(len(string_graph.links) // 2) + ' links\n')
+        unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
+        if not short_reads_available and args.keep > 0:
+            unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'unitig_graph'),
+                                     include_depth=False)
 
-            if not short_reads_available and args.keep > 0:
-                shutil.copyfile(string_graph_filename,
-                                gfa_path(args.out, next(counter), 'string_graph'))
+        # If the miniasm assembly looks too small, then we don't bother polishing it or using
+        # it for bridging.
+        if short_reads_available:
+            estimated_genome_size = graph.get_estimated_sequence_len()
+            target_size = estimated_genome_size * \
+                settings.REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING
+            if unitig_graph_size < target_size:
+                log.log('')
+                log.log(red('miniasm assembly too small for bridging'))
+                unitig_graph = None
 
-            string_graph.remove_branching_paths()
-            string_graph.save_to_gfa(branching_paths_removed_filename, include_depth=False)
-
-            log.log('Merging segments into unitigs:')
-            unitig_graph = merge_string_graph_segments_into_unitig_graph(string_graph,
-                                                                         read_nicknames)
-            circular_count = unitig_graph.get_circular_segment_count()
-            linear_count = unitig_graph.get_linear_segment_count()
-            unitig_graph_size = unitig_graph.get_total_segment_length()
-            if circular_count > 0:
-                log.log('  ' + int_to_str(circular_count) + ' circular unitig' +
-                        ('' if circular_count == 1 else 's'))
-            if linear_count > 0:
-                log.log('  ' + int_to_str(linear_count) + ' linear unitig' +
-                        ('' if linear_count == 1 else 's'))
-            log.log('  total size = ' + int_to_str(unitig_graph_size) + ' bp')
-
-            unitig_graph.save_to_gfa(unitig_graph_filename, include_depth=False)
-            if not short_reads_available and args.keep > 0:
-                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter), 'unitig_graph'),
-                                         include_depth=False)
-
-            # If the miniasm assembly looks too small, then we don't bother polishing it or using
-            # it for bridging.
-            if short_reads_available:
-                estimated_genome_size = graph.get_estimated_sequence_len()
-                target_size = estimated_genome_size * \
-                    settings.REQUIRED_MINIASM_ASSEMBLY_SIZE_FOR_BRIDGING
-                if unitig_graph_size < target_size:
-                    log.log('')
-                    log.log(red('miniasm assembly too small for bridging'))
-                    unitig_graph = None
-
-            if unitig_graph is not None:
-                # If the user supplied a long read assembly, then we use that instead of doing a
-                # Racon polish.
-                if existing_long_read_assembly:
-                    log.log('')
-                    log.log('Using provided long read assembly instead of running Racon: ' +
-                            existing_long_read_assembly)
-                    log.log('')
-                    unitig_graph = StringGraph(existing_long_read_assembly)
-                else:
-                    polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
-                                              args.racon_path, args.threads, scoring_scheme,
-                                              seg_nums_to_bridge)
-                    unitig_graph.save_to_gfa(racon_polished_filename)
-                    if not short_reads_available and args.keep > 0:
-                        unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
-                                                          'racon_polished'))
-                if short_reads_available and args.keep > 0:
+        if unitig_graph is not None:
+            # If the user supplied a long read assembly, then we use that instead of doing a
+            # Racon polish.
+            if existing_long_read_assembly:
+                log.log('')
+                log.log('Using provided long read assembly instead of running Racon: ' +
+                        existing_long_read_assembly)
+                log.log('')
+                unitig_graph = StringGraph(existing_long_read_assembly)
+            else:
+                polish_unitigs_with_racon(unitig_graph, miniasm_dir, read_dict, graph,
+                                          args.racon_path, args.threads, scoring_scheme,
+                                          seg_nums_to_bridge)
+                unitig_graph.save_to_gfa(racon_polished_filename)
+                if not short_reads_available and args.keep > 0:
                     unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
-                                                      'long_read_assembly'))
+                                                      'racon_polished'))
+            if short_reads_available and args.keep > 0:
+                unitig_graph.save_to_gfa(gfa_path(args.out, next(counter),
+                                                  'long_read_assembly'))
 
     if unitig_graph is not None and short_reads_available:
         log.log('')
