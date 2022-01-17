@@ -989,21 +989,6 @@ def makeblastdb_path_and_version(makeblastdb_path):
     return found_makeblastdb_path, version, 'good'
 
 
-def bcftools_path_and_version(bcftools_path):
-    found_bcftools_path = shutil.which(bcftools_path)
-    if found_bcftools_path is None:
-        return bcftools_path, '', 'not found'
-    command = [found_bcftools_path, '--version']
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out, _ = process.communicate()
-    try:
-        version = out.decode().split('bcftools ')[1].split()[0]
-        int(version.split('.')[0]), int(version.split('.')[1])
-    except (ValueError, IndexError):
-        version, status = '?', 'too old'
-    return found_bcftools_path, version, 'good'
-
-
 def tblastn_path_and_version(tblastn_path):
     found_tblastn_path = shutil.which(tblastn_path)
     if found_tblastn_path is None:

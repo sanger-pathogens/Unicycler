@@ -361,7 +361,7 @@ Run `unicycler --help` to view the program's most commonly used options:
 ```
 usage: unicycler [-h] [--help_all] [--version] [-1 SHORT1] [-2 SHORT2] [-s UNPAIRED] [-l LONG] -o OUT
                  [--verbosity VERBOSITY] [--min_fasta_length MIN_FASTA_LENGTH] [--keep KEEP] [-t THREADS]
-                 [--mode {conservative,normal,bold}] [--linear_seqs LINEAR_SEQS] [--vcf]
+                 [--mode {conservative,normal,bold}] [--linear_seqs LINEAR_SEQS]
 
        __
        \ \___
@@ -403,8 +403,6 @@ Output:
                                    1 = also save graphs at main checkpoints,
                                    2 = also keep SAM (enables fast rerun in different mode),
                                    3 = keep all temp files and save all graphs (for debugging)
-  --vcf                          Produce a VCF by mapping the short reads to the final assembly
-                                 (experimental, default: do not produce a vcf file)
 
 Other:
   -t THREADS, --threads THREADS  Number of threads used (default: 8)
@@ -491,11 +489,6 @@ Pilon polishing:
   --min_polish_size MIN_POLISH_SIZE
                                  Contigs shorter than this value (bp) will not be polished using
                                  Pilon (default: 10000)
-
-VCF:
-  These options control the production of the VCF of the final assembly.
-
-  --bcftools_path BCFTOOLS_PATH  Path to the bcftools executable (default: bcftools)
 
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.

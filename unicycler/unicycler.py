@@ -35,7 +35,7 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
     tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
     samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
-    racon_path_and_version, bcftools_path_and_version, gfa_path, red
+    racon_path_and_version, gfa_path, red
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
@@ -43,7 +43,6 @@ from .unicycler_align import add_aligning_arguments, fix_up_arguments, Alignment
     print_alignment_summary_table
 from .read_ref import get_read_nickname_dict
 from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
-from .vcf_func import make_vcf
 from . import log
 from . import settings
 from .version import __version__
@@ -221,10 +220,6 @@ def main():
     final_assembly_gfa = os.path.join(args.out, 'assembly.gfa')
     graph.save_to_gfa(final_assembly_gfa)
     graph.save_to_fasta(final_assembly_fasta, min_length=args.min_fasta_length)
-
-    if args.vcf and short_reads_available:
-        final_assembly_vcf = os.path.join(args.out, 'assembly.vcf')
-        make_vcf(final_assembly_vcf, args, final_assembly_fasta, insert_size_1st, insert_size_99th)
 
     log.log('')
 
@@ -435,18 +430,6 @@ def get_arguments():
                                    'using Pilon'
                                    if show_all_args else argparse.SUPPRESS)
 
-    # VCF options
-    polish_group = parser.add_argument_group('VCF',
-                                             'These options control the production of the VCF of '
-                                             'the final assembly.'
-                                             if show_all_args else argparse.SUPPRESS)
-    output_group.add_argument('--vcf', action='store_true',
-                              help='Produce a VCF by mapping the short reads to the final '
-                                   'assembly (experimental, default: do not produce a vcf file)')
-    polish_group.add_argument('--bcftools_path', type=str, default='bcftools',
-                              help='Path to the bcftools executable'
-                                   if show_all_args else argparse.SUPPRESS)
-
     # Graph cleaning options
     cleaning_group = parser.add_argument_group('Graph cleaning',
                                                'These options control the removal of small '
@@ -546,9 +529,6 @@ def get_arguments():
         args.long = os.path.abspath(args.long)
     if args.spades_tmp_dir:
         args.spades_tmp_dir = os.path.abspath(args.spades_tmp_dir)
-
-    if args.vcf and args.no_pilon:
-        quit_with_error('cannot use --no_pilon with --vcf')
 
     # Create an initial logger which doesn't have an output file.
     log.logger = log.Log(None, args.verbosity)
@@ -828,17 +808,6 @@ def check_dependencies(args, short_reads_available, long_reads_available):
     program_table.append(java_row)
     program_table.append(pilon_row)
 
-    # VCF dependencies
-    if not args.vcf:
-        bcftools_path, bcftools_version, bcftools_status = '', '', 'not used'
-    else:
-        bcftools_path, bcftools_version, bcftools_status = \
-            bcftools_path_and_version(args.bcftools_path)
-    bcftools_row = ['bcftools', bcftools_version, bcftools_status]
-    if args.verbosity > 1:
-        bcftools_row.append(bcftools_path)
-    program_table.append(bcftools_row)
-
     row_colours = {}
     for i, row in enumerate(program_table):
         if 'not used' in row:
@@ -852,16 +821,16 @@ def check_dependencies(args, short_reads_available, long_reads_available):
 
     quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                               pilon_status, bcftools_status, args)
+                               pilon_status, args)
 
 
 def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                               pilon_status, bcftools_status, args):
+                               pilon_status, args):
     if all(x == 'good' or x == 'not used'
            for x in [spades_status, racon_status, makeblastdb_status, tblastn_status,
                      bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                     pilon_status, bcftools_status]):
+                     pilon_status]):
         return
 
     log.log('')
@@ -907,9 +876,6 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
                         'or use --no_miniasm to remove Racon dependency')
     if racon_status == 'bad':
         quit_with_error('Racon was found but does not produce output')
-    if bcftools_status == 'not found':
-        quit_with_error('could not find bcftools - either specify its location using '
-                        '--bcftools_path or exclude --vcf to remove BCFtools dependency')
 
     # Code should never get here!
     quit_with_error('Unspecified error with Unicycler dependencies')
