@@ -235,16 +235,6 @@ class AssemblyGraph(object):
         log.log('', 2)
         return median_depth
 
-    def get_base_count_in_depth_range(self, min_depth, max_depth):
-        """
-        Returns the total number of bases in the graph in the given depth range.
-        """
-        total_bases = 0
-        for segment in self.segments.values():
-            if min_depth <= segment.depth <= max_depth:
-                total_bases += segment.get_length()
-        return total_bases
-
     def reassign_read_depths(self):
         """
         This function looks for segments which have an unoriginal read depth. If they are connected
@@ -1144,9 +1134,6 @@ class AssemblyGraph(object):
         if segment.number not in self.copy_depths:
             return 0
         return len(self.copy_depths[segment.number])
-
-    def get_copy_number_from_segment_number(self, seg_num):
-        return self.get_copy_number(self.segments[abs(seg_num)])
 
     def get_copy_number_colour(self, segment):
         """

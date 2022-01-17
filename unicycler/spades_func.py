@@ -145,8 +145,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         # Prepare the table line for this k-mer graph.
         table_line += [int_to_str(segment_count)]
         if verbosity > 1:
-            n50, shortest, lower_quartile, median, upper_quartile, longest = \
-                assembly_graph.get_contig_stats()
+            n50, shortest, _, median, _, longest = assembly_graph.get_contig_stats()
             table_line += [int_to_str(assembly_graph.get_total_link_count()),
                            int_to_str(assembly_graph.get_total_length()),
                            int_to_str(n50), int_to_str(longest)]

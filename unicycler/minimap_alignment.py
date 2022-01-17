@@ -47,7 +47,6 @@ class MinimapAlignment(object):
             self.num_bases = 0
             self.minimiser_count = 0
             self.read_end_gap = 0
-            self.ref_end_gap = 0
 
         else:
             self.paf_line = paf_line.strip()
@@ -70,7 +69,6 @@ class MinimapAlignment(object):
             self.minimiser_count = int(line_parts[12].split('cm:i:')[-1])
 
             self.read_end_gap = self.read_length - self.read_end
-            self.ref_end_gap = self.ref_length - self.ref_end
 
     def get_concise_string(self):
         return ','.join([str(x) for x in [self.read_start, self.read_end, self.read_strand,
@@ -96,45 +94,11 @@ class MinimapAlignment(object):
         adjusted_contig_end = self.ref_end + self.read_end_gap
         return adjusted_contig_start < 0 or adjusted_contig_end >= self.ref_length
 
-    def fraction_read_aligned(self):
-        try:
-            return (self.read_end - self.read_start) / self.read_length
-        except ZeroDivisionError:
-            return 0.0
-
     def fraction_ref_aligned(self):
         try:
             return (self.ref_end - self.ref_start) / self.ref_length
         except ZeroDivisionError:
             return 0.0
-
-    def get_start_overhang(self):
-        # return min(self.read_start, self.ref_start)
-        return self.read_start if self.read_start < self.ref_start else self.ref_start
-
-    def get_end_overhang(self):
-        # return min(self.read_end_gap, self.ref_end_gap)
-        return self.read_end_gap if self.read_end_gap < self.ref_end_gap else self.ref_end_gap
-
-    def get_total_overhang(self):
-        return self.get_start_overhang() + self.get_end_overhang()
-
-    def get_smallest_overhang(self):
-        start_overhang = self.get_start_overhang()
-        end_overhang = self.get_end_overhang()
-        return start_overhang if start_overhang < end_overhang else end_overhang
-
-
-def load_minimap_alignments_basic(minimap_alignments_str):
-    """
-    This simple function just loads the minimap alignments in a list of MinimapAlignment objects.
-    It doesn't filter, group by reads, or any of the other fancy stuff that the
-    load_minimap_alignments function does.
-    """
-    alignments = []
-    for line in line_iterator(minimap_alignments_str):
-        alignments.append(MinimapAlignment(line))
-    return alignments
 
 
 def load_minimap_alignments(minimap_alignments_str, filter_by_minimisers=False,
@@ -222,64 +186,6 @@ def build_start_end_overlap_sets(minimap_alignments):
     return start_overlap_reads, end_overlap_reads
 
 
-def combine_close_hits(alignments, min_read_ref_ratio, max_read_ref_ratio):
-    """
-    This function takes a list of alignments and it combines alignments if doing so would stay
-    within the allowed ratio range.
-    """
-    # If there's just one alignment, no grouping is necessary.
-    if len(alignments) <= 1:
-        return alignments
-
-    # Group alignments by read/ref/strand.
-    alignment_groups = defaultdict(list)
-    for a in alignments:
-        alignment_groups[(a.read_name, a.ref_name, a.read_strand)].append(a)
-
-    # For each potentially mergeable group of hits...
-    merged_alignments = []
-    for read_ref_strand, grouped_alignments in alignment_groups.items():
-        _, seg_name, strand = read_ref_strand
-        grouped_alignments = sorted(grouped_alignments, key=lambda x: x.read_start)
-
-        current = grouped_alignments[0]
-        for i in range(1, len(grouped_alignments)):
-            a = grouped_alignments[i]
-            a_ref_start = a.ref_start
-            a_ref_end = a.ref_end
-
-            # 'read' in this context is the contig were are trying to place.
-            potential_merge_read_range = a.read_end - current.read_start
-            if strand == '+':
-                potential_merge_ref_range = a_ref_end - current.ref_start
-            else:  # strand == '-'
-                potential_merge_ref_range = current.ref_end - a_ref_start
-
-            merge_would_extend = (current.read_start < a.read_start and
-                                  current.read_end < a.read_end)
-            read_ref_ratio = abs(potential_merge_read_range) / abs(potential_merge_ref_range)
-            ratio_okay = (min_read_ref_ratio <= read_ref_ratio <= max_read_ref_ratio)
-
-            if merge_would_extend and ratio_okay:
-                current.read_start = min(current.read_start, a.read_start)
-                current.read_end = max(current.read_end, a.read_end)
-                current.ref_start = min(current.ref_start, a_ref_start)
-                current.ref_end = max(current.ref_end, a_ref_end)
-                current.matching_bases += a.matching_bases
-                current.minimiser_count += a.minimiser_count
-                current.read_end_gap = current.read_length - current.read_end
-                current.ref_end_gap = current.ref_length - current.ref_end
-                current.num_bases = max(current.ref_end - current.ref_start,
-                                        current.read_end - current.read_start)
-            # If not, make a new alignment.
-            else:
-                merged_alignments.append(current)
-                current = a
-        merged_alignments.append(current)
-
-    return merged_alignments
-
-
 def remove_conflicting_alignments(alignments, allowed_overlap):
     """
     This function takes alignments for one read, removes conflicting and/or redundant alignments
@@ -304,27 +210,3 @@ def remove_conflicting_alignments(alignments, allowed_overlap):
         kept_alignment_ranges = simplify_ranges(kept_alignment_ranges + [this_range])
 
     return sorted(kept_alignments, key=lambda x: x.read_start)
-
-
-def get_opposite_alignment(alignment):
-    opposite_alignment = MinimapAlignment()
-
-    opposite_alignment.read_name = alignment.ref_name
-    opposite_alignment.read_length = alignment.ref_length
-    opposite_alignment.read_start = alignment.ref_start
-    opposite_alignment.read_end = alignment.ref_end
-
-    opposite_alignment.ref_name = alignment.read_name
-    opposite_alignment.ref_length = alignment.read_length
-    opposite_alignment.ref_start = alignment.read_start
-    opposite_alignment.ref_end = alignment.read_end
-
-    opposite_alignment.read_strand = alignment.read_strand
-    opposite_alignment.matching_bases = alignment.matching_bases
-    opposite_alignment.num_bases = alignment.num_bases
-    opposite_alignment.minimiser_count = alignment.minimiser_count
-
-    opposite_alignment.read_end_gap = opposite_alignment.read_length - opposite_alignment.read_end
-    opposite_alignment.ref_end_gap = opposite_alignment.ref_length - opposite_alignment.ref_end
-
-    return opposite_alignment

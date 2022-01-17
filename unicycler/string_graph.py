@@ -222,60 +222,6 @@ class StringGraph(object):
         else:
             log.log('No links needed removal', verbosity=2)
 
-    def segment_leads_directly_to_contig_in_both_directions(self, seg_name):
-        if self.segments[seg_name].contig:
-            return True
-        return (self.segment_leads_directly_to_contig(seg_name + '+') and
-                self.segment_leads_directly_to_contig(seg_name + '-'))
-
-    def segment_leads_directly_to_contig(self, signed_seg_name):
-        """
-        Tests whether a given segment leads to a contig via a simple unbranching path. Only tests
-        in a single direction.
-        """
-        starting_seg_name = signed_seg_name
-        current_seg_name = signed_seg_name
-        while True:
-            following_segments = self.get_following_segments(current_seg_name)
-            preceding_segments = self.get_preceding_segments(current_seg_name)
-            if len(following_segments) != 1 or len(preceding_segments) != 1:
-                return False
-            if self.segments[get_unsigned_seg_name(current_seg_name)].contig:
-                return True
-            current_seg_name = following_segments[0]
-            if current_seg_name == starting_seg_name:  # Check if we've looped back to the start!
-                return False
-
-    def get_bridging_paths(self):
-        """
-        Returns a list of all bridging paths. The contigs being bridged are included at the start
-        and end of each path.
-        """
-        paths = []
-        used_segments = set()
-        for seg_name in sorted(self.segments.keys()):
-            segment = self.segments[seg_name]
-            if not segment.contig and seg_name not in used_segments and \
-                    self.segment_leads_directly_to_contig_in_both_directions(seg_name):
-                starting_seg = seg_name + '+'
-                current_seg = starting_seg
-                path = [current_seg]
-                while True:
-                    current_seg = self.get_following_segments(current_seg)[0]
-                    path.append(current_seg)
-                    if self.segments[get_unsigned_seg_name(current_seg)].contig:
-                        break
-                current_seg = starting_seg
-                while True:
-                    current_seg = self.get_preceding_segments(current_seg)[0]
-                    path.insert(0, current_seg)
-                    if self.segments[get_unsigned_seg_name(current_seg)].contig:
-                        break
-                for seg in path:
-                    used_segments.add(get_unsigned_seg_name(seg))
-                paths.append(path)
-        return paths
-
     def seq_from_signed_seg_name(self, signed_name):
         assert(signed_name.endswith('+') or signed_name.endswith('-'))
         unsigned_seg_name = get_unsigned_seg_name(signed_name)
@@ -283,80 +229,6 @@ class StringGraph(object):
             return self.segments[unsigned_seg_name].forward_sequence
         else:
             return self.segments[unsigned_seg_name].reverse_sequence
-
-    def save_non_contigs_to_file(self, filename, min_length):
-        """
-        Saves all graph segments which are not short read contigs to a FASTA file.
-        """
-        log.log('Saving ' + filename, 1)
-        with open(filename, 'w') as fasta:
-            for segment in sorted(self.segments.values(), reverse=True,
-                                  key=lambda x: x.get_length()):
-                if segment.contig or segment.get_length() < min_length:
-                    continue
-                fasta.write(segment.fasta_record())
-
-    def check_graph_has_no_overlaps(self):
-        """
-        Asserts that the graph has no branching structures and no overlaps.
-        """
-        for seg_name in self.segments.keys():
-            pos_seg_name = seg_name + '+'
-            neg_seg_name = seg_name + '-'
-            preceding_segments = self.get_preceding_segments(pos_seg_name)
-            following_segments = self.get_following_segments(pos_seg_name)
-            assert len(preceding_segments) < 2
-            assert len(following_segments) < 2
-            if len(preceding_segments) == 1:
-                preceding_seg_name = preceding_segments[0]
-                start_link = self.links[(preceding_seg_name, pos_seg_name)]
-                rev_start_link = self.links[(neg_seg_name, flip_segment_name(preceding_seg_name))]
-                assert start_link.seg_1_overlap == 0
-                assert start_link.seg_2_overlap == 0
-                assert rev_start_link.seg_1_overlap == 0
-                assert rev_start_link.seg_2_overlap == 0
-            if len(following_segments) == 1:
-                following_seg_name = following_segments[0]
-                end_link = self.links[(pos_seg_name, following_seg_name)]
-                rev_end_link = self.links[(flip_segment_name(following_seg_name), neg_seg_name)]
-                assert end_link.seg_1_overlap == 0
-                assert end_link.seg_2_overlap == 0
-                assert rev_end_link.seg_1_overlap == 0
-                assert rev_end_link.seg_2_overlap == 0
-
-    def check_segment_names_and_ranges(self, read_dict, assembly_graph):
-        """
-        This function looks at the string graph segment names and makes sure that their ranges
-        match up with the original sequences. It is to ensure that we haven't screwed anything up
-        in the various string graph manipulations we've done.
-        """
-        for seg_name, seg in self.segments.items():
-            assert seg_name == seg.full_name
-
-            # If the string graph segment name contains a range, make sure it matches up with the
-            # range in the object.
-            try:
-                range_in_name = [int(x) for x in seg_name.rsplit(':', 1)[1].split('-')]
-            except (IndexError, ValueError):
-                range_in_name = [None, None]
-            if range_in_name[0] is None:
-                assert seg.short_name == seg.full_name
-            else:
-                assert range_in_name[0] == seg.start_pos
-                assert range_in_name[1] == seg.end_pos
-                assert seg.short_name == seg_name.rsplit(':', 1)[0]
-
-            if seg_name.startswith('CONTIG_'):
-                seg_num = int(seg_name[7:].split(':')[0])
-                full_seq = assembly_graph.seq_from_signed_seg_num(seg_num)
-            elif seg.short_name in read_dict:  # the segment is a long read
-                full_seq = read_dict[seg.short_name].sequence
-            else:  # We can't check split or merged reads, so they are skipped.
-                full_seq = None
-
-            if full_seq is not None:
-                # Miniasm uses 1-based inclusive ranges
-                assert seg.forward_sequence == full_seq[seg.start_pos-1:seg.end_pos]
 
     def segment_is_circular(self, seg_name):
         """
@@ -637,28 +509,6 @@ def flip_segment_name(seg_name):
 def get_unsigned_seg_name(seg_name):
     assert(seg_name.endswith('+') or seg_name.endswith('-'))
     return seg_name[:-1]
-
-
-def get_adjusted_contig_name_and_seq(contig_name, full_seq, start_pos, end_pos):
-    """
-    This function adjusts the start/end positions in the contig name. It's used when a partial
-    contig (from miniasm) has a partial alignment (from minimap).
-    """
-    sign = contig_name[-1]
-    name_parts = contig_name[:-1].rsplit(':', 1)
-    base_name = name_parts[0]
-    old_start, _ = (int(x) for x in name_parts[1].split('-'))
-    new_start = old_start + start_pos
-    new_end = (end_pos - start_pos) + new_start - 1
-
-    if sign == '-':
-        new_start_pos = len(full_seq) - end_pos
-        new_end_pos = len(full_seq) - start_pos
-        start_pos, end_pos = new_start_pos, new_end_pos
-    adjusted_name = base_name + ':' + str(new_start) + '-' + str(new_end) + sign
-    adjusted_seq = full_seq[start_pos:end_pos]
-
-    return adjusted_name, adjusted_seq
 
 
 def merge_string_graph_segments_into_unitig_graph(string_graph, read_nicknames):
