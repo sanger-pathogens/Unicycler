@@ -108,11 +108,6 @@ Reasons to __not__ use Unicycler:
   * [SPAdes](http://bioinf.spbau.ru/spades) v3.6.2 – v3.13.0 (`spades.py`)
 * For long-read or hybrid assembly:
   * [Racon](https://github.com/lbcb-sci/racon) (`racon`)
-* For polishing
-  * [Pilon](https://github.com/broadinstitute/pilon/wiki) (`pilon1.xx.jar`)
-  * [Java](https://www.java.com/download/) (`java`)
-  * [Bowtie2](http://bowtie-bio.sourceforge.net/bowtie2/) (`bowtie2-build` and `bowtie2`)
-  * [Samtools](http://www.htslib.org/) v1.0 or later (`samtools`)
 * For rotating circular contigs:
   * [BLAST+](https://www.ncbi.nlm.nih.gov/books/NBK279690/) (`makeblastdb` and `tblastn`)
 
@@ -328,8 +323,6 @@ At this point of the pipeline there can be many bridges, some of which may confl
 
 If the above steps have resulted in any simple, circular sequences, then Unicycler will attempt to rotate/flip them to begin at a consistent starting gene. By default this is [dnaA](http://www.uniprot.org/uniprot/?query=gene_exact%3AdnaA&sort=score) or [repA](http://www.uniprot.org/uniprot/?query=gene_exact%3ArepA&sort=score), but users can specify their own with the `--start_genes` option.
 
-Finally, Unicycler does multiple rounds of short-read polishing using [Pilon](https://github.com/broadinstitute/pilon/wiki).
-
 
 
 # Conservative, normal and bold
@@ -473,23 +466,6 @@ Assembly rotation:
                                  Path to the makeblastdb executable (default: makeblastdb)
   --tblastn_path TBLASTN_PATH    Path to the tblastn executable (default: tblastn)
 
-Pilon polishing:
-  These options control the final assembly polish using Pilon at the end of the Unicycler
-  pipeline.
-
-  --no_pilon                     Do not use Pilon to polish the final assembly (default: Pilon is
-                                 used)
-  --bowtie2_path BOWTIE2_PATH    Path to the bowtie2 executable (default: bowtie2)
-  --bowtie2_build_path BOWTIE2_BUILD_PATH
-                                 Path to the bowtie2_build executable (default: bowtie2-build)
-  --samtools_path SAMTOOLS_PATH  Path to the samtools executable (default: samtools)
-  --pilon_path PILON_PATH        Path to a Pilon executable or the Pilon Java archive file
-                                 (default: pilon)
-  --java_path JAVA_PATH          Path to the java executable (default: java)
-  --min_polish_size MIN_POLISH_SIZE
-                                 Contigs shorter than this value (bp) will not be polished using
-                                 Pilon (default: 10000)
-
 Graph cleaning:
   These options control the removal of small leftover sequences after bridging is complete.
 
@@ -534,7 +510,6 @@ cleaned.gfa                    | redundant contigs removed from the graph       
 merged.gfa                     | contigs merged together where possible                                                            | 3
 final_clean.gfa                | more redundant contigs removed                                                                    | 1
 rotated.gfa                    | circular replicons rotated and/or flipped to a start position                                     | 1
-polished.gfa                   | after a round of Pilon polishing                                                                  | 1
 __assembly.gfa__               | final assembly in [GFA v1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) graph format | 0
 __assembly.fasta__             | final assembly in FASTA format (same contigs as in assembly.gfa)                                  | 0
 __unicycler.log__              | Unicycler log file (same info as stdout)                                                          | 0

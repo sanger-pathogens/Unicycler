@@ -155,10 +155,6 @@ MAX_AUTO_THREAD_COUNT = 8
 # The default sequence line wrapping length (e.g. for use in FASTA files).
 BASES_PER_FASTA_LINE = 70
 
-# Pilon is run multiple times to polish things up as nice as possible. It will stop when no more
-# changes are made or this limit is hit.
-MAX_PILON_POLISH_COUNT = 10
-
 MINIASM_BRIDGE_QUAL_WITH_GRAPH_PATH = 1.0
 MINIASM_BRIDGE_QUAL_WITH_DEAD_END = 1.0
 MINIASM_BRIDGE_QUAL_WITHOUT_PATH_OR_DEAD_END = 0.7

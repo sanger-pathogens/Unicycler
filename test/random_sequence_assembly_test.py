@@ -53,8 +53,6 @@ def get_random_options():
     if one_third_chance():
         options.append('--no_rotate')
     if one_third_chance():
-        options.append('--no_pilon')
-    if one_third_chance():
         options.append('--no_correct')
 
     thread_count = 2 ** random.randint(0, 3)

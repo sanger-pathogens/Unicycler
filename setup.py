@@ -28,7 +28,7 @@ import subprocess
 import multiprocessing
 import fnmatch
 import importlib.util
-from unicycler.misc import get_ascii_art, get_pilon_jar_path
+from unicycler.misc import get_ascii_art
 
 # Install setuptools if not already present.
 if not importlib.util.find_spec("setuptools"):
@@ -53,8 +53,6 @@ with open('README.md', 'rb') as readme:
 
 def missing_tool(tool_name):
     path = shutil.which(tool_name)
-    if path is None and tool_name == 'pilon':
-        path = get_pilon_jar_path(None)
     if path is None:
         return [tool_name]
     else:
@@ -63,8 +61,7 @@ def missing_tool(tool_name):
 
 def tool_check():
     # Check for required programs.
-    tools = ['spades.py', 'java', 'pilon', 'samtools', 'bowtie2', 'bowtie2-build',
-             'makeblastdb', 'tblastn']
+    tools = ['spades.py', 'makeblastdb', 'tblastn']
     missing_tools = []
     for tool in tools:
         missing_tools += missing_tool(tool)

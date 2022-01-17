@@ -33,16 +33,13 @@ from .bridge_loop_unroll import create_loop_unrolling_bridges
 from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bold, \
     check_input_files, MyHelpFormatter, print_table, get_ascii_art, \
     get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
-    tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
-    samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
-    racon_path_and_version, gfa_path, red
+    tblastn_path_and_version, racon_path_and_version, gfa_path, red
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
 from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
     semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
     print_alignment_summary_table
 from .read_ref import get_read_nickname_dict
-from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
 from . import log
 from . import settings
 from .version import __version__
@@ -205,11 +202,6 @@ def main():
 
     else:  # only long reads available
         graph = string_graph
-
-    insert_size_1st, insert_size_99th = None, None
-    if short_reads_available and not args.no_pilon:
-        insert_size_1st, insert_size_99th = \
-            final_polish(graph, args, counter, long_reads_available)
 
     if not args.no_rotate:
         rotate_completed_replicons(graph, args, counter)
@@ -400,35 +392,6 @@ def get_arguments():
     rotation_group.add_argument('--tblastn_path', type=str, default='tblastn',
                                 help='Path to the tblastn executable'
                                      if show_all_args else argparse.SUPPRESS)
-
-    # Polishing options
-    polish_group = parser.add_argument_group('Pilon polishing',
-                                             'These options control the final assembly polish '
-                                             'using Pilon at the end of the Unicycler pipeline.'
-                                             if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--no_pilon', action='store_true',
-                              help='Do not use Pilon to polish the final assembly (default: Pilon '
-                                   'is used)'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--bowtie2_path', type=str, default='bowtie2',
-                              help='Path to the bowtie2 executable'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--bowtie2_build_path', type=str, default='bowtie2-build',
-                              help='Path to the bowtie2_build executable'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--samtools_path', type=str, default='samtools',
-                              help='Path to the samtools executable'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--pilon_path', type=str, default='pilon',
-                              help='Path to a Pilon executable or the Pilon Java archive file'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--java_path', type=str, default='java',
-                              help='Path to the java executable'
-                                   if show_all_args else argparse.SUPPRESS)
-    polish_group.add_argument('--min_polish_size', type=int, default=10000,
-                              help='Contigs shorter than this value (bp) will not be polished '
-                                   'using Pilon'
-                                   if show_all_args else argparse.SUPPRESS)
 
     # Graph cleaning options
     cleaning_group = parser.add_argument_group('Graph cleaning',
@@ -775,39 +738,6 @@ def check_dependencies(args, short_reads_available, long_reads_available):
     program_table.append(makeblastdb_row)
     program_table.append(tblastn_row)
 
-    # Polishing dependencies
-    if args.no_pilon or not short_reads_available:
-        bowtie2_build_path, bowtie2_build_version, bowtie2_build_status = '', '', 'not used'
-        bowtie2_path, bowtie2_version, bowtie2_status = '', '', 'not used'
-        samtools_path, samtools_version, samtools_status = '', '', 'not used'
-        java_path, java_version, java_status = '', '', 'not used'
-        pilon_path, pilon_version, pilon_status = '', '', 'not used'
-    else:
-        bowtie2_build_path, bowtie2_build_version, bowtie2_build_status = \
-            bowtie2_build_path_and_version(args.bowtie2_build_path)
-        bowtie2_path, bowtie2_version, bowtie2_status = bowtie2_path_and_version(args.bowtie2_path)
-        samtools_path, samtools_version, samtools_status = \
-            samtools_path_and_version(args.samtools_path)
-        java_path, java_version, java_status = java_path_and_version(args.java_path)
-        pilon_path, pilon_version, pilon_status = \
-            pilon_path_and_version(args.pilon_path, args.java_path, args)
-    bowtie2_build_row = ['bowtie2-build', bowtie2_build_version, bowtie2_build_status]
-    bowtie2_row = ['bowtie2', bowtie2_version, bowtie2_status]
-    samtools_row = ['samtools', samtools_version, samtools_status]
-    java_row = ['java', java_version, java_status]
-    pilon_row = ['pilon', pilon_version, pilon_status]
-    if args.verbosity > 1:
-        bowtie2_build_row.append(bowtie2_build_path)
-        bowtie2_row.append(bowtie2_path)
-        samtools_row.append(samtools_path)
-        java_row.append(java_path)
-        pilon_row.append(pilon_path)
-    program_table.append(bowtie2_build_row)
-    program_table.append(bowtie2_row)
-    program_table.append(samtools_row)
-    program_table.append(java_row)
-    program_table.append(pilon_row)
-
     row_colours = {}
     for i, row in enumerate(program_table):
         if 'not used' in row:
@@ -820,17 +750,13 @@ def check_dependencies(args, short_reads_available, long_reads_available):
                 sub_colour={'good': 'green'})
 
     quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
-                               bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                               pilon_status, args)
+                               args)
 
 
 def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
-                               bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                               pilon_status, args):
+                               args):
     if all(x == 'good' or x == 'not used'
-           for x in [spades_status, racon_status, makeblastdb_status, tblastn_status,
-                     bowtie2_build_status, bowtie2_status, samtools_status, java_status,
-                     pilon_status]):
+           for x in [spades_status, racon_status, makeblastdb_status, tblastn_status]):
         return
 
     log.log('')
@@ -849,28 +775,6 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     if tblastn_status == 'not found':
         quit_with_error('could not find tblastn - either specify its location using '
                         '--tblastn_path or use --no_rotate to remove BLAST dependency')
-    if bowtie2_build_status == 'not found':
-        quit_with_error('could not find bowtie2-build - either specify its location using '
-                        '--bowtie2_build_path or use --no_pilon to remove Bowtie2 dependency')
-    if bowtie2_status == 'not found':
-        quit_with_error('could not find bowtie2 - either specify its location using '
-                        '--bowtie2_path or use --no_pilon to remove Bowtie2 dependency')
-    if samtools_status == 'not found':
-        quit_with_error('could not find samtools - either specify its location using '
-                        '--samtools_path or use --no_pilon to remove Samtools dependency')
-    if java_status == 'not found':
-        quit_with_error('could not find java - either specify its location using --java_path or '
-                        'use --no_pilon to remove Java dependency')
-    if java_status == 'bad':
-        quit_with_error('Java did not run correctly - either specify its location using '
-                        '--java_path or use --no_pilon to remove Java dependency')
-    if pilon_status == 'not found':
-        quit_with_error('could not find pilon or pilon*.jar - either specify its location '
-                        'using --pilon_path or use --no_pilon to remove Pilon dependency')
-    if pilon_status == 'bad':
-        quit_with_error('Pilon was found (' + args.pilon_path + ') but does not work - either '
-                        'fix it, specify a different location using --pilon_path or use '
-                        '--no_pilon to remove Pilon dependency')
     if racon_status == 'not found':
         quit_with_error('could not find racon - either specify its location using --racon_path '
                         'or use --no_miniasm to remove Racon dependency')
@@ -934,25 +838,6 @@ def rotate_completed_replicons(graph, args, counter):
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'rotated'), newline=True)
         if args.keep < 3 and os.path.exists(blast_dir):
             shutil.rmtree(blast_dir, ignore_errors=True)
-
-
-def final_polish(graph, args, counter, do_pilon_reassembly):
-    log.log_section_header('Polishing assembly with Pilon')
-    log.log_explanation('Unicycler now conducts multiple rounds of Pilon in an attempt to repair '
-                        'any remaining small-scale errors with the assembly.',
-                        verbosity=1)
-    polish_dir = os.path.join(args.out, 'pilon_polish')
-    insert_size_1st, insert_size_99th = None, None
-    try:
-        insert_size_1st, insert_size_99th = \
-            polish_with_pilon_multiple_rounds(graph, graph, args, polish_dir, do_pilon_reassembly)
-    except CannotPolish as e:
-        log.log('Unable to polish assembly using Pilon: ' + e.message)
-    else:
-        if args.keep > 0:
-            graph.save_to_gfa(gfa_path(args.out, next(counter), 'polished'))
-
-    return insert_size_1st, insert_size_99th
 
 
 def align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,

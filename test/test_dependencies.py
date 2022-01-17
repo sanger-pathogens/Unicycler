@@ -58,63 +58,12 @@ class TestDependencies(unittest.TestCase):
         self.assertTrue('could not find tblastn' in stderr)
         self.assertEqual(ret_code, 1)
 
-    def test_bowtie2_build_not_found(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--bowtie2_build_path', 'not_a_real_path'])
-        self.assertTrue(bool(re.search(r'bowtie2-build\s+not found', stdout)))
-        self.assertTrue('could not find bowtie2-build' in stderr)
-        self.assertEqual(ret_code, 1)
-
-    def test_bowtie2_not_found(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--bowtie2_path', 'not_a_real_path'])
-        self.assertTrue(bool(re.search(r'bowtie2\s+not found', stdout)))
-        self.assertTrue('could not find bowtie2' in stderr)
-        self.assertEqual(ret_code, 1)
-
-    def test_samtools_not_found(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--samtools_path', 'not_a_real_path'])
-        self.assertTrue(bool(re.search(r'samtools\s+not found', stdout)))
-        self.assertTrue('could not find samtools' in stderr)
-        self.assertEqual(ret_code, 1)
-
-    def test_java_not_found(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--java_path', 'not_a_real_path'])
-        self.assertTrue(bool(re.search(r'java\s+not found', stdout)))
-        self.assertTrue('could not find java' in stderr)
-        self.assertEqual(ret_code, 1)
-
-    def test_pilon_not_found(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--pilon_path', 'not_a_real_path'])
-        self.assertTrue(bool(re.search(r'pilon\s+not found', stdout)))
-        self.assertTrue('could not find pilon')
-        self.assertEqual(ret_code, 1)
-
-    def test_bad_pilon(self):
-        bad_pilon = 'TEMP_bad_pilon_' + str(os.getpid())
-        open(bad_pilon, 'a').close()
-        os.chmod(bad_pilon, os.stat(bad_pilon).st_mode | stat.S_IEXEC)
-        stdout, stderr, ret_code = self.run_unicycler(['--pilon_path', bad_pilon])
-        self.assertTrue(bool(re.search(r'pilon\s+bad', stdout)))
-        self.assertTrue('Pilon was found' in stderr)
-        self.assertTrue('but does not work' in stderr)
-        self.assertEqual(ret_code, 1)
-        os.remove(bad_pilon)
-
     def test_no_rotate(self):
         stdout, stderr, ret_code = self.run_unicycler(['--spades_path', 'not_a_real_path',
                                                        '--no_rotate'])
         self.assertTrue(bool(re.search(r'spades.py\s+not found', stdout)))
         self.assertTrue(bool(re.search(r'makeblastdb\s+not used', stdout)))
         self.assertTrue(bool(re.search(r'tblastn\s+not used', stdout)))
-
-    def test_no_pilon(self):
-        stdout, stderr, ret_code = self.run_unicycler(['--spades_path', 'not_a_real_path',
-                                                       '--no_pilon'])
-        self.assertTrue(bool(re.search(r'spades.py\s+not found', stdout)))
-        self.assertTrue(bool(re.search(r'bowtie2-build\s+not used', stdout)))
-        self.assertTrue(bool(re.search(r'bowtie2\s+not used', stdout)))
-        self.assertTrue(bool(re.search(r'samtools\s+not used', stdout)))
-        self.assertTrue(bool(re.search(r'java\s+not used', stdout)))
-        self.assertTrue(bool(re.search(r'pilon\s+not used', stdout)))
 
     def test_verbosity_1(self):
         stdout, stderr, ret_code = self.run_unicycler(['--spades_path', 'not_a_real_path',
