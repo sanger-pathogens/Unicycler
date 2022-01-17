@@ -37,9 +37,9 @@ def main():
                                alignments='LRRL', fixed_col_widths=col_widths)
     try:
         while True:
-            test_circular_no_repeat()
-            test_circular_one_repeat()
-            test_stdout_size()
+            circular_no_repeat_test()
+            circular_one_repeat_test()
+            stdout_size_test()
 
     # The user exits this script with Ctrl-C
     except KeyboardInterrupt:
@@ -52,8 +52,6 @@ def get_random_options():
     options = []
     if one_third_chance():
         options.append('--no_rotate')
-    if one_third_chance():
-        options.append('--no_correct')
 
     thread_count = 2 ** random.randint(0, 3)
     options += ['--threads', str(thread_count)]
@@ -118,7 +116,7 @@ def sequence_matches_any_rotation(seq_1, seq_2):
     return False
 
 
-def test_circular_no_repeat():
+def circular_no_repeat_test():
     random_seq_length = random.randint(8, 20) ** 4
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)
     out_dir = test.fake_reads.make_fake_reads(random_seq)
@@ -141,7 +139,7 @@ def test_circular_no_repeat():
     shutil.rmtree(out_dir)
 
 
-def test_circular_one_repeat():
+def circular_one_repeat_test():
     random_seq_length = random.randint(9, 20) ** 4
     repeat = unicycler.misc.get_random_sequence(500)
     non_repeat_length_1 = (random_seq_length - 1000) // 2
@@ -193,7 +191,7 @@ def test_circular_one_repeat():
     shutil.rmtree(out_dir)
 
 
-def test_stdout_size():
+def stdout_size_test():
     stdout_sizes = []
     random_seq_length = random.randint(1000, 5000)
     random_seq = unicycler.misc.get_random_sequence(random_seq_length)

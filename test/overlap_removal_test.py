@@ -41,7 +41,7 @@ def main():
                                alignments='RRRRRR', fixed_col_widths=col_widths, verbosity=0)
     try:
         while True:
-            test_overlap_removal()
+            overlap_removal_test()
 
     # The user exits this script with Ctrl-C
     except KeyboardInterrupt:
@@ -50,7 +50,7 @@ def main():
             shutil.rmtree(temp_dir)
 
 
-def test_overlap_removal():
+def overlap_removal_test():
     random_seq_length = random.randint(8, 20) ** 4
     repeat_count = random.randint(1, random_seq_length // 10)
     random_seq = make_repeaty_sequence(random_seq_length, repeat_count)
