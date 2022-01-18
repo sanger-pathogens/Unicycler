@@ -77,7 +77,7 @@ As input, Unicycler takes one of the following:
 Reasons to use Unicycler:
 * It circularises replicons without the need for a separate tool like [Circlator](http://sanger-pathogens.github.io/circlator/).
 * It handles plasmid-rich genomes.
-* It can use long reads of any depth and quality in hybrid assembly. 10x or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
+* It can use long reads of any depth and quality in hybrid assembly. 10× or more may be required to complete a genome, but Unicycler can make nearly-complete genomes with far fewer long reads.
 * It produces an assembly _graph_ in addition to a contigs FASTA file, viewable in [Bandage](https://github.com/rrwick/Bandage).
 * It has very low misassembly rates.
 * It can cope with very repetitive genomes, such as [_Shigella_](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC153260/).
@@ -193,7 +193,7 @@ To complete a bacterial genome assembly (i.e. find the one correct sequence for 
 
 Assembly graphs come in many different varieties, but we are particularly interested in the kind produced by SPAdes, because that is what Unicycler uses.
 
-SPAdes graphs are made by performing a De Bruijn graph assembly with a range of different k-mer sizes, from small to large (see the [SPAdes paper](http://online.liebertpub.com/doi/abs/10.1089/cmb.2012.0021)). Each assembly builds on the previous one, which allows SPAdes to get the advantages of both small k-mer assemblies (a more connected graph) and large k-mer assemblies (ability to resolve repeats). Two contigs in a SPAdes graph that connect will overlap by their k-mer size (more info on the [Bandage wiki page](https://github.com/rrwick/Bandage/wiki/Assembler-differences)).
+SPAdes graphs are made by performing a De Bruijn graph assembly with a range of different _k_-mer sizes, from small to large (see the [SPAdes paper](http://online.liebertpub.com/doi/abs/10.1089/cmb.2012.0021)). Each assembly builds on the previous one, which allows SPAdes to get the advantages of both small _k_-mer assemblies (a more connected graph) and large _k_-mer assemblies (ability to resolve repeats). Two contigs in a SPAdes graph that connect will overlap by their _k_-mer size (more info on the [Bandage wiki page](https://github.com/rrwick/Bandage/wiki/Assembler-differences)).
 
 After producing the graph, SPAdes can perform further repeat resolution by using paired-end information. Since two reads in a pair are close to each other in the original DNA, SPAdes can use this to trace paths in the graph to form larger contigs (see [their paper on ExSPAnder](http://bioinformatics.oxfordjournals.org/content/30/12/i293.short)). However, the SPAdes contigs with repeat resolution do not come in graph form – they are only available in a FASTA file.
 
@@ -202,7 +202,7 @@ After producing the graph, SPAdes can perform further repeat resolution by using
 # Method: Illumina-only assembly
 
 When assembling just Illumina reads, Unicycler functions mainly as a SPAdes optimiser. It offers a few benefits over using SPAdes alone:
-* Tries a wide range of k-mer sizes and automatically selects the best.
+* Tries a wide range of _k_-mer sizes and automatically selects the best.
 * Filters out low-depth parts of the assembly to remove contamination.
 * Applies SPAdes repeat resolution to the graph (as opposed to disconnected contigs in a FASTA file).
 * Rejects low-confidence repeat resolution to reduce the rate of misassembly.
@@ -215,7 +215,7 @@ More information on the Illumina-only assembly process is described in the steps
 
 <img align="right" src="misc/k-mer_plot.png" width="156" height="179">
 
-Unicycler uses SPAdes to assemble the Illumina reads into an assembly graph. It tries assemblies at a wide range of k-mer sizes, evaluating the graph at each one. It chooses the graph which best minimises both contig count and dead end count. If the Illumina reads are good, it produces an assembly graph with long contigs but few to no dead ends ([more info here](#bad-illumina-reads)). Since a typical bacterial genome has no dead ends (the sequences are circular) an ideal assembly graph won't either.
+Unicycler uses SPAdes to assemble the Illumina reads into an assembly graph. It tries assemblies at a wide range of _k_-mer sizes, evaluating the graph at each one. It chooses the graph which best minimises both contig count and dead end count. If the Illumina reads are good, it produces an assembly graph with long contigs but few to no dead ends ([more info here](#bad-illumina-reads)). Since a typical bacterial genome has no dead ends (the sequences are circular) an ideal assembly graph won't either.
 
 A raw SPAdes graph can also contain some 'junk' sequences due to sequencer artefacts or contamination, so Unicycler performs some graph cleaning to remove these. Therefore, small amounts of contamination in the Illumina reads should not be a problem.
 
@@ -325,9 +325,9 @@ The specific differences between the three modes are as follows:
 
 Mode         | Invocation                      | Short read bridges | Bridge quality threshold | Contig merging
 ------------ | ------------------------------- | ------------------ | ------------------------ | -------------------------------------
-conservative | `‑‑mode conservative`           | not used           | high (25)                | contigs are only merged with bridges
-normal       | `‑‑mode normal`<br>(or nothing) | used               | medium (10)              | contigs are merged with bridges and when their multiplicity is 1
-bold         | `‑‑mode bold`                   | used               | low (1)                  | contigs are merged wherever possible
+conservative | `‑‑mode conservative`           | not used           | high (25)                | contigs are only merged with bridges
+normal       | `‑‑mode normal` (or nothing)    | used               | medium (10)              | contigs are merged with bridges and when their multiplicity is 1
+bold         | `‑‑mode bold`                   | used               | low (1)                  | contigs are merged wherever possible
 
 <p align="center"><img src="misc/conservative_normal_bold.png" alt="Conservative, normal and bold" width="550"></p>
 
@@ -552,27 +552,31 @@ Long-read alignment:
 
 Unicycler's most important output files are `assembly.gfa`, `assembly.fasta` and `unicycler.log`. These are produced by every Unicycler run. Which other files are saved to its output directory depends on the value of `--keep`:
 * `--keep 0` retains only the important files. Use this setting to save drive space.
-* `--keep 1` (the default) also saves some intermediate graphs.
+* `--keep 1` (the default) also saves some intermediate graphs which can be useful for investigating an assembly more deeply.
 * `--keep 2` also retains the SAM file of long-read alignments to the graph. This ensures that if you rerun Unicycler with the same output directory (for example changing the mode to conservative or bold) it will run faster because it does not have to repeat the alignment step.
-* `--keep 3` retains all files and saves many intermediate graphs. This is for debugging purposes and uses a lot of space. Most users should probably avoid this setting.
+* `--keep 3` retains all files and saves many intermediate graphs. This is for debugging purposes and uses a lot of space, so most users should probably avoid this setting.
 
 All files and directories are described in the table below. Intermediate output files (everything except for `assembly.gfa`, `assembly.fasta` and `unicycler.log`) will be prefixed with a number so they are in chronological order.
 
-File                           | Description                                                                                       | `--keep` level
+File/directory                 | Description                                                                                       | `--keep` level
 ------------------------------ | ------------------------------------------------------------------------------------------------- | --------------
-spades_assembly/               | directory containing all SPAdes files and each k-mer graph                                        | 3
-best_spades_graph.gfa          | the best SPAdes short-read assembly graph, with a bit of graph clean-up                           | 1
-overlaps_removed.gfa           | overlap-free version of the SPAdes graph, with some more graph clean-up                           | 3
+spades_assembly/               | directory containing SPAdes files log (can be useful for debugging if SPAdes crashes)             | 3
+*\_spades_graph_K*.gfa         | unaltered SPAdes assembly graphs at each _k_-mer size                                             | 1
+*\_depth_filter.gfa            | best SPAdes short-read assembly graph after low-depth contigs have been removed                   | 1
+*\_overlaps_removed.gfa        | overlap-free version of the best SPAdes graph, with some more graph clean-up                      | 3
 miniasm_assembly/              | directory containing miniasm string graphs and unitig graphs                                      | 3
-read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 3
-bridges_applied.gfa            | bridges applied, before any cleaning or merging                                                   | 1
-cleaned.gfa                    | redundant contigs removed from the graph                                                          | 3
-merged.gfa                     | contigs merged together where possible                                                            | 3
-final_clean.gfa                | more redundant contigs removed                                                                    | 1
-rotated.gfa                    | circular replicons rotated and/or flipped to a start position                                     | 1
+simple_bridging/               | directory containing files for the simple long-read bridging step                                 | 3
+*\_long_read_assembly.gfa      | the long-read+contig miniasm+Racon assembly                                                       | 1
+read_alignment/                | directory containing `long_read_alignments.sam`                                                   | 2
+*\_bridges_applied.gfa         | bridges applied, before any cleaning or merging                                                   | 1
+*\_cleaned.gfa                 | redundant contigs removed from the graph                                                          | 3
+*\_merged.gfa                  | contigs merged together where possible                                                            | 3
+*\_final_clean.gfa             | more redundant contigs removed                                                                    | 1
+blast/                         | directory containing files for the assembly-rotation BLAST search                                 | 3
+*\_rotated.gfa                 | circular replicons rotated and/or flipped to a start position                                     | 1
 __assembly.gfa__               | final assembly in [GFA v1](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) graph format | 0
-__assembly.fasta__             | final assembly in FASTA format (same contigs as in assembly.gfa)                                  | 0
-__unicycler.log__              | Unicycler log file (same info as stdout)                                                          | 0
+__assembly.fasta__             | final assembly in FASTA format (same sequences as in assembly.gfa expect for very short contigs)  | 0
+__unicycler.log__              | Unicycler log file (same info as was printed to stdout)                                           | 0
 
 
 
@@ -582,7 +586,7 @@ __unicycler.log__              | Unicycler log file (same info as stdout)       
 
 Unicycler is thorough and accurate, but not particularly fast. The [direct long-read bridging](#direct-long-read-bridging) step of the pipeline can take a while to complete. Two main factors influence the running time: the number of long reads (more reads take longer to align) and the genome size/complexity (finding bridge paths is more difficult in complex graphs).
 
-Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads, you can make Unicycler run faster by subsampling for only the longest reads.
+Unicycler may only take an hour or so to assemble a small, simple genome with low depth long reads. On the other hand, a complex genome with many long reads may take 12 hours to finish or more. If you have a very high depth of long reads (e.g. >100×), you can make Unicycler run faster by subsampling for only the longest reads.
 
 Using a lot of threads (with the `--threads` option) can make Unicycler run faster too. It will only use up to 8 threads by default, but if you're running it on a big machine with lots of CPU and RAM, feel free to use more!
 
@@ -609,16 +613,16 @@ You can look at the `best_spades_graph.gfa` file (the first graph Unicycler save
 
 <p align="center"><img src="misc/illumina_graph_comparison.png" alt="Graphs of varying quality" width="750"></p>
 
-__A__ is an very good Illumina read graph – the contigs are long and there are no dead ends. This read set is ideally suited for use in Unicycler and shouldn't require too many long reads to complete (10–15x would probably be enough).
+__A__ is an very good Illumina read graph – the contigs are long and there are no dead ends. This read set is ideally suited for use in Unicycler and shouldn't require too many long reads to complete (10–15× would probably be enough).
 
-__B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler, though more long reads may be required to get a complete genome (maybe 20x or so).
+__B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler, though more long reads may be required to get a complete genome (maybe 20× or so).
 
-__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. This genome may take lots of long reads to complete in Unicycler, possibly 30x or more. The final assembly will probably have more small errors (SNPs and indels), as parts of the genome cannot be polished well with Illumina reads.
+__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. This genome may take lots of long reads to complete in Unicycler, possibly 30× or more. The final assembly will probably have more small errors (SNPs and indels), as parts of the genome cannot be polished well with Illumina reads.
 
 
 ### Very short contigs
 
-Confused by very small (e.g. 2 bp) contigs in Unicycler assemblies? Unlike a SPAdes graph where neighbouring sequences overlap by their k-mer size, Unicycler's final graph has no overlaps and the sequences adjoin directly. This means that contigs in complex regions can be quite short. They may be useless as stand-alone contigs but are still important in the graph structure.
+Confused by very small (e.g. 2 bp) contigs in Unicycler assemblies? Unlike a SPAdes graph where neighbouring sequences overlap by their _k_-mer size, Unicycler's final graph has no overlaps and the sequences adjoin directly. This means that contigs in complex regions can be quite short. They may be useless as stand-alone contigs but are still important in the graph structure.
 
 <p align="center"><img src="misc/short_contigs.png" alt="Short contigs in assembly graph"></p>
 
@@ -627,7 +631,7 @@ If short contigs are a problem for your downstream analysis, you can use the `--
 
 ### Chromosomes and plasmid depth
 
-Unicycler normalises the depth of contigs in the graph to the median value. This typically means that the chromosome has a depth near 1x and plasmids may have different (typically higher) depths.
+Unicycler normalises the depth of contigs in the graph to the median value. This typically means that the chromosome has a depth near 1× and plasmids may have different (typically higher) depths.
 
 <p align="center"><img src="misc/depth.png" alt="Plasmid depths"></p>
 

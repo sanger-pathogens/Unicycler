@@ -149,6 +149,11 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     log.log('\nRead depth filter: removed {} contigs totalling {} bp'.format(removed_count,
                                                                              removed_length))
     # Clean up.
+    if keep < 1:
+        for g in graph_files:
+            if os.path.isfile(g):
+                log.log('Deleting ' + g)
+                os.remove(g)
     if keep < 3 and os.path.isdir(spades_dir):
         log.log('Deleting ' + spades_dir + '/')
         shutil.rmtree(spades_dir, ignore_errors=True)
