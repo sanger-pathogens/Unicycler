@@ -31,7 +31,7 @@ class BadFastq(Exception):
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
                           expected_linear_seqs, spades_tmp_dir, largest_component,
-                          spades_graph_prefix):
+                          spades_graph_prefix, spades_options):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best one.
     """
@@ -61,7 +61,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
 
     graph_files, insert_size_mean, insert_size_deviation = \
         run_spades_all_kmers(reads, spades_dir, kmer_range, threads, spades_path,
-                             spades_tmp_dir, spades_graph_prefix)
+                             spades_tmp_dir, spades_graph_prefix, spades_options)
 
     existing_graph_files = [x for x in graph_files if x is not None]
     if not existing_graph_files:
@@ -165,7 +165,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
 
 
 def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, tmp_dir,
-                         spades_graph_prefix):
+                         spades_graph_prefix, spades_options):
     """
     SPAdes is run with all k-mers up to the top one. For example:
       * round 1: 25
@@ -198,9 +198,11 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, tm
         else:  # subsequent k-mer
             previous_k = kmers[i-1]
             command += ['--restart-from', f'k{previous_k}']
+        if spades_options:
+            command += spades_options.split()
 
         graph_file, insert_size_mean, insert_size_deviation = \
-            run_spades_one_kmer(command, spades_dir, biggest_kmer, short1, short2, unpaired)
+            run_spades_one_kmer(command, spades_dir, biggest_kmer)
 
         copy_path = spades_graph_prefix + '_K' + '{:03d}'.format(biggest_kmer) + '.gfa'
         shutil.copy(graph_file, copy_path)
@@ -230,7 +232,7 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, tm
     return graph_files, insert_size_mean, insert_size_deviation
 
 
-def run_spades_one_kmer(command, spades_dir, biggest_kmer, short1, short2, unpaired):
+def run_spades_one_kmer(command, spades_dir, biggest_kmer):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     insert_size_mean = None
@@ -259,9 +261,9 @@ def run_spades_one_kmer(command, spades_dir, biggest_kmer, short1, short2, unpai
         except ValueError:
             pass
 
-    spades_error = process.stderr.readline().strip().decode()
-    if spades_error:
-        quit_with_error('SPAdes encountered an error: ' + spades_error)
+    if process.returncode != 0:
+        spades_error = process.stderr.read().strip().decode()
+        quit_with_error('SPAdes encountered an error:\n' + spades_error)
 
     graph_file = os.path.join(spades_dir, 'K' + str(biggest_kmer),
                               'assembly_graph_with_scaffolds.gfa')
