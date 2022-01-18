@@ -240,15 +240,15 @@ def get_arguments():
     # Short read input options
     input_group = parser.add_argument_group('Input')
     input_group.add_argument('-1', '--short1', required=False,
-                             help='FASTQ file of first short reads in each pair (required)')
+                             help='FASTQ file of first short reads in each pair')
     input_group.add_argument('-2', '--short2', required=False,
-                             help='FASTQ file of second short reads in each pair (required)')
+                             help='FASTQ file of second short reads in each pair')
     input_group.add_argument('-s', '--unpaired', required=False,
-                             help='FASTQ file of unpaired short reads (optional)')
+                             help='FASTQ file of unpaired short reads')
 
     # Long read input options
     input_group.add_argument('-l', '--long', required=False,
-                             help='FASTQ or FASTA file of long reads (optional)')
+                             help='FASTQ or FASTA file of long reads')
 
     # Output options
     output_group = parser.add_argument_group('Output')
@@ -331,7 +331,7 @@ def get_arguments():
                                    'directory)'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--spades_options', type=str, default=None,
-                              help='Additional options to be given to SPAdes (example:'
+                              help='Additional options to be given to SPAdes (example: '
                                    '"--phred-offset 33", default: no additional options)'
                                    if show_all_args else argparse.SUPPRESS)
 
