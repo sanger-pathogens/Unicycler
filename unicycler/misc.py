@@ -849,19 +849,10 @@ def spades_status_from_version(version):
     assert major_version == 3
 
     minor_version = int(version.split('.')[1])
-    if minor_version < 13:
+    if minor_version < 14:
         return 'too old'
-    assert minor_version >= 13
-
-    patch_version = int(version.split('.')[2])
-    if minor_version > 13:
+    else:
         return 'good'
-    assert minor_version == 13
-    if minor_version == 13:
-        if patch_version < 1:
-            return 'too old'
-        else:
-            return 'good'
 
 
 def racon_path_and_version(racon_path):
