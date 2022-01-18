@@ -18,15 +18,14 @@ import unicycler.misc
 import unicycler.log
 
 
-class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
+class TestAssemblyGraphFunctions1(unittest.TestCase):
     """
     Tests various AssemblyGraph functions on a graph loaded from a SPAdes FASTG file.
     """
 
     def setUp(self):
-        test_fastg = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg')
-        self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25,
-                                                            insert_size_mean=401,
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 25, insert_size_mean=401,
                                                             insert_size_deviation=60)
         unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
 
@@ -62,10 +61,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
             flipped_reverse_link_list = [-x for x in reverse_link_list]
             self.assertEqual(sorted(forward_link_list), sorted(flipped_reverse_link_list))
 
-    def test_load_spades_paths(self):
-        self.assertEqual(len(self.graph.paths), 0)
-        paths_file = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg.paths')
-        self.graph.load_spades_paths(paths_file)
+    def test_load_paths(self):
         self.assertEqual(len(self.graph.paths), 53)
 
     def test_get_median_read_depth(self):
@@ -292,13 +288,13 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
         self.assertEqual(self.graph.get_n_segment_length(50), 3217)
 
 
-class TestAssemblyGraphFunctionsGfa(unittest.TestCase):
+class TestAssemblyGraphFunctions2(unittest.TestCase):
     """
     Tests various AssemblyGraph functions on a graph loaded from a GFA file.
     """
 
     def setUp(self):
-        test_gfa = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.gfa')
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_assembly_graph_no_paths.gfa')
         self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 0)
         unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)
 

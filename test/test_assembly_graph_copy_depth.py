@@ -20,9 +20,8 @@ import unicycler.assembly_graph_copy_depth
 class TestCopyDepth(unittest.TestCase):
 
     def setUp(self):
-        test_fastg = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg')
-        self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25,
-                                                            insert_size_mean=401,
+        test_gfa = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.gfa')
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_gfa, 25, insert_size_mean=401,
                                                             insert_size_deviation=60)
         unicycler.assembly_graph_copy_depth.determine_copy_depth(self.graph)
 
@@ -49,6 +48,7 @@ class TestCopyDepth(unittest.TestCase):
         """
         Tests a particular part of the graph with merging and splitting.
         """
+        print(self.graph.copy_depths)
         self.assertEqual(len(self.graph.copy_depths[67]), 1)
         self.assertEqual(len(self.graph.copy_depths[165]), 1)
         self.assertEqual(len(self.graph.copy_depths[174]), 1)

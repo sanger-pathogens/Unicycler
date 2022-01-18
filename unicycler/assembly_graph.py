@@ -113,7 +113,8 @@ class AssemblyGraph(object):
                     line_parts = line.strip().split('\t')
                     path_name = line_parts[1]
                     segments = [signed_string_to_int(x) for x in line_parts[2].split(',')]
-                    self.paths[path_name] = segments
+                    if len(segments) > 1:
+                        self.paths[path_name] = segments
 
     def get_median_read_depth(self, segment_list=None):
         """
