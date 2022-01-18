@@ -312,9 +312,9 @@ def get_arguments():
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--kmers', type=str, default=None,
                               help='Exact k-mers to use for SPAdes assembly, comma-separated '
-                                   '(example: 22,33,44, default: automatic)'
+                                   '(example: 21,51,71, default: automatic)'
                                    if show_all_args else argparse.SUPPRESS)
-    spades_group.add_argument('--kmer_count', type=int, default=10,
+    spades_group.add_argument('--kmer_count', type=int, default=8,
                               help='Number of k-mer steps to use in SPAdes assembly'
                                    if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--depth_filter', type=float, default=0.25,
