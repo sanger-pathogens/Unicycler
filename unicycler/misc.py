@@ -812,7 +812,7 @@ def spades_path_and_version(spades_path):
     if 'python version' in out and 'is not supported' in out:
         return found_spades_path, '', 'Python problem'
 
-    # Make sure SPAdes is 3.6.2 - 3.13.0
+    # Make sure SPAdes is 3.13.1 or later
     try:
         status = spades_status_from_version(version)
     except (ValueError, IndexError):
@@ -846,26 +846,20 @@ def spades_status_from_version(version):
         return 'too old'
     if major_version >= 4:
         return 'too new'
+    assert major_version == 3
 
     minor_version = int(version.split('.')[1])
-    if minor_version < 6:
+    if minor_version < 13:
         return 'too old'
-    if minor_version > 13:
-        return 'too new'
-    assert 6 <= minor_version <= 13
+    assert minor_version >= 13
 
     patch_version = int(version.split('.')[2])
-    if 6 < minor_version < 13:
+    if minor_version > 13:
         return 'good'
-    assert minor_version == 6 or minor_version == 13
-    if minor_version == 6:
-        if patch_version < 2:
-            return 'too old'
-        else:
-            return 'good'
+    assert minor_version == 13
     if minor_version == 13:
-        if patch_version > 0:
-            return 'too new'
+        if patch_version < 1:
+            return 'too old'
         else:
             return 'good'
 

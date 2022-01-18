@@ -18,8 +18,8 @@ import subprocess
 import gzip
 import shutil
 import statistics
-from .misc import round_to_nearest_odd, get_compression_type, int_to_str, quit_with_error,\
-    strip_read_extensions, bold, dim, print_table, get_left_arrow, float_to_str
+from .misc import round_to_nearest_odd, get_compression_type, int_to_str, quit_with_error, \
+    bold, dim, print_table, get_left_arrow, float_to_str
 from .assembly_graph import AssemblyGraph
 from . import log
 
@@ -30,48 +30,21 @@ class BadFastq(Exception):
 
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
-                          expected_linear_seqs, spades_tmp_dir, largest_component):
+                          expected_linear_seqs, spades_tmp_dir, largest_component,
+                          spades_graph_prefix):
     """
-    This function tries a SPAdes assembly at different k-mers and returns the best.
-    'The best' is defined as the smallest dead-end count after low-depth filtering.  If multiple
-    graphs have the same dead-end count (e.g. zero!) then the highest kmer is used.
+    This function tries a SPAdes assembly at different k-mers and returns the best one.
     """
     spades_dir = os.path.join(out_dir, 'spades_assembly')
     if not os.path.exists(spades_dir):
         os.makedirs(spades_dir)
 
-    # SPAdes can possibly crash if given too many threads, so limit it to 32.
-    threads = min(threads, 32)
-
-    # Make sure that the FASTQ files look good.
-    using_paired_reads = bool(short1) and bool(short2)
-    using_unpaired_reads = bool(short_unpaired)
-    if using_paired_reads:
-        count_1, count_2 = 0, 0
-        try:
-            count_1 = get_read_count(short1)
-        except BadFastq:
-            quit_with_error('this read file is not a properly formatted FASTQ: ' + short1)
-        try:
-            count_2 = get_read_count(short2)
-        except BadFastq:
-            quit_with_error('this read file is not a properly formatted FASTQ: ' + short2)
-        if count_1 != count_2:
-            quit_with_error('the paired read input files have an unequal number of reads')
-    if using_unpaired_reads:
-        try:
-            get_read_count(short_unpaired)
-        except BadFastq:
-            quit_with_error('this read file is not properly formatted as FASTQ: ' + short_unpaired)
-
+    threads = min(threads, 32)  # SPAdes can possibly crash if given too many threads.
+    check_fastqs(short1, short2, short_unpaired)
     reads = (short1, short2, short_unpaired)
 
-    if kmers is not None:
-        kmer_range = kmers
-    else:
-        kmer_range = get_kmer_range(short1, short2, short_unpaired, spades_dir, kmer_count,
-                                    min_k_frac, max_k_frac, spades_path)
-    assem_dir = os.path.join(spades_dir, 'assembly')
+    kmer_range = get_kmer_range(kmers, short1, short2, short_unpaired, spades_dir, kmer_count,
+                                min_k_frac, max_k_frac, spades_path)
 
     log.log_section_header('SPAdes assemblies')
     log.log_explanation('Unicycler now uses SPAdes to assemble the short reads. It scores the '
@@ -80,26 +53,24 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
                         'function is 1/(c*(d+2)), where c is the contig count and d is the '
                         'dead end count.')
 
-    # Conduct a SPAdes assembly for each k-mer and score them to choose the best.
     if verbosity > 1:
         spades_results_table = [['K-mer', 'Contigs', 'Links', 'Total length', 'N50',
                                  'Longest contig', 'Dead ends', 'Score']]
     else:
         spades_results_table = [['K-mer', 'Contigs', 'Dead ends', 'Score']]
-    best_score = 0.0
-    best_kmer = 0
-    best_graph_filename = ''
 
     graph_files, insert_size_mean, insert_size_deviation = \
-        spades_assembly(reads, assem_dir, kmer_range, threads, spades_path, spades_tmp_dir)
+        run_spades_all_kmers(reads, spades_dir, kmer_range, threads, spades_path,
+                             spades_tmp_dir, spades_graph_prefix)
 
     existing_graph_files = [x for x in graph_files if x is not None]
     if not existing_graph_files:
         quit_with_error('SPAdes failed to produce assemblies. '
-                        'See spades_assembly/assembly/spades.log for more info.')
-    median_segment_count = statistics.median(count_segments_in_spades_fastg(x)
+                        'See spades_assembly/spades.log for more info.')
+    median_segment_count = statistics.median(count_segments_in_gfa(x)
                                              for x in existing_graph_files)
 
+    best_score, best_kmer, best_graph_filename = 0.0, 0, ''
     for graph_file, kmer in zip(graph_files, kmer_range):
         table_line = [int_to_str(kmer)]
 
@@ -109,8 +80,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
             spades_results_table.append(table_line)
             continue
 
-        assembly_graph = AssemblyGraph(graph_file, kmer, paths_file=None,
-                                       insert_size_mean=insert_size_mean,
+        assembly_graph = AssemblyGraph(graph_file, kmer, insert_size_mean=insert_size_mean,
                                        insert_size_deviation=insert_size_deviation)
 
         # If this graph has way too many segments, then we will just skip it because very complex
@@ -149,34 +119,15 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
         spades_results_table.append(table_line)
 
         if score > best_score:
-            best_kmer = kmer
-            best_score = score
-            best_graph_filename = graph_file
+            best_kmer, best_score, best_graph_filename = kmer, score, graph_file
 
     log.log('', 2)
 
     if not best_kmer:
         quit_with_error('none of the SPAdes graphs were suitable for scaffolding in Unicycler')
 
-    # If the best k-mer is the top k-mer, then SPAdes has already done the repeat resolution and
-    # we can just grab it now. Easy! If the best k-mer was a different k-mer size, then we need
-    # to run SPAdes again to get that repeat resolution.
-    if best_kmer != kmer_range[-1]:
-        new_kmer_range = [x for x in kmer_range if x <= best_kmer]
-        graph_file, insert_size_mean, insert_size_deviation = \
-            spades_assembly(reads, assem_dir, new_kmer_range, threads, spades_path, spades_tmp_dir,
-                            just_last=True)
-        best_graph_filename = graph_file
-    paths_file = os.path.join(assem_dir, 'contigs.paths')
-    if os.path.isfile(paths_file):
-        copied_paths_file = os.path.join(spades_dir,
-                                         'k' + ('%03d' % best_kmer) + '_contigs.paths')
-        shutil.copyfile(paths_file, copied_paths_file)
-    else:
-        paths_file = None
-
     # Now we can load and clean the graph again, this time giving it the SPAdes contig paths.
-    assembly_graph = AssemblyGraph(best_graph_filename, best_kmer, paths_file=paths_file,
+    assembly_graph = AssemblyGraph(best_graph_filename, best_kmer,
                                    insert_size_mean=insert_size_mean,
                                    insert_size_deviation=insert_size_deviation)
     removed_count, removed_length = assembly_graph.clean(read_depth_filter, largest_component)
@@ -196,8 +147,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     # Report on the results of the read depth filter (can help with identifying levels of
     # contamination).
     log.log('\nRead depth filter: removed {} contigs totalling {} bp'.format(removed_count,
-                                                                           removed_length))
-
+                                                                             removed_length))
     # Clean up.
     if keep < 3 and os.path.isdir(spades_dir):
         log.log('Deleting ' + spades_dir + '/')
@@ -209,31 +159,73 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     return assembly_graph
 
 
-def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp_dir,
-                    just_last=False):
+def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, tmp_dir,
+                         spades_graph_prefix):
     """
-    This runs a SPAdes assembly, possibly continuing from a previous assembly.
-    """
-    short1 = read_files[0]
-    short2 = read_files[1]
-    unpaired = read_files[2]
+    SPAdes is run with all k-mers up to the top one. For example:
+      * round 1: 25
+      * round 2: 25,43
+      * round 3: 25,43,59
+      * round 4: 25,43,59,73
 
+    This is because it only saves the necessary graph information for the final k-mer. The first
+    round is a normal SPAdes run, and subsequent rounds use the --restart-from option.
+    """
+    short1, short2, unpaired = read_files[0], read_files[1], read_files[2]
     using_paired_reads = short1 is not None and short2 is not None and \
         os.path.isfile(short1) and os.path.isfile(short2)
     using_unpaired_reads = unpaired is not None and os.path.isfile(unpaired)
 
-    kmer_string = ','.join([str(x) for x in kmers])
-    command = [spades_path, '-o', out_dir, '-k', kmer_string, '--threads', str(threads),
-               '-m', '1024']
-    if just_last:
-        command += ['--restart-from', 'k' + str(kmers[-1])]
+    graph_files, insert_size_means, insert_size_deviations = [], [], []
+    for i in range(len(kmers)):
+        kmer_string = ','.join([str(x) for x in kmers[:i+1]])
+        biggest_kmer = kmers[i]
+        command = [spades_path, '-o', spades_dir, '-k', kmer_string, '--threads', str(threads),
+                   '-m', '1024']
+        if tmp_dir is not None:
+            command += ['--tmp-dir', tmp_dir]
+        if i == 0:  # first k-mer
+            command += ['--isolate']
+            if using_paired_reads:
+                command += ['-1', short1, '-2', short2]
+            if using_unpaired_reads:
+                command += ['-s', unpaired]
+        else:  # subsequent k-mer
+            previous_k = kmers[i-1]
+            command += ['--restart-from', f'k{previous_k}']
+
+        graph_file, insert_size_mean, insert_size_deviation = \
+            run_spades_one_kmer(command, spades_dir, biggest_kmer, short1, short2, unpaired)
+
+        copy_path = spades_graph_prefix + '_K' + '{:03d}'.format(biggest_kmer) + '.gfa'
+        shutil.copy(graph_file, copy_path)
+        graph_files.append(copy_path)
+        insert_size_means.append(insert_size_mean)
+        insert_size_deviations.append(insert_size_deviation)
+
+    insert_size_means = [x for x in insert_size_means if x is not None]
+    insert_size_deviations = [x for x in insert_size_deviations if x is not None]
+
+    if insert_size_means and insert_size_deviations:
+        insert_size_mean = statistics.median(insert_size_means)
+        insert_size_deviation = statistics.median(insert_size_deviations)
     else:
-        if using_paired_reads:
-            command += ['--only-assembler', '-1', short1, '-2', short2]
-        if using_unpaired_reads:
-            command += ['--only-assembler', '-s', unpaired]
-    if spades_tmp_dir is not None:
-        command += ['--tmp-dir', spades_tmp_dir]
+        # If we couldn't get the insert size from the SPAdes output (e.g. it was an
+        # unpaired-reads-only assembly), we'll use the read length instead.
+        read_lengths = get_read_lengths(short1) + get_read_lengths(short2) + \
+                       get_read_lengths(unpaired)
+        insert_size_mean = statistics.mean(read_lengths)
+        insert_size_deviation = max(statistics.stdev(read_lengths), 1.0)
+
+    log.log('', 2)
+    log.log('Insert size mean: ' + float_to_str(insert_size_mean, 1) + ' bp', 2)
+    log.log('Insert size stdev: ' + float_to_str(insert_size_deviation, 1) + ' bp', 2)
+    log.log('', 2)
+
+    return graph_files, insert_size_mean, insert_size_deviation
+
+
+def run_spades_one_kmer(command, spades_dir, biggest_kmer, short1, short2, unpaired):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     insert_size_mean = None
@@ -262,39 +254,38 @@ def spades_assembly(read_files, out_dir, kmers, threads, spades_path, spades_tmp
         except ValueError:
             pass
 
-    # If we couldn't get the insert size from the SPAdes output (e.g. it was an unpaired-reads-only
-    # assembly), we'll use the read length instead.
-    if insert_size_mean is None or insert_size_deviation is None:
-        read_lengths = get_read_lengths(short1) + get_read_lengths(short2) + \
-                       get_read_lengths(unpaired)
-        insert_size_mean = statistics.mean(read_lengths)
-        insert_size_deviation = max(statistics.stdev(read_lengths), 1.0)
-
-    log.log('', 2)
-    log.log('Insert size mean: ' + float_to_str(insert_size_mean, 1) + ' bp', 2)
-    log.log('Insert size stdev: ' + float_to_str(insert_size_deviation, 1) + ' bp', 2)
-    log.log('', 2)
-
     spades_error = process.stderr.readline().strip().decode()
     if spades_error:
         quit_with_error('SPAdes encountered an error: ' + spades_error)
 
-    if just_last:
-        graph_file = os.path.join(out_dir, 'K' + str(kmers[-1]), 'assembly_graph.fastg')
-        return graph_file, insert_size_mean, insert_size_deviation
-    else:
-        graph_files = []
-        for kmer in kmers:
-            graph_file = os.path.join(out_dir, 'K' + str(kmer), 'assembly_graph.fastg')
-            if os.path.isfile(graph_file):
-                parent_dir = os.path.dirname(out_dir)
-                copied_graph_file = os.path.join(parent_dir,
-                                                 ('k%03d' % kmer) + '_assembly_graph.fastg')
-                shutil.copyfile(graph_file, copied_graph_file)
-                graph_files.append(copied_graph_file)
-            else:
-                graph_files.append(None)
-        return graph_files, insert_size_mean, insert_size_deviation
+    graph_file = os.path.join(spades_dir, 'K' + str(biggest_kmer),
+                              'assembly_graph_with_scaffolds.gfa')
+    if not os.path.isfile(graph_file):
+        quit_with_error('SPAdes failed to produce an assembly graph: ' + str(graph_file))
+
+    return graph_file, insert_size_mean, insert_size_deviation
+
+
+def check_fastqs(short1, short2, short_unpaired):
+    using_paired_reads = bool(short1) and bool(short2)
+    using_unpaired_reads = bool(short_unpaired)
+    if using_paired_reads:
+        count_1, count_2 = 0, 0
+        try:
+            count_1 = get_read_count(short1)
+        except BadFastq:
+            quit_with_error('this read file is not a properly formatted FASTQ: ' + short1)
+        try:
+            count_2 = get_read_count(short2)
+        except BadFastq:
+            quit_with_error('this read file is not a properly formatted FASTQ: ' + short2)
+        if count_1 != count_2:
+            quit_with_error('the paired read input files have an unequal number of reads')
+    if using_unpaired_reads:
+        try:
+            get_read_count(short_unpaired)
+        except BadFastq:
+            quit_with_error('this read file is not properly formatted as FASTQ: ' + short_unpaired)
 
 
 def get_max_spades_kmer(spades_path):
@@ -316,11 +307,15 @@ def get_max_spades_kmer(spades_path):
         return 127
 
 
-def get_kmer_range(reads_1_filename, reads_2_filename, unpaired_reads_filename, spades_dir,
-                   kmer_count, min_kmer_frac, max_kmer_frac, spades_path):
+def get_kmer_range(given_kmers, reads_1_filename, reads_2_filename, unpaired_reads_filename,
+                   spades_dir, kmer_count, min_kmer_frac, max_kmer_frac, spades_path):
     """
     Uses the read lengths to determine the k-mer range to be used in the SPAdes assembly.
     """
+    # If the user specified which k-mers to use, we can skip automatic k-mer selection.
+    if given_kmers is not None:
+        return given_kmers
+
     log.log_section_header('Choosing k-mer range for assembly')
     log.log_explanation('Unicycler chooses a k-mer range for SPAdes based on the length of the '
                         'input reads. It uses a wide range of many k-mer sizes to maximise the '
@@ -428,10 +423,10 @@ def get_read_count(reads_filename):
     return read_count
 
 
-def count_segments_in_spades_fastg(fastg_file):
+def count_segments_in_gfa(fastg_file):
     seq_count = 0
     with open(fastg_file, 'rt') as fastg:
         for line in fastg:
-            if line.startswith('>'):
+            if line.startswith('S\t'):
                 seq_count += 1
-    return seq_count // 2
+    return seq_count

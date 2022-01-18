@@ -42,11 +42,11 @@ class BadOverlaps(Exception):
 
 class AssemblyGraph(object):
     """
-    This class holds an assembly graph with segments and links.
+    This class holds an assembly graph in GFA with segments and links (and contig paths too if the
+    graph was made by SPAdes).
     """
 
-    def __init__(self, filename, overlap, paths_file=None,
-                 insert_size_mean=250, insert_size_deviation=50):
+    def __init__(self, filename, overlap, insert_size_mean=250, insert_size_deviation=50):
         self.segments = {}  # Dict of unsigned segment number -> segment
         self.forward_links = {}  # Dict of signed segment number -> list of signed segment numbers
         self.reverse_links = {}  # Dict of signed segment number <- list of signed segment numbers
@@ -57,49 +57,9 @@ class AssemblyGraph(object):
         self.insert_size_mean = insert_size_mean
         self.insert_size_deviation = insert_size_deviation
 
-        if filename.endswith('.fastg'):
-            self.load_from_fastg(filename)
-        else:
-            self.load_from_gfa(filename)
-            if not overlap:
-                self.overlap = get_overlap_from_gfa_link(filename)
-
-        if paths_file:
-            self.load_spades_paths(paths_file)
-
-    def load_from_fastg(self, filename):
-        """
-        Loads a Graph from a SPAdes-style FASTG file.
-        """
-        # Load in the graph segments.
-        headers, sequences = get_headers_and_sequences(filename)
-        for i, header in enumerate(headers):
-            num = get_unsigned_number_from_header(header)
-            sequence = sequences[i]
-            positive = is_header_positive(header)
-
-            # If the segment already exists, then add this sequence.
-            if num in self.segments:
-                self.segments[num].add_sequence(sequence, positive)
-
-            # If the segment does not exist, make it.
-            else:
-                depth = get_depth_from_header(header)
-                segment = Segment(num, depth, sequence, positive)
-                self.segments[num] = segment
-
-        # Make sure that every segment has both a forward and reverse sequence.
-        for segment in self.segments.values():
-            segment.build_other_sequence_if_necessary()
-
-        # Load in the links.
-        for header in headers:
-            start, end_list = get_links_from_header(header)
-            if end_list:
-                self.forward_links[start] = end_list
-        self.forward_links = build_rc_links_if_necessary(self.forward_links)
-        self.reverse_links = build_reverse_links(self.forward_links)
-        self.sort_link_order()
+        self.load_from_gfa(filename)
+        if not overlap:
+            self.overlap = get_overlap_from_gfa_link(filename)
 
     def load_from_gfa(self, filename):
         """
@@ -146,7 +106,7 @@ class AssemblyGraph(object):
             self.reverse_links = build_reverse_links(self.forward_links)
         self.sort_link_order()
 
-        # Load in the paths
+        # Load in the paths.
         with open(filename, 'rt') as gfa_file:
             for line in gfa_file:
                 if line.startswith('P'):
@@ -154,55 +114,6 @@ class AssemblyGraph(object):
                     path_name = line_parts[1]
                     segments = [signed_string_to_int(x) for x in line_parts[2].split(',')]
                     self.paths[path_name] = segments
-
-    def load_spades_paths(self, filename):
-        """
-        Loads in SPAdes contig paths from file.
-        It only saves the positive paths and does not save paths with only one segment.
-        If a SPAdes path has a gap (semicolon), then it treats each component part as a separate
-        path (i.e. paths do not span gaps).
-        """
-        names = []
-        segment_strings = []
-        name = ''
-        segment_string = ''
-
-        paths_file = open(filename, 'rt')
-        for line in paths_file:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith('NODE'):
-                if name:
-                    names.append(name)
-                    segment_strings.append(segment_string)
-                    segment_string = ''
-                name = line
-            else:
-                segment_string += line
-        paths_file.close()
-        if name:
-            names.append(name)
-            segment_strings.append(segment_string)
-
-        for i, name in enumerate(names):
-            if name.endswith("'"):
-                continue
-            name_parts = name.split('_')
-            if len(name_parts) < 2:
-                continue
-            name = '_'.join(name_parts[:2])
-            segment_string = segment_strings[i]
-            if not segment_string:
-                continue
-            segment_string_parts = segment_string.split(';')
-            segment_string_parts = [x for x in segment_string_parts if len(x.split(',')) > 1]
-            for j, segment_string_part in enumerate(segment_string_parts):
-                path_name = name
-                if len(segment_string_parts) > 1:
-                    path_name += '_' + str(j + 1)
-                segments = [signed_string_to_int(x) for x in segment_string_part.split(',')]
-                self.paths[path_name] = segments
 
     def get_median_read_depth(self, segment_list=None):
         """

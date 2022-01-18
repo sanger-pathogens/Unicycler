@@ -99,8 +99,7 @@ def run_unicycler(out_dir, verbosity=None, options=None):
 
 def get_assembly_fasta_and_graph(out_dir):
     fasta = unicycler.misc.load_fasta(os.path.join(out_dir, 'assembly.fasta'))
-    graph = unicycler.assembly_graph.AssemblyGraph(os.path.join(out_dir, 'assembly.gfa'),
-                                                   0, paths_file=None)
+    graph = unicycler.assembly_graph.AssemblyGraph(os.path.join(out_dir, 'assembly.gfa'), 0)
     return fasta, graph
 
 

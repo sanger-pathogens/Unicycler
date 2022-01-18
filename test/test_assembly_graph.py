@@ -25,7 +25,7 @@ class TestAssemblyGraphFunctionsFastg(unittest.TestCase):
 
     def setUp(self):
         test_fastg = os.path.join(os.path.dirname(__file__), 'test_assembly_graph.fastg')
-        self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25, paths_file=None,
+        self.graph = unicycler.assembly_graph.AssemblyGraph(test_fastg, 25,
                                                             insert_size_mean=401,
                                                             insert_size_deviation=60)
         unicycler.log.logger = unicycler.log.Log(log_filename=None, stdout_verbosity_level=0)

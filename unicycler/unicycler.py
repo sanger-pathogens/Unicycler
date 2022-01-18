@@ -70,7 +70,8 @@ def main():
     if short_reads_available:
 
         # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
-        best_spades_graph = gfa_path(args.out, next(counter), 'best_spades_graph')
+        spades_graph_prefix = gfa_path(args.out, next(counter), 'spades_graph')[:-4]
+        best_spades_graph = gfa_path(args.out, next(counter), 'depth_filter')
         if os.path.isfile(best_spades_graph):
             log.log('\nSPAdes graph already exists. Will use this graph instead of running '
                     'SPAdes:\n  ' + best_spades_graph)
@@ -81,7 +82,7 @@ def main():
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.kmers, args.linear_seqs, args.spades_tmp_dir,
-                                          args.largest_component)
+                                          args.largest_component, spades_graph_prefix)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -94,16 +95,6 @@ def main():
                               newline=True, include_insert_size=True)
 
         anchor_segments = get_anchor_segments(graph, args.min_anchor_seg_len)
-
-        # TO DO: SHORT READ ALIGNMENT TO GRAPH
-        # * This would be very useful for a number of reasons:
-        #   * Would allow better calculation of segment depths, which would in turn help with copy
-        #     depth determination.
-        #   * Would allow for better short read bridging.
-
-        # TO DO: SHORT READ BRIDGING?
-        # * I'd like to do my own bridging with short reads, to replace SPAdes contig bridges, which
-        #   can be unreliable.
 
         # Make an initial set of bridges using the SPAdes contig paths. This step is skipped when
         # using conservative bridging mode (in that case we don't trust SPAdes contig paths at all).
@@ -759,7 +750,7 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     if spades_status == 'not found':
         quit_with_error('could not find SPAdes at ' + args.spades_path)
     if spades_status == 'too old' or spades_status == 'too new':
-        quit_with_error('Unicycler requires SPAdes v3.6.2 - v3.13.0')
+        quit_with_error('Unicycler requires SPAdes v3.13.1 or later')
     if spades_status == 'Python problem':
         quit_with_error('SPAdes cannot run due to an incompatible Python version')
     if spades_status == 'bad':
