@@ -33,7 +33,7 @@ class LoopUnrollingBridge(object):
     """
     def __init__(self, graph, start, end, middle, repeat):
         """
-        This constructor assumes the the start, end, middle and repeat segments form a simple loop
+        This constructor assumes the start, end, middle and repeat segments form a simple loop
         in the graph supported by either a SPAdes contig or a long read alignment. It will use
         segment depths to determine the loop count and score the bridge's quality.
         """

@@ -36,7 +36,7 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     tblastn_path_and_version, racon_path_and_version, gfa_path, red
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
-from .unicycler_align import add_aligning_arguments, fix_up_arguments, AlignmentScoringScheme, \
+from .unicycler_align import fix_up_arguments, AlignmentScoringScheme, \
     semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
     print_alignment_summary_table
 from .read_ref import get_read_nickname_dict
@@ -147,9 +147,10 @@ def main():
             bridges += create_miniasm_bridges(graph, string_graph, anchor_segments,
                                               scoring_scheme, args.verbosity, args.min_bridge_qual)
 
-        bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
-                                                   read_dict, long_read_filename, scoring_scheme,
-                                                   anchor_segments)
+        if not args.no_simple_bridges:
+            bridges += create_simple_long_read_bridges(graph, args.out, args.keep, args.threads,
+                                                       read_dict, long_read_filename,
+                                                       scoring_scheme, anchor_segments)
         if not args.no_long_read_alignment:
             read_names, min_scaled_score, min_alignment_length = \
                 align_long_reads_to_assembly_graph(graph, anchor_segments, args, full_command,
@@ -228,7 +229,6 @@ def get_arguments():
     parser = argparse.ArgumentParser(description=full_description, formatter_class=MyHelpFormatter,
                                      add_help=False)
 
-    # Help options
     help_group = parser.add_argument_group('Help')
     help_group.add_argument('-h', '--help', action='help',
                             help='Show this help message and exit')
@@ -237,7 +237,6 @@ def get_arguments():
     help_group.add_argument('--version', action='version', version='Unicycler v' + __version__,
                             help="Show Unicycler's version number")
 
-    # Short read input options
     input_group = parser.add_argument_group('Input')
     input_group.add_argument('-1', '--short1', required=False,
                              help='FASTQ file of first short reads in each pair')
@@ -245,12 +244,9 @@ def get_arguments():
                              help='FASTQ file of second short reads in each pair')
     input_group.add_argument('-s', '--unpaired', required=False,
                              help='FASTQ file of unpaired short reads')
-
-    # Long read input options
     input_group.add_argument('-l', '--long', required=False,
                              help='FASTQ or FASTA file of long reads')
 
-    # Output options
     output_group = parser.add_argument_group('Output')
     output_group.add_argument('-o', '--out', required=True,
                               help='Output directory (required)')
@@ -294,7 +290,6 @@ def get_arguments():
                                   'scaffolding anchors (default: automatic threshold)'
                                   if show_all_args else argparse.SUPPRESS)
 
-    # SPAdes assembly options
     spades_group = parser.add_argument_group('SPAdes assembly',
                                              'These options control the short-read SPAdes '
                                              'assembly at the beginning of the Unicycler pipeline.'
@@ -335,7 +330,6 @@ def get_arguments():
                                    '"--phred-offset 33", default: no additional options)'
                                    if show_all_args else argparse.SUPPRESS)
 
-    # Miniasm assembly options
     miniasm_group = parser.add_argument_group('miniasm+Racon assembly',
                                               'These options control the use of miniasm and Racon '
                                               'to produce long-read bridges.'
@@ -354,7 +348,43 @@ def get_arguments():
                                     '(default: perform long-read assembly using miniasm/Racon)'
                                     if show_all_args else argparse.SUPPRESS)
 
-    # Rotation options
+    long_group = parser.add_argument_group('Long-read alignment and bridging',
+                                           'These options control the use of long-read alignment '
+                                           'to produce long-read bridges.'
+                                           if show_all_args else argparse.SUPPRESS)
+    long_group.add_argument('--no_simple_bridges', action='store_true',
+                            help='Skip simple long-read bridging (default: use simple '
+                                 'long-read bridging)'
+                                 if show_all_args else argparse.SUPPRESS)
+    long_group.add_argument('--no_long_read_alignment', action='store_true',
+                            help='Skip long-read-alignment-based bridging (default: use long-read '
+                                 'alignments to produce bridges)'
+                                 if show_all_args else argparse.SUPPRESS)
+    long_group.add_argument('--contamination', required=False,
+                            help='FASTA file of known contamination in long reads'
+                            if show_all_args else argparse.SUPPRESS)
+    long_group.add_argument('--scores', type=str, required=False, default='3,-6,-5,-2',
+                            help='Comma-delimited string of alignment scores: match, mismatch, '
+                                 'gap open, gap extend'
+                            if show_all_args else argparse.SUPPRESS)
+    long_group.add_argument('--low_score', type=float, required=False,
+                            help='Score threshold - alignments below this are considered poor '
+                                 '(default: set threshold automatically)'
+                            if show_all_args else argparse.SUPPRESS)
+
+    cleaning_group = parser.add_argument_group('Graph cleaning',
+                                               'These options control the removal of small '
+                                               'leftover sequences after bridging is complete.'
+                                               if show_all_args else argparse.SUPPRESS)
+    cleaning_group.add_argument('--min_component_size', type=int, default=1000,
+                                help='Graph components smaller than this size (bp) will be '
+                                     'removed from the final graph'
+                                     if show_all_args else argparse.SUPPRESS)
+    cleaning_group.add_argument('--min_dead_end_size', type=int, default=1000,
+                                help='Graph dead ends smaller than this size (bp) will be removed '
+                                     'from the final graph'
+                                     if show_all_args else argparse.SUPPRESS)
+
     rotation_group = parser.add_argument_group('Assembly rotation',
                                                'These options control the rotation of completed '
                                                'circular sequence near the end of the Unicycler '
@@ -385,31 +415,6 @@ def get_arguments():
                                 help='Path to the tblastn executable'
                                      if show_all_args else argparse.SUPPRESS)
 
-    # Graph cleaning options
-    cleaning_group = parser.add_argument_group('Graph cleaning',
-                                               'These options control the removal of small '
-                                               'leftover sequences after bridging is complete.'
-                                               if show_all_args else argparse.SUPPRESS)
-    cleaning_group.add_argument('--min_component_size', type=int, default=1000,
-                                help='Graph components smaller than this size (bp) will be '
-                                     'removed from the final graph'
-                                     if show_all_args else argparse.SUPPRESS)
-    cleaning_group.add_argument('--min_dead_end_size', type=int, default=1000,
-                                help='Graph dead ends smaller than this size (bp) will be removed '
-                                     'from the final graph'
-                                     if show_all_args else argparse.SUPPRESS)
-
-    # Add the arguments for the aligner, but suppress the help text.
-    align_group = parser.add_argument_group('Long-read alignment',
-                                            'These options control the alignment of long reads to '
-                                            'the assembly graph.'
-                                            if show_all_args else argparse.SUPPRESS)
-    align_group.add_argument('--no_long_read_alignment', action='store_true',
-                             help='Skip long-read-alignment-bases bridging (default: use '
-                                  'long-read alignments to produce bridges)'
-                                  if show_all_args else argparse.SUPPRESS)
-    add_aligning_arguments(align_group, show_all_args)
-
     # If no arguments were used, print the entire help (argparse default is to just give an error
     # like '--out is required').
     if len(sys.argv) == 1:
@@ -427,8 +432,8 @@ def get_arguments():
 
     if not (args.long and (args.short1 or args.unpaired)):  # if not a hybrid assembly
         if args.existing_long_read_assembly:
-            quit_with_error('--existing_long_read_assembly can only be used with hybrid '
-                            'assemblies')
+            quit_with_error('--existing_long_read_assembly requires both short and long read '
+                            'inputs')
 
     if args.keep < 0 or args.keep > 3:
         quit_with_error('--keep must be between 0 and 3 (inclusive)')
