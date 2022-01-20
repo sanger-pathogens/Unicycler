@@ -566,7 +566,7 @@ All files and directories are described in the table below. Intermediate output 
 File/directory                 | Description                                                                                       | `--keep` level
 :----------------------------- | :------------------------------------------------------------------------------------------------ | :------------:
 `spades_assembly/`             | directory containing SPAdes files log (can be useful for debugging if SPAdes crashes)             | 3
-`*_spades_graph_K*.gfa`        | unaltered SPAdes assembly graphs at each _k_-mer size                                             | 1
+`*_spades_graph_k*.gfa`        | unaltered SPAdes assembly graphs at each _k_-mer size                                             | 1
 `*_depth_filter.gfa`           | best SPAdes short-read assembly graph after low-depth contigs have been removed                   | 1
 `*_overlaps_removed.gfa`       | overlap-free version of the best SPAdes graph, with some more graph clean-up                      | 3
 `miniasm_assembly/`            | directory containing miniasm string graphs and unitig graphs                                      | 3

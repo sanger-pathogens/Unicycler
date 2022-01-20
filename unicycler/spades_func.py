@@ -187,7 +187,7 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, sp
         graph_file, insert_size_mean, insert_size_deviation = \
             run_spades_one_kmer(command, spades_dir, biggest_kmer)
 
-        copy_path = spades_graph_prefix + '_K' + '{:03d}'.format(biggest_kmer) + '.gfa'
+        copy_path = spades_graph_prefix + '_k' + '{:03d}'.format(biggest_kmer) + '.gfa'
         shutil.copy(graph_file, copy_path)
         graph_files.append(copy_path)
         insert_size_means.append(insert_size_mean)
