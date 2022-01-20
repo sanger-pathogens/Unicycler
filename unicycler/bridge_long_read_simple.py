@@ -475,7 +475,8 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     best_score = None
     best_count = None
 
-    loop_count = 0
+    loop_count, fail_to_improve_count = 0, 0
+    prev_test_seq_score = None
     while True:
         test_seq = start_seg_seq + repeat_seq
         for _ in range(loop_count):
@@ -489,6 +490,8 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
             if best_score is None or test_seq_score > best_score:
                 best_score = test_seq_score
                 best_count = loop_count
+        else:
+            test_seq_score = 0
 
         # Break when we've hit the max loop count. But if the max is our best, then we keep
         # trying higher.
@@ -499,7 +502,17 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
         if loop_count > max_tested_loop_count * 10:
             break
 
+        # If the score fails to increase a few times in a row, we can assume that we're getting
+        # further from the correct answer and can break the loop to save time.
+        if prev_test_seq_score is not None and test_seq_score <= prev_test_seq_score:
+            fail_to_improve_count += 1
+        else:
+            fail_to_improve_count = 0
+        if fail_to_improve_count > 3:
+            break
+
         loop_count += 1
+        prev_test_seq_score = test_seq_score
 
     # This read now casts its vote for the best repeat count!
     if best_count is not None:
