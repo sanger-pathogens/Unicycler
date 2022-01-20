@@ -14,8 +14,8 @@ I'd recommend looking at the resulting assembly graphs in [Bandage](https://gith
 These are synthetic reads from plasmids A, B and E from the [_Shigella sonnei_ 53G genome assembly](https://www.ncbi.nlm.nih.gov/genome/417?genome_assembly_id=166795):
 
 Download reads [from the figshare page](https://figshare.com/articles/Synthetic_Shigella_plasmid_reads/5165776) or via these direct links:
-* [short_reads_1.fastq.gz](https://github.com/rrwick/Unicycler/raw/master/sample_data/short_reads_1.fastq.gz), [short_reads_2.fastq.gz](https://github.com/rrwick/Unicycler/raw/master/sample_data/short_reads_2.fastq.gz)<br>
-* [long_reads_low_depth.fastq.gz](https://github.com/rrwick/Unicycler/raw/master/sample_data/long_reads_low_depth.fastq.gz), [long_reads_high_depth.fastq.gz](https://github.com/rrwick/Unicycler/raw/master/sample_data/long_reads_high_depth.fastq.gz)
+* [short_reads_1.fastq.gz](https://github.com/rrwick/Unicycler/raw/main/sample_data/short_reads_1.fastq.gz), [short_reads_2.fastq.gz](https://github.com/rrwick/Unicycler/raw/main/sample_data/short_reads_2.fastq.gz)<br>
+* [long_reads_low_depth.fastq.gz](https://github.com/rrwick/Unicycler/raw/main/sample_data/long_reads_low_depth.fastq.gz), [long_reads_high_depth.fastq.gz](https://github.com/rrwick/Unicycler/raw/main/sample_data/long_reads_high_depth.fastq.gz)
 
 These plasmids are small compared to a bacterial genome, but insertion sequences create many repeats. Only the smallest plasmid assembles completely with short reads alone. Hybrid assemblies with low-depth long reads manage to complete the medium-sized plasmid, and it takes high-depth long reads to complete all three.
 
