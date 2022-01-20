@@ -81,9 +81,8 @@ def main():
                                           args.depth_filter, args.verbosity,
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
-                                          args.kmers, args.linear_seqs, args.spades_tmp_dir,
-                                          args.largest_component, spades_graph_prefix,
-                                          args.spades_options)
+                                          args.kmers, args.linear_seqs, args.largest_component,
+                                          spades_graph_prefix, args.spades_options)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -320,11 +319,6 @@ def get_arguments():
                               help='Only keep the largest connected component of the assembly '
                                    'graph (default: keep all connected components)'
                                    if show_all_args else argparse.SUPPRESS)
-    spades_group.add_argument('--spades_tmp_dir', type=str, default=None,
-                              help='Specify SPAdes temporary directory using the SPAdes --tmp-dir '
-                                   'option (default: make a temporary directory in the output '
-                                   'directory)'
-                                   if show_all_args else argparse.SUPPRESS)
     spades_group.add_argument('--spades_options', type=str, default=None,
                               help='Additional options to be given to SPAdes (example: '
                                    '"--phred-offset 33", default: no additional options)'
@@ -487,8 +481,6 @@ def get_arguments():
         args.unpaired = os.path.abspath(args.unpaired)
     if args.long:
         args.long = os.path.abspath(args.long)
-    if args.spades_tmp_dir:
-        args.spades_tmp_dir = os.path.abspath(args.spades_tmp_dir)
 
     # Create an initial logger which doesn't have an output file.
     log.logger = log.Log(None, args.verbosity)
