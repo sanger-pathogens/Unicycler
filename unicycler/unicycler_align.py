@@ -34,18 +34,14 @@ not, see <http://www.gnu.org/licenses/>.
 
 import sys
 import os
-import argparse
 import time
-import random
-import shutil
 import math
 from multiprocessing.dummy import Pool as ThreadPool
 import threading
-from .misc import int_to_str, float_to_str, check_file_exists, quit_with_error, \
-    weighted_average_list, get_sequence_file_type, MyHelpFormatter, dim, magenta, colour,\
-    get_default_thread_count
-from .read_ref import load_references, load_long_reads
-from .alignment import Alignment, AlignmentScoringScheme
+from .misc import int_to_str, float_to_str, quit_with_error, weighted_average_list, \
+    get_sequence_file_type, dim, magenta, colour
+from .read_ref import load_references
+from .alignment import Alignment
 from . import settings
 from .minimap_alignment import load_minimap_alignments
 from . import log

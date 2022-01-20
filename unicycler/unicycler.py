@@ -22,6 +22,7 @@ import shutil
 import random
 import itertools
 import multiprocessing
+from .alignment import AlignmentScoringScheme
 from .assembly_graph import AssemblyGraph
 from .assembly_graph_copy_depth import determine_copy_depth
 from .bridge_long_read_simple import create_simple_long_read_bridges
@@ -36,10 +37,9 @@ from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bol
     tblastn_path_and_version, racon_path_and_version, gfa_path, red
 from .spades_func import get_best_spades_graph
 from .blast_func import find_start_gene, CannotFindStart
-from .unicycler_align import fix_up_arguments, AlignmentScoringScheme, \
-    semi_global_align_long_reads, load_references, load_long_reads, load_sam_alignments, \
-    print_alignment_summary_table
-from .read_ref import get_read_nickname_dict
+from .unicycler_align import fix_up_arguments, semi_global_align_long_reads, load_references, \
+    load_sam_alignments, print_alignment_summary_table
+from .read_ref import get_read_nickname_dict, load_long_reads
 from . import log
 from . import settings
 from .version import __version__
@@ -49,8 +49,7 @@ def main():
     """
     Script execution starts here.
     """
-    # Fix the random seed so the program produces the same output every time it's run.
-    random.seed(0)
+    random.seed(0)  # Fixed seed so the program produces the same output every time it's run.
 
     full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
@@ -62,13 +61,10 @@ def main():
     print_intro_message(args, full_command, out_dir_message)
     check_dependencies(args, short_reads_available, long_reads_available)
 
-    # Files are numbered in chronological order
-    counter = itertools.count(start=1)
+    counter = itertools.count(start=1)  # Files are numbered in chronological order.
     bridges = []
 
-    # If we have short reads, do all the SPAdes stuff.
     if short_reads_available:
-
         # Produce a SPAdes assembly graph with a k-mer that balances contig length and connectivity.
         spades_graph_prefix = gfa_path(args.out, next(counter), 'spades_graph')[:-4]
         best_spades_graph = gfa_path(args.out, next(counter), 'depth_filter')
@@ -104,31 +100,19 @@ def main():
             if not bridges:
                 log.log('none found', 1)
 
-        # Now that we've made short read bridges, we no longer need the paths in the graph.
-        graph.paths = {}
+        graph.paths = {}  # Now that we've made short read bridges, we no longer need the paths.
 
     else:  # short reads not available
         graph = None
         anchor_segments = []
 
-    if short_reads_available and long_reads_available:
-        # TO DO: use long reads to check for misassemblies in short-read assembly graph. If there
-        # is a misassembly (happened in QMP_B2_170), that can totally ruin the rest of the process!
-        # I should do this in the same way I'll use long reads to verify an assembly: minimap
-        # align the reads, then look for locations where the aligned reads have too much overlap.
-
-        # TO DO: tune alignment parameters with last-train
-
-        scoring_scheme = AlignmentScoringScheme(args.scores)
-    else:
-        scoring_scheme = AlignmentScoringScheme(args.scores)
+    scoring_scheme = AlignmentScoringScheme(args.scores)
 
     if long_reads_available:
         read_dict, read_names, long_read_filename = load_long_reads(args.long, output_dir=args.out)
         read_nicknames = get_read_nickname_dict(read_names)
     else:
-        read_dict, read_names, long_read_filename = {}, [], ''
-        read_nicknames = {}
+        read_dict, read_names, long_read_filename, read_nicknames = {}, [], '', {}
 
     if long_reads_available and not args.no_miniasm:
         string_graph = make_miniasm_string_graph(graph, read_dict, long_read_filename,
@@ -137,7 +121,6 @@ def main():
     else:
         string_graph = None
 
-    # If there aren't short reads and the miniasm assembly failed, then there's nothing we can do!
     if not short_reads_available and string_graph is None:
         quit_with_error('miniasm assembly failed')
 
@@ -179,11 +162,10 @@ def main():
         if args.keep > 2:
             graph.save_to_gfa(gfa_path(args.out, next(counter), 'merged'))
 
-        # Perform some final cleaning on the graph.
         log.log_section_header('Bridged assembly graph')
         log.log_explanation('The assembly is now mostly finished and no more structural changes '
                             'will be made. Ideally the assembly graph should now have one contig '
-                            'per replicon and no erroneous contigs (i.e a complete assembly). '
+                            'per replicon and no erroneous contigs (i.e. a complete assembly). '
                             'If there are more contigs, then the assembly is not complete.',
                             verbosity=1)
         graph.final_clean()
@@ -198,7 +180,6 @@ def main():
     if not args.no_rotate:
         rotate_completed_replicons(graph, args, counter)
 
-    # Save the final state as both a GFA and FASTA file.
     log.log_section_header('Assembly complete')
     final_assembly_fasta = os.path.join(args.out, 'assembly.fasta')
     final_assembly_gfa = os.path.join(args.out, 'assembly.gfa')
@@ -576,12 +557,6 @@ def get_anchor_segments(graph, min_anchor_seg_len):
     anchor_segments = sorted([graph.segments[x] for x in anchor_seg_nums
                               if graph.segments[x].get_length() >= min_anchor_seg_len],
                              reverse=True, key=lambda x: x.get_length())
-
-    # TO DO: if long reads are available, I could potentially use them to more reliably determine
-    # whether segments are single-copy or not single-copy. Something like taking all long reads
-    # which align to a segment and seeing if they all cluster together well (based on read-to-read
-    # alignments), implying single-copy, or if they cluster into two or more groups, implying
-    # multi-copy.
 
     log.log('', 2)
     total_anchor_length = sum([x.get_length() for x in anchor_segments])

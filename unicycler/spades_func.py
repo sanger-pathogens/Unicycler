@@ -126,7 +126,6 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
     if not best_kmer:
         quit_with_error('none of the SPAdes graphs were suitable for scaffolding in Unicycler')
 
-    # Now we can load and clean the graph again, this time giving it the SPAdes contig paths.
     assembly_graph = AssemblyGraph(best_graph_filename, best_kmer,
                                    insert_size_mean=insert_size_mean,
                                    insert_size_deviation=insert_size_deviation)
