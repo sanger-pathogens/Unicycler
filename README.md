@@ -10,14 +10,18 @@ And read about how we use it to complete bacterial genomes here:
 
 
 
-# A note on Trycycler
+# 2022 update
 
-[Trycycler](https://github.com/rrwick/Trycycler/wiki) is a newer tool that in many cases is a better choice than Unicycler. Here is a quick guide on whether you should use Unicycler or Trycycler to assemble your bacterial genome:
-* If you only have short reads, use Unicycler (Trycycler does not do short-read assembly).
-* If you only have long reads, Trycycler is a better choice. While Unicycler can do long-read-only assembly, its approach is somewhat out-of-date. Something else to consider is the depth of your long reads, as Trycycler prefers deeper read sets. If your long-read set is shallow (e.g. <25×), then [Flye](https://github.com/fenderglass/Flye) might be your best option.
-* If you have both short and long reads (i.e. are doing a hybrid assembly), then Unicycler and [Trycycler+polishing](https://github.com/rrwick/Trycycler/wiki/Polishing-after-Trycycler) are both viable options. If you have lots of long reads (e.g. >100×), use Trycycler+polishing. If you have sparse long reads (e.g. <25×), use Unicycler. If your long-read depth falls between those values, it might be worth trying both approaches.
+Unicycler was initially made in 2016, back when long reads could be sparse and very noisy. For example, our early Oxford Nanopore sequencing runs might generate only 15× read depth for a single bacterial isolate, and most of the reads had a _lot_ of errors. So Unicycler was designed to use low-depth and low-accuracy long reads to scaffold a short-read assembly graph to completion, an approach I call short-read-first hybrid assembly. Assuming the short-read assembly graph is in good shape, Unicycler does this quite well!
 
-You can read more on Trycycler's FAQ page: [Should I use Unicycler or Trycycler to assemble my bacterial genome?](https://github.com/rrwick/Trycycler/wiki/FAQ-and-miscellaneous-tips#should-i-use-unicycler-or-trycycler-to-assemble-my-bacterial-genome)
+However, things have changed in the last six years. Nanopore sequencing yield is now much higher, making >100× depth easy to obtain, even on multiplexed runs. Read accuracy has also improved and continues to get better each year. High-depth and high-accuracy long reads make long-read-first hybrid assembly (long-read assembly followed by short-read polishing) a viable approach that's often preferable to Unicycler. I have developed [Trycycler](https://github.com/rrwick/Trycycler/wiki) and [Polypolish](https://github.com/rrwick/Polypolish/wiki) in the pursuit of ideal long-read-first assemblies.
+
+Unicycler is not completely out-of-date, as it is still (in my opinion) the best tool for short-read-first hybrid assembly of bacterial genomes. But I think it should only be used for hybrid assembly when long-read-first is not an option – i.e. when long-read depth is low. I also think that Unicycler is good for short-read-only bacterial genomes, as it produces cleaner assembly graphs than SPAdes alone. So while Unicycler doesn't get a lot of my time and attention these days, I don't yet consider it to be abandonware.
+
+For some up-to-date bacterial genome assembly tips, check out this links from Trycycler's wiki:
+* [Should I use Unicycler or Trycycler to assemble my bacterial genome?](https://github.com/rrwick/Trycycler/wiki/FAQ-and-miscellaneous-tips#should-i-use-unicycler-or-trycycler-to-assemble-my-bacterial-genome)
+* [Guide to bacterial genome assembly](https://github.com/rrwick/Trycycler/wiki/Guide-to-bacterial-genome-assembly)
+
 
 
 
@@ -618,7 +622,7 @@ __A__ is an very good Illumina read graph – the contigs are long and there are
 
 __B__ is also a good graph. The genome is more complex, resulting in a more tangled structure, but there are still very few dead ends (you can see one in the lower left). This read set would also work well in Unicycler, though more long reads may be required to get a complete genome (maybe 30× or so).
 
-__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. This genome may take lots of long reads to complete in Unicycler, possibly 50× or more. The final assembly will probably have more small errors (SNPs and indels), as parts of the genome cannot be polished well with Illumina reads. If your graph looks like this, I'd recommend trying a long-read-first assembly approach (see [A note on Trycycler](#a-note-on-trycycler)).
+__C__ is a disaster! It is broken into many pieces, probably because parts of the genome got no read depth at all. This genome may take lots of long reads to complete in Unicycler, possibly 50× or more. The final assembly will probably have more small errors (SNPs and indels), as parts of the genome cannot be polished well with Illumina reads. If your graph looks like this, I'd recommend trying a long-read-first assembly approach (see [2022 update](#2022-update)).
 
 
 ### Very short contigs
