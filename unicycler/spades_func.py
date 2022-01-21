@@ -18,6 +18,8 @@ import subprocess
 import gzip
 import shutil
 import statistics
+from typing import Optional
+
 from .misc import round_to_nearest_odd, get_compression_type, int_to_str, quit_with_error, \
     bold, dim, print_table, get_left_arrow, float_to_str
 from .assembly_graph import AssemblyGraph
@@ -177,6 +179,7 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, sp
         os.path.isfile(short1) and os.path.isfile(short2)
     using_unpaired_reads = unpaired is not None and os.path.isfile(unpaired)
 
+    insert_size_deviations: list[Optional[float]]
     graph_files, insert_size_means, insert_size_deviations = [], [], []
     for i in range(len(kmers)):
         biggest_kmer = kmers[i]
@@ -192,7 +195,7 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, sp
         graph_files.append(copy_path)
         insert_size_means.append(insert_size_mean)
         insert_size_deviations.append(insert_size_deviation)
-    log.log('')
+        log.log('')
 
     insert_size_means = [x for x in insert_size_means if x is not None]
     insert_size_deviations = [x for x in insert_size_deviations if x is not None]
