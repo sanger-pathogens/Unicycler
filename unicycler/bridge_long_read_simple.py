@@ -517,3 +517,5 @@ def get_read_loop_vote(start, end, middle, repeat, strand, minimap_alignments, r
     # This read now casts its vote for the best repeat count!
     if best_count is not None:
         return best_count
+    else:
+        return -1  # vote for bad read
