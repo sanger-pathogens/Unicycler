@@ -1,6 +1,6 @@
 <p align="center"><img src="misc/logo.png" alt="Unicycler" width="600"></p>
 
-Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/lbcb-sci/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a hybrid assembly.
+Unicycler is an assembly pipeline for bacterial genomes. It can assemble [Illumina](http://www.illumina.com/)-only read sets where it functions as a [SPAdes](http://cab.spbu.ru/software/spades/)-optimiser. It can also assembly long-read-only sets ([PacBio](http://www.pacb.com/) or [Nanopore](https://nanoporetech.com/)) where it runs a [miniasm](https://github.com/lh3/miniasm)+[Racon](https://github.com/lbcb-sci/racon) pipeline. For the best possible assemblies, give it both Illumina reads _and_ long reads, and it will conduct a short-read-first hybrid assembly.
 
 Read more about Unicycler here:
 > [__Wick RR, Judd LM, Gorrie CL, Holt KE.__ Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. _PLoS Comput Biol_ 2017.](http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005595)
@@ -574,8 +574,8 @@ File/directory                 | Description                                    
 :----------------------------- | :------------------------------------------------------------------------------------------------ | :------------:
 `spades_assembly/`             | directory containing SPAdes files log (can be useful for debugging if SPAdes crashes)             | 3
 `*_spades_graph_k*.gfa`        | unaltered SPAdes assembly graphs at each _k_-mer size                                             | 1
-`*_depth_filter.gfa`           | best SPAdes short-read assembly graph after low-depth contigs have been removed                   | 1
-`*_overlaps_removed.gfa`       | overlap-free version of the best SPAdes graph, with some more graph clean-up                      | 3
+`*_depth_filter.gfa`           | best SPAdes short-read assembly graph after low-depth contigs have been removed and multiplicity determination | 1
+`*_overlaps_removed.gfa`       | overlap-free version of the best SPAdes graph, with some more graph clean-up                      | 1
 `miniasm_assembly/`            | directory containing miniasm string graphs and unitig graphs                                      | 3
 `simple_bridging/`             | directory containing files for the simple long-read bridging step                                 | 3
 `*_long_read_assembly.gfa`     | the long-read+contig miniasm+Racon assembly                                                       | 1
