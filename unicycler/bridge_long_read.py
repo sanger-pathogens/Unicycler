@@ -296,8 +296,11 @@ class LongReadBridge(object):
         # The number of reads which contribute to a bridge is a big deal, so the read count factor
         # scales linearly. This value is capped at 1, which means that bridges with too few reads
         # are punished but bridges with excess reads are not rewarded.
-        read_count_factor = min(1.0, actual_read_count / expected_read_count)
-        self.quality *= read_count_factor
+        try:
+            read_count_factor = min(1.0, actual_read_count / expected_read_count)
+            self.quality *= read_count_factor
+        except ZeroDivisionError:
+            pass
 
         # The length of alignments to the start/end segments is positively correlated with quality
         # to reward bridges with long alignments. Specifically, we want there to be at least one
