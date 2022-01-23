@@ -40,6 +40,8 @@
 #ifndef SEQAN_INCLUDE_SEQAN_BASIC_ALLOCATOR_INTERFACE_H_
 #define SEQAN_INCLUDE_SEQAN_BASIC_ALLOCATOR_INTERFACE_H_
 
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Walloc-size-larger-than="
 
 namespace seqan {
