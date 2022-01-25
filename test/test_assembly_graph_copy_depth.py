@@ -48,7 +48,6 @@ class TestCopyDepth(unittest.TestCase):
         """
         Tests a particular part of the graph with merging and splitting.
         """
-        print(self.graph.copy_depths)
         self.assertEqual(len(self.graph.copy_depths[67]), 1)
         self.assertEqual(len(self.graph.copy_depths[165]), 1)
         self.assertEqual(len(self.graph.copy_depths[174]), 1)
