@@ -101,7 +101,10 @@ def determine_copy_depth_part_2(graph, tolerance, copy_depth_table):
     if log.logger.stdout_verbosity_level >= 3:
         copy_depth_table.append(['SPLITTING MULTIPLICITY', '', ''])
     if redistribute_copy_depths(graph, tolerance, copy_depth_table):
-        determine_copy_depth_part_2(graph, tolerance, copy_depth_table)
+        try:
+            determine_copy_depth_part_2(graph, tolerance, copy_depth_table)
+        except RecursionError:
+            pass
 
 
 def assign_single_copy_depth(graph, min_single_copy_length, copy_depth_table):
