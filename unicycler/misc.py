@@ -812,7 +812,7 @@ def spades_path_and_version(spades_path):
     if 'python version' in out and 'is not supported' in out:
         return found_spades_path, '', 'Python problem'
 
-    # Make sure SPAdes is 3.13.1 or later
+    # Make sure SPAdes is 3.14.0 or later
     try:
         status = spades_status_from_version(version)
     except (ValueError, IndexError):

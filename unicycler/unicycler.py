@@ -727,7 +727,7 @@ def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, 
     if spades_status == 'not found':
         quit_with_error('could not find SPAdes at ' + args.spades_path)
     if spades_status == 'too old' or spades_status == 'too new':
-        quit_with_error('Unicycler requires SPAdes v3.13.1 or later')
+        quit_with_error('Unicycler requires SPAdes v3.14.0 or later')
     if spades_status == 'Python problem':
         quit_with_error('SPAdes cannot run due to an incompatible Python version')
     if spades_status == 'bad':
