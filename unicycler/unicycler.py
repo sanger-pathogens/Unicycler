@@ -59,7 +59,7 @@ def main():
 
     check_input_files(args)
     print_intro_message(args, full_command, out_dir_message)
-    check_dependencies(args, short_reads_available, long_reads_available)
+    spades_version = check_dependencies(args, short_reads_available, long_reads_available)
 
     counter = itertools.count(start=1)  # Files are numbered in chronological order.
     bridges = []
@@ -78,7 +78,7 @@ def main():
                                           args.spades_path, args.threads, args.keep,
                                           args.kmer_count, args.min_kmer_frac, args.max_kmer_frac,
                                           args.kmers, args.linear_seqs, args.largest_component,
-                                          spades_graph_prefix, args.spades_options)
+                                          spades_graph_prefix, args.spades_options, spades_version)
         determine_copy_depth(graph)
         if args.keep > 0 and not os.path.isfile(best_spades_graph):
             graph.save_to_gfa(best_spades_graph, save_copy_depth_info=True, newline=True,
@@ -715,6 +715,7 @@ def check_dependencies(args, short_reads_available, long_reads_available):
 
     quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,
                                args)
+    return spades_version
 
 
 def quit_if_dependency_problem(spades_status, racon_status, makeblastdb_status, tblastn_status,

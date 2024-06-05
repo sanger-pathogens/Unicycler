@@ -638,7 +638,7 @@ def print_table(table, alignments='', max_col_width=30, col_separation=3, indent
             for text, colour_name in sub_colour.items():
                 row_str = row_str.replace(text, colour(text, colour_name))
             if j < row_rows - 1 and UNDERLINE in row_str:
-                row_str = re.sub('\033\[4m', '', row_str)
+                row_str = re.sub('\033\\[4m', '', row_str)
             if return_str:
                 full_table_str += indenter + row_str + '\n'
             else:
@@ -740,8 +740,8 @@ def remove_formatting(text):
 
 def get_ascii_art():
     ascii_art = (bold_red("       __\n") +
-                 bold_red("       \ \___\n") +
-                 bold_red("        \ ___\\\n") +
+                 bold_red("       \\ \\___\n") +
+                 bold_red("        \\ ___\\\n") +
                  bold_red("        //\n") +
                  bold_red("   ____//      ") +
                  bold_yellow("_    _         _                     _\n") +
@@ -750,11 +750,11 @@ def get_ascii_art():
                  bold_red("//  \\//  \\\\   ") +
                  bold_yellow("| |  | | _ __   _   ___  _   _   ___ | |  ___  _ __\n") +
                  bold_red("||  (O)  ||   ") +
-                 bold_yellow("| |  | || '_ \ | | / __|| | | | / __|| | / _ \| '__|\n") +
-                 bold_red("\\\\    \_ //   ") +
+                 bold_yellow("| |  | || '_ \\ | | / __|| | | | / __|| | / _ \\| '__|\n") +
+                 bold_red("\\\\    \\_ //   ") +
                  bold_yellow("| |__| || | | || || (__ | |_| || (__ | ||  __/| |\n") +
                  bold_red(" \\\\_____//     ") +
-                 bold_yellow("\____/ |_| |_||_| \___| \__, | \___||_| \___||_|\n") +
+                 bold_yellow("\\____/ |_| |_||_| \\___| \\__, | \\___||_| \\___||_|\n") +
                  bold_yellow("                                        __/ |\n") +
                  bold_yellow("                                       |___/"))
     return ascii_art
@@ -844,15 +844,15 @@ def spades_status_from_version(version):
     major_version = int(version.split('.')[0])
     if major_version < 3:
         return 'too old'
-    if major_version >= 4:
+    if major_version >= 5:
         return 'too new'
-    assert major_version == 3
+    assert major_version == 3 or major_version == 4
 
-    minor_version = int(version.split('.')[1])
-    if minor_version < 14:
-        return 'too old'
-    else:
-        return 'good'
+    if major_version == 3:
+        minor_version = int(version.split('.')[1])
+        if minor_version < 14:
+            return 'too old'
+    return 'good'
 
 
 def racon_path_and_version(racon_path):

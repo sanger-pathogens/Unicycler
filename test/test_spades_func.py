@@ -49,43 +49,50 @@ class TestSPAdesFunc(unittest.TestCase):
     def test_build_spades_command_1(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              0, '1.fq.gz', '2.fq.gz', None, True,
-                                                             False, None)
+                                                             False, None, '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21', '--threads', '16',
                                    '--isolate', '-1', '1.fq.gz', '-2', '2.fq.gz', '-m', '1024'])
 
     def test_build_spades_command_2(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              1, '1.fq.gz', '2.fq.gz', None, True,
-                                                             False, None)
+                                                             False, None, '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21,31', '--threads', '16',
                                    '--restart-from', 'k21', '-m', '1024'])
 
     def test_build_spades_command_3(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              2, '1.fq.gz', '2.fq.gz', None, True,
-                                                             False, None)
+                                                             False, None, '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21,31,41', '--threads', '16',
                                    '--restart-from', 'k31', '-m', '1024'])
 
     def test_build_spades_command_4(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              0, None, None, 's.fq.gz', False, True,
-                                                             None)
+                                                             None, '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21', '--threads', '16',
                                    '--isolate', '-s', 's.fq.gz', '-m', '1024'])
 
     def test_build_spades_command_5(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              0, '1.fq.gz', '2.fq.gz', None, True,
-                                                             False, '-m 123')
+                                                             False, '-m 123', '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21', '--threads', '16',
                                    '--isolate', '-1', '1.fq.gz', '-2', '2.fq.gz', '-m', '123'])
 
     def test_build_spades_command_6(self):
         command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
                                                              0, '1.fq.gz', '2.fq.gz', None, True,
-                                                             False, '--tmp-dir abc')
+                                                             False, '--tmp-dir abc', '3.15.5')
         self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21', '--threads', '16',
                                    '--isolate', '-1', '1.fq.gz', '-2', '2.fq.gz', '--tmp-dir',
                                    'abc', '-m', '1024'])
 
+    def test_build_spades_command_7(self):
+        command = unicycler.spades_func.build_spades_command('spades.py', 'out', 16, [21, 31, 41],
+                                                             0, '1.fq.gz', '2.fq.gz', None, True,
+                                                             False, None, '4.0.0')
+        self.assertEqual(command, ['spades.py', '-o', 'out', '-k', '21', '--threads', '16',
+                                   '--gfa11', '--isolate', '-1', '1.fq.gz', '-2', '2.fq.gz',
+                                   '-m', '1024'])

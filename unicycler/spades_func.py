@@ -32,7 +32,7 @@ class BadFastq(Exception):
 def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_filter, verbosity,
                           spades_path, threads, keep, kmer_count, min_k_frac, max_k_frac, kmers,
                           expected_linear_seqs, largest_component, spades_graph_prefix,
-                          spades_options):
+                          spades_options, spades_version):
     """
     This function tries a SPAdes assembly at different k-mers and returns the best one.
     """
@@ -62,7 +62,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
 
     graph_files, insert_size_mean, insert_size_deviation = \
         run_spades_all_kmers(reads, spades_dir, kmer_range, threads, spades_path,
-                             spades_graph_prefix, spades_options)
+                             spades_graph_prefix, spades_options, spades_version)
 
     existing_graph_files = [x for x in graph_files if x is not None]
     if not existing_graph_files:
@@ -162,7 +162,7 @@ def get_best_spades_graph(short1, short2, short_unpaired, out_dir, read_depth_fi
 
 
 def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, spades_graph_prefix,
-                         spades_options):
+                         spades_options, spades_version):
     """
     SPAdes is run with all k-mers up to the top one. For example:
       * round 1: 25
@@ -183,7 +183,7 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, sp
         biggest_kmer = kmers[i]
         command = build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, short2,
                                        unpaired, using_paired_reads, using_unpaired_reads,
-                                       spades_options)
+                                       spades_options, spades_version)
         log.log(' '.join(command))
         graph_file, insert_size_mean, insert_size_deviation = \
             run_spades_one_kmer(command, spades_dir, biggest_kmer)
@@ -218,10 +218,12 @@ def run_spades_all_kmers(read_files, spades_dir, kmers, threads, spades_path, sp
 
 
 def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, short2, unpaired,
-                         using_paired_reads, using_unpaired_reads, spades_options):
+                         using_paired_reads, using_unpaired_reads, spades_options, spades_version):
     kmer_string = ','.join([str(x) for x in kmers[:i+1]])
 
     command = [spades_path, '-o', spades_dir, '-k', kmer_string, '--threads', str(threads)]
+    if spades_version.startswith("4."):
+        command += ['--gfa11']
     if i == 0:  # first k-mer
         command += ['--isolate']
         if using_paired_reads:

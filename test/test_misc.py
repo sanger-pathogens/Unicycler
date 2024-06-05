@@ -381,4 +381,7 @@ class TestMiscFunctions(unittest.TestCase):
         self.assertEqual(unicycler.misc.spades_status_from_version('3.15.3'), 'good')
 
     def test_spades_version_status_13(self):
-        self.assertEqual(unicycler.misc.spades_status_from_version('4.0.0'), 'too new')
+        self.assertEqual(unicycler.misc.spades_status_from_version('4.0.0'), 'good')
+
+    def test_spades_version_status_14(self):
+        self.assertEqual(unicycler.misc.spades_status_from_version('5.0.0'), 'too new')
