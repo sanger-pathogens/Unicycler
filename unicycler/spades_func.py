@@ -226,6 +226,8 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
         command += ['--gfa11']
     if i == 0:  # first k-mer
         if '--careful' in spades_options.split():
+            if '--isolate' in spades_options.split():
+                raise ValueError("SPAdes options '--careful' and '--isolate' are not compatible; please choose one or the other")
             command += ['--careful']
         elif '--isolate' in spades_options.split():
             command += ['--isolate']
