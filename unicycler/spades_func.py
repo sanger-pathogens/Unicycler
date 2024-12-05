@@ -222,10 +222,18 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
     kmer_string = ','.join([str(x) for x in kmers[:i+1]])
 
     command = [spades_path, '-o', spades_dir, '-k', kmer_string, '--threads', str(threads)]
+    split_spade_options = spade_options.split()
     if spades_version.startswith("4."):
         command += ['--gfa11']
     if i == 0:  # first k-mer
-        command += ['--isolate']
+        if '--careful' in split_spade_options:
+            if '--isolate' in split_spades_options:
+                raise ValueError("SPAdes options '--careful' and '--isolate' are not compatible; please choose one or the other")
+            command += ['--careful']
+            split_spade_options.remove('--careful')
+        elif '--isolate' in split_spade_options:
+            command += ['--isolate']
+            split_spade_options.remove('--isolate')
         if using_paired_reads:
             command += ['-1', short1, '-2', short2]
         if using_unpaired_reads:
@@ -234,8 +242,8 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
         previous_k = kmers[i - 1]
         command += ['--restart-from', f'k{previous_k}']
     if spades_options:
-        command += spades_options.split()
-    if not spades_options or '-m' not in spades_options.split():
+        command += split_spade_options
+    if not spades_options or '-m' not in split_spade_options:
         command += ['-m', '1024']
     return command
 
