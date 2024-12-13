@@ -230,8 +230,10 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
             if '--isolate' in split_spades_options:
                 raise ValueError("SPAdes options '--careful' and '--isolate' are not compatible; please choose one or the other")
             command += ['--careful']
+            split_spades_options.remove('--careful')
         elif '--isolate' in split_spades_options:
             command += ['--isolate']
+            split_spades_options.remove('--isolate')
         if using_paired_reads:
             command += ['-1', short1, '-2', short2]
         if using_unpaired_reads:
