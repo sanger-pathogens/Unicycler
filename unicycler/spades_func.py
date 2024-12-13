@@ -222,7 +222,7 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
     kmer_string = ','.join([str(x) for x in kmers[:i+1]])
 
     command = [spades_path, '-o', spades_dir, '-k', kmer_string, '--threads', str(threads)]
-    split_spades_options = spades_options.split()
+    split_spades_options = spades_options.split() if spades_options else []
     if spades_version.startswith("4."):
         command += ['--gfa11']
     if i == 0:  # first k-mer
@@ -230,10 +230,8 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
             if '--isolate' in split_spades_options:
                 raise ValueError("SPAdes options '--careful' and '--isolate' are not compatible; please choose one or the other")
             command += ['--careful']
-            split_spades_options.remove('--careful')
         elif '--isolate' in split_spades_options:
             command += ['--isolate']
-            split_spades_options.remove('--isolate')
         if using_paired_reads:
             command += ['-1', short1, '-2', short2]
         if using_unpaired_reads:
@@ -241,6 +239,10 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
     else:  # subsequent k-mer
         previous_k = kmers[i - 1]
         command += ['--restart-from', f'k{previous_k}']
+        # make sure these options are not added again to the command line
+        # when restarting from previous run as this would lead SPAdes to crash
+        split_spades_options.remove('--careful')
+        split_spades_options.remove('--isolate')
     if spades_options:
         command += split_spades_options
     if not spades_options or '-m' not in split_spades_options:
