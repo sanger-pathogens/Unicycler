@@ -243,8 +243,8 @@ def build_spades_command(spades_path, spades_dir, threads, kmers, i, short1, sho
         command += ['--restart-from', f'k{previous_k}']
         # make sure these options are not added again to the command line
         # when restarting from previous run as this would lead SPAdes to crash
-        split_spades_options.remove('--careful')
-        split_spades_options.remove('--isolate')
+        if '--careful' in split_spades_options: split_spades_options.remove('--careful')
+        if '--isolate' in split_spades_options: split_spades_options.remove('--isolate')
     if spades_options:
         command += split_spades_options
     if not spades_options or '-m' not in split_spades_options:
